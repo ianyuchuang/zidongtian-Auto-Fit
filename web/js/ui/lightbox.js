@@ -31,15 +31,40 @@ export function clampPan(view, { w, h }) {
   };
 }
 
-/**
- * 開啟燈箱。回傳 close()；重複呼叫會先關掉舊的。
- */
-let openClose = null;
+/** 焦點是否在可打字的欄位上（燈箱是非強制視窗，快捷鍵不能搶走輸入）。 */
+export function isTypingTarget(el) {
+  if (!el) return false;
+  if (el.isContentEditable) return true;
+  return ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName);
+}
 
-export function openLightbox(src, { title = '', root = null } = {}) {
+// 同一時間只留一個燈箱；不擋右欄檢視器，開著也能繼續打字。
+let current = null;
+
+/** 燈箱是否開著。 */
+export function isLightboxOpen() {
+  return !!current;
+}
+
+/** 換掉燈箱裡的圖（例如「確認，下一張」後跟著跳圖），縮放歸零。 */
+export function updateLightbox(src, title = '') {
+  if (!current || !src) return false;
+  current.setImage(src, title);
+  return true;
+}
+
+/** 關閉目前的燈箱。 */
+export function closeLightbox() {
+  current?.close();
+}
+
+/**
+ * 開啟燈箱（非強制視窗：右欄檢視器仍可點、可打字）。回傳 close()。
+ */
+export function openLightbox(src, { title = '', root = null, onClose = null } = {}) {
   const host = root || document.getElementById('dialog-root') || document.body;
   if (!src || !host) return () => {};
-  openClose?.();
+  current?.close();
 
   const overlay = document.createElement('div');
   overlay.className = 'overlay lightbox';
@@ -53,12 +78,12 @@ export function openLightbox(src, { title = '', root = null } = {}) {
       <button class="lb-btn" data-lb="close" title="關閉（Esc）">✕</button>
     </div>
     <div class="lb-stage"><img alt="${esc(title)}" draggable="false"></div>
-    <div class="lb-hint">滾輪縮放 · 拖曳平移 · 雙擊還原 · Esc 關閉</div>`;
+    <div class="lb-hint">滾輪縮放 · 拖曳平移 · 雙擊還原 · Esc 關閉；右欄三個欄位照樣可以打字</div>`;
 
   const stage = overlay.querySelector('.lb-stage');
   const img = overlay.querySelector('img');
   const zoomLabel = overlay.querySelector('.lb-zoom');
-  img.src = src;
+  const titleEl = overlay.querySelector('.lb-title');
 
   let view = { ...IDENTITY };
   const boxOf = () => {
@@ -86,23 +111,32 @@ export function openLightbox(src, { title = '', root = null } = {}) {
     apply();
   }
 
+  function setImage(nextSrc, nextTitle = '') {
+    img.src = nextSrc;
+    img.alt = nextTitle;
+    titleEl.textContent = nextTitle;
+    titleEl.title = nextTitle;
+    reset();
+  }
+
   function close() {
-    if (openClose === close) openClose = null;
+    if (current && current.close === close) current = null;
     overlay.remove();
     document.removeEventListener('keydown', onKey);
+    onClose?.();
   }
 
   function onKey(e) {
     if (e.key === 'Escape') {
       e.preventDefault();
       close();
-    } else if (e.key === '+' || e.key === '=') {
-      zoom(1.25);
-    } else if (e.key === '-' || e.key === '_') {
-      zoom(1 / 1.25);
-    } else if (e.key === '0') {
-      reset();
+      return;
     }
+    // 游標在輸入格裡時，鍵盤讓給打字
+    if (isTypingTarget(e.target)) return;
+    if (e.key === '+' || e.key === '=') zoom(1.25);
+    else if (e.key === '-' || e.key === '_') zoom(1 / 1.25);
+    else if (e.key === '0') reset();
   }
 
   stage.addEventListener(
@@ -171,8 +205,8 @@ export function openLightbox(src, { title = '', root = null } = {}) {
 
   document.addEventListener('keydown', onKey);
   host.appendChild(overlay);
-  img.addEventListener('load', apply, { once: true });
-  apply();
-  openClose = close;
+  img.addEventListener('load', apply);
+  setImage(src, title);
+  current = { close, setImage };
   return close;
 }

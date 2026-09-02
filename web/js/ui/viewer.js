@@ -3,7 +3,7 @@
 import { STATUS_LABEL, TRASH_DIR, isTrashDir } from '../state.js';
 import { esc, toast, confirmDialog } from './dialog.js';
 import { reportMove } from './dnd.js';
-import { openLightbox } from './lightbox.js';
+import { openLightbox, isLightboxOpen, updateLightbox, closeLightbox } from './lightbox.js';
 
 const FIELDS = [
   ['desc', '內容說明'],
@@ -14,6 +14,17 @@ const FIELDS = [
 export function mountViewer(container, app) {
   container.className = 'viewer';
   let currentId = null;
+  let zoomKind = null; // 燈箱正在看哪張圖：'big' | 'crop' | null
+
+  function zoomTitle(p, kind) {
+    return `${p ? p.name : ''}${kind === 'crop' ? '（白板裁切）' : ''}`;
+  }
+
+  // 換照片時，開著的燈箱跟著換圖（「確認，下一張」不必重開）
+  function syncLightbox(p, kind, url) {
+    if (!url || zoomKind !== kind || !isLightboxOpen()) return;
+    updateLightbox(url, zoomTitle(p, kind));
+  }
 
   function renderFull(p) {
     container.innerHTML = `
@@ -33,13 +44,22 @@ export function mountViewer(container, app) {
         <button class="btn btn-primary" data-act="confirm">✓ 確認，下一張<kbd>Enter</kbd></button>
       </div>`;
     const img = container.querySelector('.big img');
-    app.fullUrl(p).then((u) => currentId === p.id && (img.src = u)).catch(console.error);
+    app
+      .fullUrl(p)
+      .then((u) => {
+        if (currentId !== p.id) return;
+        img.src = u;
+        syncLightbox(p, 'big', u);
+      })
+      .catch(console.error);
     app
       .cropUrl(p)
       .then((u) => {
         if (currentId !== p.id) return;
         const c = container.querySelector('.crop');
         c.innerHTML = u ? `<img alt="白板裁切" src="${u}">` : `<span>${p.source === 'filename' ? '檔名解析，無需辨識' : '尚無裁切'}</span>`;
+        syncLightbox(p, 'crop', u);
+        if (!u && zoomKind === 'crop') closeLightbox();
       })
       .catch(console.error);
   }
@@ -60,7 +80,9 @@ export function mountViewer(container, app) {
     // 辨識完成後才有裁切
     if (p.bbox && !container.querySelector('.crop img')) {
       app.cropUrl(p).then((u) => {
-        if (u && currentId === p.id) container.querySelector('.crop').innerHTML = `<img alt="白板裁切" src="${u}">`;
+        if (!u || currentId !== p.id) return;
+        container.querySelector('.crop').innerHTML = `<img alt="白板裁切" src="${u}">`;
+        syncLightbox(p, 'crop', u);
       });
     }
   }
@@ -71,6 +93,7 @@ export function mountViewer(container, app) {
       container.className = 'viewer';
       container.innerHTML = '<div class="empty">左邊點一列，這裡會顯示大圖與白板裁切。</div>';
       currentId = null;
+      closeLightbox();
       return;
     }
     container.className = `viewer ${p.status}`;
@@ -95,8 +118,15 @@ export function mountViewer(container, app) {
     const zoomable = e.target.closest('.big img, .crop img');
     if (zoomable && zoomable.getAttribute('src')) {
       const p = app.photo(currentId);
-      const inCrop = !!zoomable.closest('.crop');
-      return openLightbox(zoomable.src, { title: `${p ? p.name : ''}${inCrop ? '（白板裁切）' : ''}` });
+      const kind = zoomable.closest('.crop') ? 'crop' : 'big';
+      zoomKind = kind;
+      openLightbox(zoomable.src, {
+        title: zoomTitle(p, kind),
+        onClose: () => {
+          zoomKind = null;
+        },
+      });
+      return;
     }
     const nav = e.target.closest('[data-nav]');
     if (nav) return app.stepSelection(Number(nav.dataset.nav));
@@ -131,5 +161,8 @@ export function mountViewer(container, app) {
     }
   });
   render();
-  return unsubscribe;
+  return () => {
+    closeLightbox();
+    unsubscribe();
+  };
 }

@@ -1,7 +1,7 @@
 // 燈箱的縮放/平移數學（純函式，不碰 DOM）。
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { clamp, wheelFactor, zoomAt, clampPan, MIN_SCALE, MAX_SCALE, IDENTITY } from '../../web/js/ui/lightbox.js';
+import { clamp, wheelFactor, zoomAt, clampPan, isTypingTarget, MIN_SCALE, MAX_SCALE, IDENTITY } from '../../web/js/ui/lightbox.js';
 
 const near = (a, b, eps = 1e-9) => assert.ok(Math.abs(a - b) < eps, `${a} ≉ ${b}`);
 
@@ -59,4 +59,19 @@ test('縮放後再夾限：右下角放大不會出現空白邊', () => {
   assert.equal(v.scale, 3);
   near(v.tx, -800);
   near(v.ty, -600);
+});
+
+// 燈箱是非強制視窗（不擋右欄），快捷鍵不能搶走輸入格的鍵盤
+test('isTypingTarget：輸入格／文字區／下拉／contenteditable 算在打字', () => {
+  assert.equal(isTypingTarget({ tagName: 'INPUT' }), true);
+  assert.equal(isTypingTarget({ tagName: 'TEXTAREA' }), true);
+  assert.equal(isTypingTarget({ tagName: 'SELECT' }), true);
+  assert.equal(isTypingTarget({ tagName: 'DIV', isContentEditable: true }), true);
+});
+
+test('isTypingTarget：一般元素與 null 不算', () => {
+  assert.equal(isTypingTarget({ tagName: 'DIV' }), false);
+  assert.equal(isTypingTarget({ tagName: 'BUTTON' }), false);
+  assert.equal(isTypingTarget(null), false);
+  assert.equal(isTypingTarget(undefined), false);
 });
