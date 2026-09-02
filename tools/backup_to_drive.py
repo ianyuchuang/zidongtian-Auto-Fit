@@ -135,7 +135,8 @@ def get_drive_service():
         if not CREDENTIALS_PATH.exists():
             raise RuntimeError(
                 f"找不到 Google 授權檔: {CREDENTIALS_PATH}\n"
-                "請把 OAuth 用戶端的 credentials.json 放到那裡再執行一次。"
+                "請把 OAuth 用戶端的 credentials.json 放到那裡再執行一次。\n"
+                "還沒有的話，申請步驟見 docs\\bat.md 的「第一次備份」。"
             )
         flow = InstalledAppFlow.from_client_secrets_file(str(CREDENTIALS_PATH), SCOPES)
         creds = flow.run_local_server(port=0)
