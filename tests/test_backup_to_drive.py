@@ -153,3 +153,17 @@ def test_authorize_explains_when_browser_flow_fails():
         b.authorize(flow, timeout=1)
     msg = str(e.value)
     assert "403" in msg and "發布應用程式" in msg and "AttributeError" in msg
+
+
+def test_describe_client_shows_project_and_client_prefix_only(tmp_path):
+    cred = tmp_path / "credentials.json"
+    cred.write_text('{"installed":{"project_id":"autofit-123","client_id":"680638242094-abcdefghijklmnop.apps.googleusercontent.com","client_secret":"SECRET-XYZ"}}', encoding="utf-8")
+    text = b.describe_client(cred)
+    assert "autofit-123" in text and "680638242094-abcdefg" in text
+    assert "SECRET" not in text and "googleusercontent" not in text
+
+
+def test_describe_client_does_not_crash_on_bad_file(tmp_path):
+    cred = tmp_path / "credentials.json"
+    cred.write_text("not json", encoding="utf-8")
+    assert "讀不出" in b.describe_client(cred)

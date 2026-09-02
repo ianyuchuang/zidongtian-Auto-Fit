@@ -140,12 +140,28 @@ def get_drive_service():
                 "請把 OAuth 用戶端的 credentials.json 放到那裡再執行一次。\n"
                 "還沒有的話，申請步驟見 docs\\bat.md 的「第一次備份」。"
             )
+        log.info("用戶端：%s", describe_client(CREDENTIALS_PATH))
         flow = InstalledAppFlow.from_client_secrets_file(str(CREDENTIALS_PATH), SCOPES)
         creds = authorize(flow)
         TOKEN_PATH.parent.mkdir(parents=True, exist_ok=True)
         TOKEN_PATH.write_text(creds.to_json(), encoding="utf-8")
         log.info("已儲存授權 token: %s", TOKEN_PATH)
     return build("drive", "v3", credentials=creds, cache_discovery=False)
+
+
+def describe_client(path: Path) -> str:
+    """從 credentials.json 讀出專案 id 與用戶端 id 前段（不含 secret），
+    讓人能對照 Cloud Console 右上角選的專案是不是同一個。"""
+    import json
+
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        info = data.get("installed") or data.get("web") or {}
+        project = info.get("project_id") or "（沒有 project_id）"
+        client = (info.get("client_id") or "")[:20]
+        return f"專案 {project}，用戶端 {client}…"
+    except Exception as e:
+        return f"（讀不出 {path.name}：{e}）"
 
 
 def authorize(flow, timeout: int = AUTH_TIMEOUT):
@@ -162,7 +178,8 @@ def authorize(flow, timeout: int = AUTH_TIMEOUT):
         raise RuntimeError(
             "Google 授權沒有完成。\n"
             "  - 瀏覽器顯示「已封鎖存取權 / 403 access_denied」：那支 app 還在「測試中」，\n"
-            f"    到 {AUDIENCE_URL} 按「發布應用程式」，或把自己的 Gmail 加進「測試使用者」，等一兩分鐘再跑\n"
+            f"    到 {AUDIENCE_URL} 按「發布應用程式」（跳出視窗要按「確認」），或把自己的 Gmail 加進「測試使用者」；\n"
+            "    Console 右上角選的專案必須是上面「用戶端：專案 …」那一個，否則發布的是別的專案\n"
             "  - 瀏覽器沒有打開：把上面印出的網址貼到 Chrome / Edge\n"
             f"  - 超過 {timeout} 秒沒按完：再跑一次\n"
             f"  （原始錯誤：{type(e).__name__}: {e}）"
