@@ -2,10 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { RECOGNIZERS, getRecognizer, DEFAULT_PROMPT } from '../../web/js/recognizer/index.js';
 
-test('登錄表：模擬版可用，本地模型與 API 明確標示未接', () => {
+test('登錄表：模擬版與 LLM API 可用，本地模型明確標示未接', () => {
   assert.equal(getRecognizer('mock').available, true);
   assert.equal(getRecognizer('local').available, false);
-  assert.equal(getRecognizer('api').available, false);
+  assert.equal(getRecognizer('api').available, true);
   assert.equal(RECOGNIZERS.length, 3);
   assert.ok(DEFAULT_PROMPT.length > 0);
   assert.throws(() => getRecognizer('nope'), /沒有這個辨識方式/);

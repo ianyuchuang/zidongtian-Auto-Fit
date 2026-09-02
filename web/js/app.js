@@ -35,6 +35,7 @@ export function createApp() {
     template: null, // {name, file} | null
     prompt: '',
     recognizerId: 'mock',
+    api: null, // LLM API 設定 {provider, apiKey, model}（只在記憶體，不存進校對暫存）
     selectedId: null,
     dirFilter: null, // 左樹點選的資料夾路徑；null = 全部
     chip: 'all',
@@ -81,13 +82,14 @@ export function createApp() {
     },
 
     // ---------- 開啟資料夾 ----------
-    async open({ rootHandle, readOnly = false, date, template = null, prompt = '', recognizerId = 'mock' }) {
+    async open({ rootHandle, readOnly = false, date, template = null, prompt = '', recognizerId = 'mock', api = null }) {
       state.root = rootHandle;
       state.readOnly = readOnly;
       state.date = date;
       state.template = template;
       state.prompt = prompt;
       state.recognizerId = recognizerId;
+      state.api = api;
       await app.rescan();
       const saved = loadSaved(rootHandle.name);
       applySaved(state.photos, saved);
@@ -173,6 +175,7 @@ export function createApp() {
               prompt: state.prompt,
               folderName: dir?.name ?? '',
               rootName: state.root.name,
+              api: state.api,
             });
             p.desc = r.desc ?? '';
             p.design = r.design ?? '';

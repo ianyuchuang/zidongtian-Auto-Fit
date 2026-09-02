@@ -41,6 +41,30 @@ export async function makeCropUrl(file, bbox) {
   return URL.createObjectURL(await toBlob(c, 'image/jpeg', 0.9));
 }
 
+/**
+ * 給 LLM API 用：長邊縮到 maxSide 的 JPEG，轉成 base64 字串。
+ * 回傳 { data, mimeType: 'image/jpeg', width, height }。
+ */
+export async function encodeJpegBase64(file, maxSide = 1500, quality = 0.9) {
+  const bmp = await bitmapOf(file);
+  const scale = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(bmp.width * scale));
+  c.height = Math.max(1, Math.round(bmp.height * scale));
+  c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+  bmp.close();
+  const buf = new Uint8Array(await (await toBlob(c, 'image/jpeg', quality)).arrayBuffer());
+  return { data: bytesToBase64(buf), mimeType: 'image/jpeg', width: c.width, height: c.height };
+}
+
+/** Uint8Array → base64（分段 btoa，避免一次 spread 幾 MB 爆堆疊）。 */
+export function bytesToBase64(bytes) {
+  let bin = '';
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+  return btoa(bin);
+}
+
 export async function imageSize(file) {
   const bmp = await bitmapOf(file);
   const r = { width: bmp.width, height: bmp.height };
