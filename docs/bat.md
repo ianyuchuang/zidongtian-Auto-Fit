@@ -33,7 +33,7 @@ cmd.exe 執行批次檔時是「跑一行 → 記住位元組位置 → 再開�
 
 ## 缺套件
 
-三個腳本用到的套件都在 `tools/requirements-tools.txt`（pytest、Google API）。
+三個腳本用到的套件都在 `tools/requirements-tools.txt`（pytest、pillow、Google API）。
 缺的時候腳本會問要不要現在裝；也可以自己開命令視窗跑：
 
 ```

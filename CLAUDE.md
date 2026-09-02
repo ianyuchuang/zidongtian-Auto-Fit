@@ -34,5 +34,5 @@
   - 校對結果暫存在瀏覽器 localStorage（依根資料夾名），不寫進照片資料夾；每筆 AI 結果記 `engine`（`mock` / `api:claude`…），換引擎重開同資料夾時，未確認的 AI 結果會重跑、已確認與檔名解析保留（否則會一直看到模擬辨識的假資料）。
   - 「刪除」＝搬到根資料夾下 `_回收桶`（網頁無法用 Windows 資源回收桶），拖回即還原，產生 Word 時略過；瀏覽器拿不到完整磁碟路徑，入口頁只顯示資料夾名與子資料夾摘要。
 - 測試：`python -m pytest`（tests/；會一併跑 `node --test tests/js/*.test.mjs`，需 Node.js）。
-- 工具套件清單 `tools/requirements-tools.txt`（pytest + Google API）；缺的時候 `tools/deps.py` 會問要不要現在裝。
+- 工具套件清單 `tools/requirements-tools.txt`（pytest、pillow、Google API）；缺的時候 `tools/deps.py` 會問要不要現在裝。
 - 待定：板型 docx 目前只記錄檔名、輸出仍用預設版面；低信心門檻暫 70%；每個資料夾各出一份 docx（同 V1.0）。

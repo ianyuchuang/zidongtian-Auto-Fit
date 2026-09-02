@@ -85,3 +85,19 @@ def test_missing_pytest_is_reported_not_crashed(git, monkeypatch):
                         lambda *a, **k: (_ for _ in ()).throw(RuntimeError("缺少套件 pytest")))
     assert g.main([]) == 1
     assert not git.ran(["git", "push"])
+
+
+def test_test_modules_are_covered_by_requirements():
+    # 測試需要的套件都要寫進 requirements，否則裝了也補不齊（PIL 的套件名是 pillow）
+    req = (Path(__file__).resolve().parent.parent / "tools" / "requirements-tools.txt")
+    text = req.read_text(encoding="utf-8").lower()
+    assert {"pytest", "PIL"} <= set(g.TEST_MODULES)
+    for pkg in ("pytest", "pillow"):
+        assert pkg in text
+
+
+def test_run_tests_checks_every_test_dependency_first(git, monkeypatch):
+    seen = []
+    monkeypatch.setattr(g.deps, "ensure", lambda mods, what: seen.append(list(mods)))
+    assert g.main(["--no-push"]) == 0
+    assert seen == [g.TEST_MODULES]

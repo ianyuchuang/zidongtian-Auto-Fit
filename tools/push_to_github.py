@@ -22,6 +22,9 @@ import deps  # noqa: E402
 
 REPO_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_MESSAGE = "更新自懂填 Auto-Fit"
+# 跑完整個 tests/ 需要的套件（import 名稱），與 requirements-tools.txt 對應。
+# 少一個就會有測試紅掉、擋住推送，所以在跑之前先一次問完。
+TEST_MODULES = ["pytest", "PIL"]
 BRANCH = "main"
 
 PUSH_HINTS = """
@@ -58,7 +61,7 @@ def ask_message() -> str:
 
 def run_tests() -> bool:
     print("\n[1/3] 測試...")
-    deps.ensure(["pytest"], "測試")
+    deps.ensure(TEST_MODULES, "測試")
     if call([sys.executable, "-m", "pytest", "-q"]) != 0:
         print("\n[X] 測試沒過，先不要推。把上面的訊息貼給 Claude。")
         return False
