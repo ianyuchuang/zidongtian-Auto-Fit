@@ -7,6 +7,7 @@
     python experiments/qwen3vl/run.py --size 4b                 # 單階段：整張縮到 1500px 直接讀
     python experiments/qwen3vl/run.py --size 2b --mode twostage # 兩階段：768px 找白板框 → 原圖裁切再讀
     python experiments/qwen3vl/run.py --size 4b --rescore       # 用上次 raw 重算，不跑模型
+    python experiments/qwen3vl/run.py --size 4b --llama-dir ..\llama.cpp-vulkan --ngl 99 --tag vulkan  # 核顯
 輸出：experiments/results/qwen3vl_<size>_<mode>.json
 模型要求輸出白板上「所有列」的 JSON；評分時取與正解最接近的一列（見 common.best_row）。
 """
@@ -53,7 +54,7 @@ def port_open(port: int) -> bool:
         return s.connect_ex(("127.0.0.1", port)) == 0
 
 
-def start_server(size: str, llama_dir: Path, models_dir: Path, port: int):
+def start_server(size: str, llama_dir: Path, models_dir: Path, port: int, ngl: int = 0):
     exe = llama_dir / "llama-server.exe"
     if not exe.exists():
         exe = llama_dir / "llama-server"
@@ -64,7 +65,7 @@ def start_server(size: str, llama_dir: Path, models_dir: Path, port: int):
         if not f.exists():
             sys.exit(f"找不到模型檔：{f}")
     cmd = [str(exe), "-m", str(models_dir / m), "--mmproj", str(models_dir / mm),
-           "--host", "127.0.0.1", "--port", str(port), "-c", "16384", "-ngl", "0", "--temp", "0"]
+           "--host", "127.0.0.1", "--port", str(port), "-c", "16384", "-ngl", str(ngl), "--temp", "0"]
     print("啟動 llama-server:", " ".join(cmd), flush=True)
     proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     t = time.perf_counter()
@@ -181,6 +182,8 @@ def main():
     ap.add_argument("--llama-dir", type=Path, default=LLAMA_DIR)
     ap.add_argument("--models-dir", type=Path, default=BASE / "models")
     ap.add_argument("--port", type=int, default=PORT)
+    ap.add_argument("--ngl", type=int, default=0, help="卸載到 GPU 的層數；CPU 版執行檔用 0，Vulkan/SYCL 版可用 99（核顯）")
+    ap.add_argument("--tag", default="", help="結果檔名附加字（例如 vulkan），區分不同執行檔的結果")
     ap.add_argument("--out", type=Path, default=None)
     ap.add_argument("--rescore", action="store_true")
     args = ap.parse_args()
@@ -189,7 +192,7 @@ def main():
     except Exception:
         pass
     model = f"Qwen3-VL-{args.size.upper()}-Instruct Q4_K_M"
-    out_path = args.out or RESULT_DIR / f"qwen3vl_{args.size}_{args.mode}.json"
+    out_path = args.out or RESULT_DIR / f"qwen3vl_{args.size}_{args.mode}{'_' + args.tag if args.tag else ''}.json"
 
     if args.rescore:
         prev = json.loads(out_path.read_text(encoding="utf-8"))
@@ -204,7 +207,7 @@ def main():
             sys.exit(f"資料夾裡沒有照片：{args.photos}")
         proc = None
         if not port_open(args.port):
-            proc = start_server(args.size, args.llama_dir, args.models_dir, args.port)
+            proc = start_server(args.size, args.llama_dir, args.models_dir, args.port, args.ngl)
         else:
             print(f"port {args.port} 已有 server，直接用（請確認是 {args.size} 的模型）")
         results, secs = {}, {}
@@ -235,6 +238,7 @@ def main():
     summary = common.summarize([r for r in rows if r["gt"]])
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps({"model": model, "mode": args.mode, "max_side": args.max_side,
+                                    "llama_dir": str(args.llama_dir), "ngl": args.ngl,
                                     "photos": str(photos[0].parent), "summary": summary, "rows": rows},
                                    ensure_ascii=False, indent=2), encoding="utf-8")
     common.print_report(f"{model} [{args.mode}]", rows, summary)
