@@ -72,3 +72,21 @@ test('planExport：每資料夾一組、依 dirs 順序、空內容說明略過'
   assert.match(w[0], /2 張 AI/);
   assert.match(w[1], /1 張內容說明為空/);
 });
+
+test('planExport / exportWarnings：回收桶裡的照片不輸出、不計入提醒', () => {
+  const dirs = [
+    { path: '', name: '帷幕骨架' },
+    { path: '4F', name: '4F' },
+    { path: '_回收桶', name: '_回收桶' },
+  ];
+  const photos = [
+    { id: 'a', dir: '4F', desc: 'a', status: 'parsed' },
+    { id: 't', dir: '_回收桶', desc: 't', status: 'ai' },
+    { id: 'u', dir: '_回收桶', desc: '', status: 'pending' },
+  ];
+  const { groups, skipped, trashed } = planExport(photos, dirs);
+  assert.deepEqual(groups.map((g) => [g.folderName, g.photos.map((p) => p.id)]), [['4F', ['a']]]);
+  assert.deepEqual(skipped, []);
+  assert.deepEqual(trashed.map((p) => p.id), ['t', 'u']);
+  assert.deepEqual(exportWarnings(photos), []);
+});

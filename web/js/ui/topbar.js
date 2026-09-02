@@ -87,10 +87,11 @@ async function exportWord(app) {
     return;
   }
   const list = plan.groups.map((g) => `<li>${esc(g.folderName)}：${g.photos.length} 張</li>`).join('');
+  const trashed = plan.trashed?.length ? `<p class="muted">回收桶（_回收桶）裡的 ${plan.trashed.length} 張不輸出。</p>` : '';
   const warn = plan.warnings.length ? `<p style="color:var(--yellow-text)">${plan.warnings.map(esc).join('<br>')}</p>` : '';
   const go = await showDialog({
     title: '產生 Word 檔',
-    body: `<p>每個資料夾各產生一份，存在該資料夾${app.state.readOnly ? '（唯讀模式改為下載）' : ''}，檔名「${esc(app.dateInfo().compact)} 資料夾名.docx」。</p><ul>${list}</ul>${warn}`,
+    body: `<p>每個資料夾各產生一份，存在該資料夾${app.state.readOnly ? '（唯讀模式改為下載）' : ''}，檔名「${esc(app.dateInfo().compact)} 資料夾名.docx」。</p><ul>${list}</ul>${trashed}${warn}`,
     buttons: [
       { label: '取消', value: false },
       { label: '產生', value: true, primary: true },

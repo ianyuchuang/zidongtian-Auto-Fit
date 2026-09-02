@@ -1,6 +1,8 @@
 // Word 輸出的純邏輯（無 DOM、不碰 docx 函式庫）：版面常數、分組、尺寸、檔名、檢查。
 // 版面常數取自 V1.0 self_check_core.py（EMU → twips / px）。
 
+import { isTrashDir } from './state.js';
+
 const EMU_PER_TWIP = 635;
 const EMU_PER_PX = 9525;
 
@@ -57,12 +59,17 @@ export function pairRows(photos, perRow = LAYOUT.perRow) {
 /**
  * 規劃輸出：每個有照片的資料夾各產生一份 docx（與 V1.0 相同，存在該資料夾）。
  * orderedPhotos 已依表格順序排好。dirs: [{path, name}]。
- * 內容說明為空的照片略過並列入 skipped。
+ * 內容說明為空的照片略過並列入 skipped；回收桶（_回收桶）裡的照片不輸出，列入 trashed。
  */
 export function planExport(orderedPhotos, dirs) {
   const byDir = new Map();
   const skipped = [];
+  const trashed = [];
   for (const p of orderedPhotos) {
+    if (isTrashDir(p.dir)) {
+      trashed.push(p);
+      continue;
+    }
     if (!(p.desc || '').trim()) {
       skipped.push(p);
       continue;
@@ -75,12 +82,13 @@ export function planExport(orderedPhotos, dirs) {
     const photos = byDir.get(d.path);
     if (photos && photos.length) groups.push({ dir: d.path, folderName: d.name, photos });
   }
-  return { groups, skipped };
+  return { groups, skipped, trashed };
 }
 
 /** 輸出前的提醒（不阻擋）。 */
 export function exportWarnings(orderedPhotos) {
   const warnings = [];
+  orderedPhotos = orderedPhotos.filter((p) => !isTrashDir(p.dir));
   const unreviewed = orderedPhotos.filter((p) => p.status === 'ai' || p.status === 'low');
   if (unreviewed.length) warnings.push(`有 ${unreviewed.length} 張 AI 辨識結果尚未確認，將以目前欄位內容輸出。`);
   const pending = orderedPhotos.filter((p) => p.status === 'pending');

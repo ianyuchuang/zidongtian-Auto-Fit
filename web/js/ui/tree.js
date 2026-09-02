@@ -1,6 +1,8 @@
 // 左欄：資料夾樹（點選篩選、拖列到資料夾即搬移）、新增資料夾、底部進度。
 
+import { isTrashDir } from '../state.js';
 import { esc, promptDialog, toast } from './dialog.js';
+import { DND_MULTI, DND_SINGLE, dropIds, reportMove } from './dnd.js';
 
 export function mountTree(container, app) {
   container.className = 'sidebar';
@@ -17,9 +19,9 @@ export function mountTree(container, app) {
     treeEl.innerHTML = dirs
       .map(
         (d) => `
-      <div class="tree-node ${(dirFilter ?? null) === (d.depth === 0 ? null : d.path) ? 'active' : ''}"
-           data-path="${esc(d.path)}" style="padding-left:${10 + d.depth * 16}px" title="${esc(d.path || d.name)}">
-        <span>${d.depth === 0 ? '🗀' : '🗀'}</span><span>${esc(d.name)}</span>
+      <div class="tree-node ${(dirFilter ?? null) === (d.depth === 0 ? null : d.path) ? 'active' : ''} ${isTrashDir(d.path) ? 'trash' : ''}"
+           data-path="${esc(d.path)}" style="padding-left:${10 + d.depth * 16}px" title="${esc(d.path || d.name)}${isTrashDir(d.path) ? '（回收桶：不輸出 Word，拖回其他資料夾即還原）' : ''}">
+        <span>${isTrashDir(d.path) ? '🗑' : '🗀'}</span><span>${esc(d.name)}</span>
         <span class="count">${d.fileCount}</span>
       </div>`,
       )
@@ -41,7 +43,7 @@ export function mountTree(container, app) {
   // 拖曳搬移
   treeEl.addEventListener('dragover', (e) => {
     const node = e.target.closest('.tree-node');
-    if (!node || !e.dataTransfer.types.includes('text/autofit-photo')) return;
+    if (!node || !(e.dataTransfer.types.includes(DND_MULTI) || e.dataTransfer.types.includes(DND_SINGLE))) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     node.classList.add('over');
@@ -52,11 +54,11 @@ export function mountTree(container, app) {
     if (!node) return;
     e.preventDefault();
     node.classList.remove('over');
-    const id = e.dataTransfer.getData('text/autofit-photo');
-    if (!id) return;
+    const ids = dropIds(e.dataTransfer);
+    if (!ids.length) return;
     try {
-      const ok = await app.moveToDir(id, node.dataset.path);
-      if (ok) toast(`已搬到「${app.dirOf(node.dataset.path)?.name}」${app.state.readOnly ? '（唯讀複本，未動到實際檔案）' : ''}`);
+      const r = await app.moveManyToDir(ids, node.dataset.path);
+      reportMove(app, r, app.dirOf(node.dataset.path)?.name ?? node.dataset.path);
     } catch (err) {
       console.error(err);
       toast(`搬移失敗：${err.message}`, { error: true });

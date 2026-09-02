@@ -37,6 +37,9 @@ input[type="text"]:focus, textarea:focus { outline: 2px solid var(--accent); out
 .btn:disabled { opacity: .5; cursor: default; }
 .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
 .btn-primary:hover { background: var(--accent-dark); }
+.btn-danger { color: var(--red-text); border-color: #e6b8b3; }
+.btn-danger:hover { background: var(--red-bg); }
+.btn-danger:disabled:hover { background: #fff; }
 .muted { color: var(--muted); }
 .small { font-size: 12px; }
 
@@ -85,6 +88,7 @@ input[type="text"]:focus, textarea:focus { outline: 2px solid var(--accent); out
 .tree-node.active { background: var(--sel); border-left-color: var(--accent); font-weight: 600; }
 .tree-node.over { background: var(--accent-soft); outline: 2px dashed var(--accent); outline-offset: -2px; }
 .tree-node .count { margin-left: auto; color: var(--muted); font-size: 12px; }
+.tree-node.trash { color: var(--red-text); }
 .tree-add { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 8px 12px; color: var(--accent); }
 .tree-add:hover { background: #f5f6f8; }
 .sidebar .stats { border-top: 1px solid var(--line); padding: 10px 12px; color: var(--muted); font-size: 12px; line-height: 1.7; }
@@ -97,6 +101,10 @@ input[type="text"]:focus, textarea:focus { outline: 2px solid var(--accent); out
 .chip[data-chip="low"].active { background: var(--red-text); border-color: var(--red-text); }
 .chip .n { opacity: .75; margin-left: 3px; }
 .filters .search { margin-left: auto; width: 180px; }
+.bulkbar { display: flex; align-items: center; gap: 10px; padding: 6px 10px; background: var(--accent-soft); border: 1px solid #bfe0d1; border-radius: var(--radius); font-size: 13px; }
+.bulkbar select { border: 1px solid var(--line); border-radius: var(--radius); padding: 4px 6px; background: #fff; }
+.bulkbar .btn { padding: 4px 10px; }
+.bulkbar[hidden] { display: none; }
 .table-wrap { flex: 1; overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
 table.photos { width: 100%; border-collapse: collapse; }
 table.photos th { position: sticky; top: 0; background: #f1f3f5; text-align: left; font-weight: 600; font-size: 12px; color: #444; padding: 8px 6px; z-index: 1; }
@@ -111,6 +119,10 @@ tr.photo:hover td { background: #fafbfc; }
 tr.photo.selected td { background: var(--sel); }
 tr.photo.selected td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 tr.photo.dragging { opacity: .4; }
+tr.photo.checked td { background: #f3f8f5; }
+td.chk, th.chk { width: 34px; text-align: center; }
+td.chk input, th.chk input { width: 16px; height: 16px; cursor: pointer; margin: 0; }
+tr.group.trash td { color: var(--red-text); }
 tr.photo.drop-before td { box-shadow: inset 0 2px 0 var(--accent); }
 tr.photo.drop-after td { box-shadow: inset 0 -2px 0 var(--accent); }
 .handle { color: #9aa1ab; cursor: grab; font-size: 16px; user-select: none; text-align: center; width: 20px; }
@@ -148,6 +160,7 @@ td.conf { color: var(--muted); width: 48px; text-align: right; }
 .viewer .actions { display: flex; gap: 10px; margin-top: 18px; }
 .viewer .actions .btn { flex: 1; padding: 9px; }
 .viewer .actions .btn-primary { flex: 2; }
+.viewer .actions .btn-danger { flex: 0 0 auto; padding: 9px 12px; }
 .viewer .actions kbd { opacity: .75; font-weight: 400; margin-left: 6px; font-family: inherit; }
 
 /* ---------- 對話框 / 提示 ---------- */

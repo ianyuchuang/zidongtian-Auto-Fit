@@ -9,6 +9,10 @@ import {
   sortPhotos,
   reorderWithinDir,
   assignOrder,
+  TRASH_DIR,
+  isTrashDir,
+  pruneChecked,
+  moveSummary,
 } from '../../web/js/state.js';
 
 const mk = (id, dir, status, extra = {}) => ({ id, dir, status, desc: id, order: 0, ...extra });
@@ -70,4 +74,31 @@ test('reorderWithinDir：同資料夾前後插入；跨資料夾回 null', () =>
   const order = assignOrder(['e', 'c', 'd']);
   assert.equal(order.get('e'), 0);
   assert.equal(order.get('d'), 2);
+});
+
+test('isTrashDir：回收桶本身與其下層', () => {
+  assert.equal(TRASH_DIR, '_回收桶');
+  assert.equal(isTrashDir('_回收桶'), true);
+  assert.equal(isTrashDir('_回收桶/舊'), true);
+  assert.equal(isTrashDir('_回收桶2'), false);
+  assert.equal(isTrashDir('4F/_回收桶'), false);
+  assert.equal(isTrashDir(''), false);
+  assert.equal(isTrashDir(undefined), false);
+});
+
+test('pruneChecked：只留還存在的 id', () => {
+  const checked = new Set(['a', 'zzz', 'e']);
+  assert.equal(pruneChecked(checked, photos), 1);
+  assert.deepEqual([...checked], ['a', 'e']);
+  assert.equal(pruneChecked(checked, photos), 0);
+});
+
+test('moveSummary：成功 / 部分失敗 / 沒動 / 唯讀', () => {
+  assert.equal(moveSummary({ moved: 3, failed: [] }, '5F'), '已搬 3 張到「5F」');
+  assert.equal(moveSummary({ moved: 1, failed: [] }, '5F', { readOnly: true }), '已搬 1 張到「5F」（唯讀複本，未動到實際檔案）');
+  assert.equal(
+    moveSummary({ moved: 1, failed: [{ name: 'a.jpg', error: '同名' }] }, '5F'),
+    '已搬 1 張到「5F」。1 張失敗：a.jpg（同名）',
+  );
+  assert.equal(moveSummary({ moved: 0, failed: [] }, '5F'), '沒有需要搬移的照片');
 });

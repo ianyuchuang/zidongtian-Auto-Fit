@@ -1,7 +1,8 @@
 // 右欄：檢視器（大圖 + 日期戳、白板裁切、三欄同步編輯、跳過 / 確認）。
 
-import { STATUS_LABEL } from '../state.js';
-import { esc } from './dialog.js';
+import { STATUS_LABEL, TRASH_DIR, isTrashDir } from '../state.js';
+import { esc, toast, confirmDialog } from './dialog.js';
+import { reportMove } from './dnd.js';
 
 const FIELDS = [
   ['desc', '內容說明'],
@@ -25,6 +26,7 @@ export function mountViewer(container, app) {
       <div class="crop"><span>尚無裁切</span></div>
       ${FIELDS.map(([f, label]) => `<div class="f"><label>${label}</label><input type="text" data-f="${f}" value="${esc(p[f])}"></div>`).join('')}
       <div class="actions">
+        <button class="btn btn-danger" data-act="trash" title="${isTrashDir(p.dir) ? `已在「${TRASH_DIR}」，拖回其他資料夾即還原` : `移到「${TRASH_DIR}」（可從左側資料夾樹拖回來）`}" ${isTrashDir(p.dir) ? 'disabled' : ''}>🗑</button>
         <button class="btn" data-act="skip">跳過</button>
         <button class="btn btn-primary" data-act="confirm">✓ 確認，下一張<kbd>Enter</kbd></button>
       </div>`;
@@ -88,8 +90,24 @@ export function mountViewer(container, app) {
     const act = e.target.closest('[data-act]');
     if (!act || !currentId) return;
     if (act.dataset.act === 'confirm') app.confirm(currentId);
+    else if (act.dataset.act === 'trash') trashCurrent();
     else app.skip(currentId);
   });
+
+  async function trashCurrent() {
+    const p = app.photo(currentId);
+    if (!p) return;
+    const ok = await confirmDialog('刪除照片', `把「${esc(p.name)}」搬到「${TRASH_DIR}」？（不會真的刪檔，之後可從左側資料夾樹拖回來。）`);
+    if (!ok) return;
+    try {
+      const r = await app.trash([p.id]);
+      reportMove(app, r, TRASH_DIR);
+      if (r.moved) app.gotoNextPending(app.state.selectedId);
+    } catch (err) {
+      console.error(err);
+      toast(`刪除失敗：${err.message}`, { error: true });
+    }
+  }
 
   const unsubscribe = app.subscribe((what) => {
     if (what === 'date') {

@@ -11,6 +11,9 @@ import {
   reorderWithinDir,
   assignOrder,
   nextPendingReview,
+  TRASH_DIR,
+  isTrashDir,
+  pruneChecked,
 } from './state.js';
 import { loadSaved, savePhotos, applySaved } from './storage.js';
 import { makeThumbUrl, makeCropUrl } from './imaging.js';
@@ -37,6 +40,7 @@ export function createApp() {
     chip: 'all',
     query: '',
     collapsed: new Set(),
+    checked: new Set(), // 勾選的照片 id（多選：批次搬移 / 刪除）
     recognizing: false,
   };
 
@@ -134,6 +138,7 @@ export function createApp() {
       state.tree = tree;
       state.dirs = dirs;
       state.photos = photos;
+      if (pruneChecked(state.checked, photos)) emit('checked');
       emit('tree');
       emit('photos');
     },
@@ -214,6 +219,30 @@ export function createApp() {
       emit('filter');
     },
 
+    // ---------- 勾選（多選） ----------
+    isChecked(id) {
+      return state.checked.has(id);
+    },
+    setChecked(ids, on) {
+      for (const id of ids) {
+        if (on) state.checked.add(id);
+        else state.checked.delete(id);
+      }
+      emit('checked');
+    },
+    toggleChecked(id) {
+      app.setChecked([id], !state.checked.has(id));
+    },
+    clearChecked() {
+      if (!state.checked.size) return;
+      state.checked.clear();
+      emit('checked');
+    },
+    /** 勾選的照片，依表格順序。 */
+    checkedPhotos() {
+      return app.orderedPhotos().filter((p) => state.checked.has(p.id));
+    },
+
     // ---------- 編輯 ----------
     setField(id, field, value) {
       const p = byId(id);
@@ -266,6 +295,7 @@ export function createApp() {
       }
       Object.assign(state, { page: 'entry', root: null, tree: null, dirs: [], photos: [], selectedId: null, dirFilter: null, chip: 'all', query: '', recognizing: false });
       state.collapsed = new Set();
+      state.checked = new Set();
       emit('page');
     },
 
@@ -279,24 +309,72 @@ export function createApp() {
       emit('photos');
       return true;
     },
+    /** 搬一張到資料夾。同資料夾 / 找不到 → false；搬移失敗丟錯。 */
     async moveToDir(id, dirPath) {
       const p = byId(id);
+      if (!p || !app.dirOf(dirPath) || p.dir === dirPath) return false;
+      const r = await app.moveManyToDir([id], dirPath);
+      if (r.failed.length) throw new Error(r.failed[0].error);
+      return r.moved > 0;
+    },
+    /**
+     * 批次搬移到資料夾。一張失敗不影響其他張；回傳 { moved, failed: [{name, error}] }。
+     * 搬完的照片會從勾選集合移除（id 隨路徑改變）。
+     */
+    async moveManyToDir(ids, dirPath) {
       const to = app.dirOf(dirPath);
-      if (!p || !to || p.dir === dirPath) return false;
-      const from = app.dirOf(p.dir);
-      const newHandle = await moveFile(p.handle, from.handle, to.handle);
-      const maxOrder = Math.max(-1, ...state.photos.filter((x) => x.dir === dirPath).map((x) => x.order));
-      p.handle = newHandle;
-      p.file = null;
-      p.dir = dirPath;
-      p.path = dirPath ? `${dirPath}/${p.name}` : p.name;
-      p.id = p.path;
-      p.order = maxOrder + 1;
-      if (state.selectedId === id) state.selectedId = p.id;
-      await app.rescan();
-      save();
-      emit('selection');
-      return true;
+      if (!to) throw new Error(`找不到資料夾：${dirPath || '（根資料夾）'}`);
+      let nextOrder = Math.max(-1, ...state.photos.filter((x) => x.dir === dirPath).map((x) => x.order)) + 1;
+      const result = { moved: 0, failed: [] };
+      for (const id of ids) {
+        const p = byId(id);
+        if (!p || p.dir === dirPath) continue;
+        const from = app.dirOf(p.dir);
+        try {
+          const newHandle = await moveFile(p.handle, from.handle, to.handle);
+          p.handle = newHandle;
+          p.file = null;
+          p.dir = dirPath;
+          p.path = dirPath ? `${dirPath}/${p.name}` : p.name;
+          state.checked.delete(p.id);
+          if (state.selectedId === p.id) state.selectedId = p.path;
+          p.id = p.path;
+          p.order = nextOrder++;
+          result.moved += 1;
+        } catch (e) {
+          console.error('搬移失敗', p.name, e);
+          result.failed.push({ name: p.name, error: e.message });
+        }
+      }
+      if (result.moved) {
+        await app.rescan();
+        save();
+        emit('checked');
+        emit('selection');
+      }
+      return result;
+    },
+    /** 刪除＝搬到根資料夾下的 _回收桶（沒有就建）。已在回收桶的略過。回傳同 moveManyToDir，外加 alreadyTrashed。 */
+    async trash(ids) {
+      if (!app.dirOf(TRASH_DIR)) {
+        try {
+          await createDir(state.root, TRASH_DIR);
+        } catch (e) {
+          if (!/已存在/.test(e.message)) throw e;
+        }
+        await app.rescan();
+        if (!app.dirOf(TRASH_DIR)) throw new Error(`建立回收桶資料夾「${TRASH_DIR}」失敗`);
+      }
+      const targets = [];
+      let alreadyTrashed = 0;
+      for (const id of ids) {
+        const p = byId(id);
+        if (!p) continue;
+        if (isTrashDir(p.dir)) alreadyTrashed += 1;
+        else targets.push(id);
+      }
+      const r = await app.moveManyToDir(targets, TRASH_DIR);
+      return { ...r, alreadyTrashed };
     },
     async addFolder(name) {
       await createDir(state.root, name);

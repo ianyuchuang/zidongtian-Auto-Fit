@@ -115,3 +115,32 @@ export function reorderWithinDir(photos, movingId, targetId, place = 'before') {
 export function assignOrder(ids) {
   return new Map(ids.map((id, i) => [id, i]));
 }
+
+/** 回收桶：根資料夾下的固定子資料夾。「刪除」＝搬進去（網頁無法丟進 Windows 資源回收桶），可再拖回來還原。 */
+export const TRASH_DIR = '_回收桶';
+
+export function isTrashDir(path) {
+  return path === TRASH_DIR || (path ?? '').startsWith(`${TRASH_DIR}/`);
+}
+
+/** 勾選集合只留還存在的 id（就地修改），回傳移除數。 */
+export function pruneChecked(checked, photos) {
+  const alive = new Set(photos.map((p) => p.id));
+  let removed = 0;
+  for (const id of [...checked]) {
+    if (!alive.has(id)) {
+      checked.delete(id);
+      removed += 1;
+    }
+  }
+  return removed;
+}
+
+/** 批次搬移結果 → 提示文字。r = { moved, failed: [{name, error}] } */
+export function moveSummary(r, dirName, { readOnly = false } = {}) {
+  const parts = [];
+  if (r.moved) parts.push(`已搬 ${r.moved} 張到「${dirName}」${readOnly ? '（唯讀複本，未動到實際檔案）' : ''}`);
+  if (r.failed.length) parts.push(`${r.failed.length} 張失敗：${r.failed.map((f) => `${f.name}（${f.error}）`).join('；')}`);
+  if (!parts.length) parts.push('沒有需要搬移的照片');
+  return parts.join('。');
+}
