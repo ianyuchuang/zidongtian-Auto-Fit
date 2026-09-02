@@ -102,3 +102,31 @@ export async function writeFile(dirHandle, name, blob, altName = null) {
     return tryWrite(altName);
   }
 }
+
+/** 入口頁顯示用的摘要：{ name, subdirs: 第一層子資料夾名, dirCount: 含下層的子資料夾數, fileCount: 照片總數 } */
+export function describeTree(tree) {
+  let fileCount = 0;
+  let dirCount = 0;
+  (function walk(n) {
+    fileCount += n.files.length;
+    for (const c of n.children) {
+      dirCount += 1;
+      walk(c);
+    }
+  })(tree);
+  return { name: tree.name, subdirs: tree.children.map((c) => c.name), dirCount, fileCount };
+}
+
+/** describeTree 的結果 → 一行文字，例：「子資料夾：2F、3F、4F、5F（下層共 20 個）・共 502 張照片」 */
+export function treeSummaryText({ subdirs, dirCount, fileCount }, maxShown = 8) {
+  const parts = [];
+  if (subdirs.length) {
+    const shown = subdirs.slice(0, maxShown).join('、') + (subdirs.length > maxShown ? '…' : '');
+    const nested = dirCount > subdirs.length ? `（下層共 ${dirCount} 個）` : '';
+    parts.push(`子資料夾：${shown}${nested}`);
+  } else {
+    parts.push('沒有子資料夾');
+  }
+  parts.push(`共 ${fileCount} 張照片`);
+  return parts.join('・');
+}

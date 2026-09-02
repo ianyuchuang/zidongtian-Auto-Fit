@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MemoryDirectoryHandle, memoryTreeFromFileList } from '../../web/js/fs/memory.js';
-import { scanTree, flattenDirs, findDir, moveFile, createDir, writeFile, exists } from '../../web/js/fs/adapter.js';
+import { scanTree, flattenDirs, findDir, moveFile, createDir, writeFile, exists, describeTree, treeSummaryText } from '../../web/js/fs/adapter.js';
 
 function sampleRoot() {
   const root = new MemoryDirectoryHandle('帷幕骨架');
@@ -80,4 +80,17 @@ test('memoryTreeFromFileList：依 webkitRelativePath 建樹', async () => {
   const tree = await scanTree(root);
   assert.deepEqual(flattenDirs(tree).map((d) => d.path), ['', '4F', '5F']);
   assert.deepEqual(tree.files.map((f) => f.name), ['c.jpg']);
+});
+
+test('describeTree / treeSummaryText：入口頁的資料夾摘要', async () => {
+  const root = sampleRoot();
+  const f4 = await root.getDirectoryHandle('4F');
+  const east = new MemoryDirectoryHandle('東側', f4);
+  f4._entries.set('東側', east);
+  east.putFile('e.jpg', new File(['e'], 'x'));
+  const d = describeTree(await scanTree(root));
+  assert.deepEqual(d, { name: '帷幕骨架', subdirs: ['4F', '5F'], dirCount: 3, fileCount: 5 });
+  assert.equal(treeSummaryText(d), '子資料夾：4F、5F（下層共 3 個）・共 5 張照片');
+  assert.equal(treeSummaryText({ subdirs: [], dirCount: 0, fileCount: 2 }), '沒有子資料夾・共 2 張照片');
+  assert.equal(treeSummaryText({ subdirs: ['a', 'b', 'c'], dirCount: 3, fileCount: 0 }, 2), '子資料夾：a、b…・共 0 張照片');
 });

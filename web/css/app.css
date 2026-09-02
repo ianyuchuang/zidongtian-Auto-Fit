@@ -53,6 +53,8 @@ input[type="text"]:focus, textarea:focus { outline: 2px solid var(--accent); out
 }
 .dropzone:hover, .dropzone.over { border-color: var(--accent); background: var(--accent-soft); }
 .dropzone .picked { color: var(--accent); font-weight: 600; }
+.dropzone.has-pick .hint { display: none; }
+.dropzone .summary { margin-top: 6px; }
 .entry textarea { width: 100%; min-height: 64px; border: 1px solid var(--line); border-radius: var(--radius); padding: 8px; resize: vertical; }
 .entry .row { display: flex; gap: 24px; }
 .entry .row .field { flex: 1; }
