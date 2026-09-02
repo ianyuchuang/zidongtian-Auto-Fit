@@ -1,0 +1,104 @@
+// 檔案系統操作層：所有對資料夾/檔案的存取都經過這裡。
+// handle 可以是瀏覽器 File System Access API 的 handle，或 fs/memory.js 的記憶體 handle。
+
+import { isPhotoName, naturalCompare } from '../filename.js';
+
+/**
+ * 遞迴掃描資料夾 → 樹。每個節點：{ name, path, handle, files: [{name, path, handle}], children: [節點] }
+ * path 用 '/' 串接、根為 ''。檔案與子資料夾都自然排序。
+ */
+export async function scanTree(dirHandle, path = '') {
+  const node = { name: dirHandle.name, path, handle: dirHandle, files: [], children: [] };
+  for await (const h of dirHandle.values()) {
+    if (h.kind === 'directory') {
+      if (h.name.startsWith('.')) continue;
+      node.children.push(await scanTree(h, path ? `${path}/${h.name}` : h.name));
+    } else if (h.kind === 'file' && isPhotoName(h.name)) {
+      node.files.push({ name: h.name, path: path ? `${path}/${h.name}` : h.name, handle: h });
+    }
+  }
+  node.files.sort((a, b) => naturalCompare(a.name, b.name));
+  node.children.sort((a, b) => naturalCompare(a.name, b.name));
+  return node;
+}
+
+/** 樹攤平成資料夾清單（深度優先，含根）：[{path, name, handle, depth, fileCount, node}] */
+export function flattenDirs(tree) {
+  const out = [];
+  (function walk(n, depth) {
+    out.push({ path: n.path, name: n.name, handle: n.handle, depth, fileCount: n.files.length, node: n });
+    for (const c of n.children) walk(c, depth + 1);
+  })(tree, 0);
+  return out;
+}
+
+export function findDir(tree, path) {
+  return flattenDirs(tree).find((d) => d.path === path) ?? null;
+}
+
+/**
+ * 搬移檔案到另一個資料夾（保留檔名）。
+ * 目標已有同名檔 → 丟錯，不覆蓋。優先用原生 move()，不支援就「複製 + 刪原檔」。
+ * 回傳新的 file handle。
+ */
+export async function moveFile(fileHandle, fromDir, toDir) {
+  const name = fileHandle.name;
+  if (await exists(toDir, name)) throw new Error(`目標資料夾「${toDir.name}」已有同名檔案：${name}`);
+  if (typeof fileHandle.move === 'function') {
+    try {
+      await fileHandle.move(toDir);
+      return await toDir.getFileHandle(name);
+    } catch (e) {
+      // 本機資料夾多半不支援 move()，改走複製 + 刪除
+    }
+  }
+  const file = await fileHandle.getFile();
+  const dest = await toDir.getFileHandle(name, { create: true });
+  const w = await dest.createWritable();
+  await w.write(file);
+  await w.close();
+  await fromDir.removeEntry(name);
+  return dest;
+}
+
+export async function exists(dirHandle, name) {
+  try {
+    await dirHandle.getFileHandle(name);
+    return true;
+  } catch (e) {
+    if (e && e.name === 'TypeMismatchError') return true;
+    return false;
+  }
+}
+
+export async function createDir(dirHandle, name) {
+  const clean = name.trim();
+  if (!clean || /[\\/:*?"<>|]/.test(clean)) throw new Error(`資料夾名稱不合法：${name}`);
+  try {
+    await dirHandle.getDirectoryHandle(clean);
+    throw new Error(`資料夾已存在：${clean}`);
+  } catch (e) {
+    if (e.name !== 'NotFoundError') throw e;
+  }
+  return dirHandle.getDirectoryHandle(clean, { create: true });
+}
+
+/**
+ * 寫檔。若主檔名寫不進去（例如 Word 正開著），改用 altName；還是失敗就丟錯。
+ * 回傳實際寫入的檔名。
+ */
+export async function writeFile(dirHandle, name, blob, altName = null) {
+  const tryWrite = async (n) => {
+    const h = await dirHandle.getFileHandle(n, { create: true });
+    const w = await h.createWritable();
+    await w.write(blob);
+    await w.close();
+    return n;
+  };
+  try {
+    return await tryWrite(name);
+  } catch (e) {
+    if (!altName) throw e;
+    return tryWrite(altName);
+  }
+}
