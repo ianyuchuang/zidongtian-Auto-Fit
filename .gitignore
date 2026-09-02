@@ -1,0 +1,24 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Node
+node_modules/
+
+# Temp / output
+*.tmp
+~$*
+
+# 需求與參考資料（不納入版控）
+需求及資訊來源/
+
+# 測試 / 紀錄
+.pytest_cache/
+*.log
