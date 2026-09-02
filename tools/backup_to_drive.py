@@ -51,6 +51,8 @@ KEEP_LOCAL = 7
 ZIP_PREFIX = "自懂填備份-"
 DRIVE_FOLDER_NAME = "自懂填-Auto-Fit 備份"
 SCOPES = ["https://www.googleapis.com/auth/drive.file"]
+AUTH_TIMEOUT = 180  # 瀏覽器授權等幾秒；沒完成就放棄並說明原因，不要一直卡著
+AUDIENCE_URL = "https://console.cloud.google.com/auth/audience"
 # 上傳需要的套件（import 名稱），缺了先問要不要裝
 GOOGLE_MODULES = ["googleapiclient", "google_auth_oauthlib", "google.oauth2", "google.auth"]
 
@@ -139,11 +141,32 @@ def get_drive_service():
                 "還沒有的話，申請步驟見 docs\\bat.md 的「第一次備份」。"
             )
         flow = InstalledAppFlow.from_client_secrets_file(str(CREDENTIALS_PATH), SCOPES)
-        creds = flow.run_local_server(port=0)
+        creds = authorize(flow)
         TOKEN_PATH.parent.mkdir(parents=True, exist_ok=True)
         TOKEN_PATH.write_text(creds.to_json(), encoding="utf-8")
         log.info("已儲存授權 token: %s", TOKEN_PATH)
     return build("drive", "v3", credentials=creds, cache_discovery=False)
+
+
+def authorize(flow, timeout: int = AUTH_TIMEOUT):
+    """開瀏覽器跑一次 OAuth；沒完成（403、瀏覽器沒開、超時）就大聲說明原因，不要卡住。"""
+    log.info("第一次使用：會開瀏覽器請你用 Google 帳號授權（%d 秒內沒完成就放棄）。", timeout)
+    try:
+        return flow.run_local_server(
+            port=0,
+            timeout_seconds=timeout,
+            authorization_prompt_message="瀏覽器沒有自動打開的話，把這個網址貼到 Chrome / Edge：\n{url}\n",
+            success_message="授權完成，可以關掉這個分頁，回到備份視窗。",
+        )
+    except Exception as e:
+        raise RuntimeError(
+            "Google 授權沒有完成。\n"
+            "  - 瀏覽器顯示「已封鎖存取權 / 403 access_denied」：那支 app 還在「測試中」，\n"
+            f"    到 {AUDIENCE_URL} 按「發布應用程式」，或把自己的 Gmail 加進「測試使用者」，等一兩分鐘再跑\n"
+            "  - 瀏覽器沒有打開：把上面印出的網址貼到 Chrome / Edge\n"
+            f"  - 超過 {timeout} 秒沒按完：再跑一次\n"
+            f"  （原始錯誤：{type(e).__name__}: {e}）"
+        ) from e
 
 
 def find_or_create_folder(service, name: str = DRIVE_FOLDER_NAME, cache_path: Path = FOLDER_ID_PATH) -> str:

@@ -125,3 +125,31 @@ def test_find_or_create_creates_when_absent(tmp_path):
     assert fid == "new-1"
     assert svc.files().created[0]["mimeType"] == "application/vnd.google-apps.folder"
     assert cache.read_text() == "new-1"
+
+
+# ---------- 授權流程：沒完成要說原因，不能默默卡住 ----------
+class _Flow:
+    def __init__(self, result=None, error=None):
+        self.result, self.error, self.kwargs = result, error, None
+
+    def run_local_server(self, **kwargs):
+        self.kwargs = kwargs
+        if self.error:
+            raise self.error
+        return self.result
+
+
+def test_authorize_uses_timeout_and_returns_creds():
+    flow = _Flow(result="creds")
+    assert b.authorize(flow, timeout=42) == "creds"
+    assert flow.kwargs["timeout_seconds"] == 42
+    assert flow.kwargs["port"] == 0
+
+
+def test_authorize_explains_when_browser_flow_fails():
+    # 403 頁面不會導回 localhost，run_local_server 超時後會丟 AttributeError
+    flow = _Flow(error=AttributeError("'NoneType' object has no attribute 'replace'"))
+    with pytest.raises(RuntimeError) as e:
+        b.authorize(flow, timeout=1)
+    msg = str(e.value)
+    assert "403" in msg and "發布應用程式" in msg and "AttributeError" in msg
