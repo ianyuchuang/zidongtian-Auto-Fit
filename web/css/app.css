@@ -65,7 +65,10 @@ input[type="text"]:focus, textarea:focus { outline: 2px solid var(--accent); out
 /* ---------- 工作台 ---------- */
 .work { height: 100vh; display: grid; grid-template-rows: 52px 1fr; grid-template-columns: 200px 1fr 380px; }
 .topbar { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; padding: 0 14px; background: var(--panel); border-bottom: 1px solid var(--line); }
-.brand { font-weight: 700; font-size: 16px; margin-right: 8px; white-space: nowrap; }
+.brand { font-weight: 700; font-size: 16px; margin-right: 8px; white-space: nowrap; cursor: pointer; }
+.brand:hover { opacity: .8; }
+.dropzone .alt { display: block; margin-top: 8px; }
+.dropzone .alt a { color: var(--accent); }
 .brand span { color: var(--accent); }
 .pill { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; background: #fff; max-width: 340px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pill.clickable { cursor: pointer; }

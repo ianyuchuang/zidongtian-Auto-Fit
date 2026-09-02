@@ -194,7 +194,7 @@ export function mountTable(container, app) {
     app.reorder(id, tr.dataset.id, placeOf(e, tr));
   });
 
-  app.subscribe((what) => {
+  const unsubscribe = app.subscribe((what) => {
     if (what === 'photos' || what === 'filter' || what === 'tree' || what === 'page') {
       render();
       renderChips();
@@ -210,4 +210,5 @@ export function mountTable(container, app) {
   });
   render();
   renderChips();
+  return unsubscribe;
 }

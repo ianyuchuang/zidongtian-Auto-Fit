@@ -1,7 +1,7 @@
 // 頂列：資料夾 / 板型 / 日期 pill、批次修改設計值、產生 Word 檔。
 
 import { parseRocInput } from '../rocdate.js';
-import { esc, showDialog, alertDialog, promptDialog, toast } from './dialog.js';
+import { esc, showDialog, alertDialog, confirmDialog, promptDialog, toast } from './dialog.js';
 
 export function mountTopbar(container, app) {
   container.className = 'topbar';
@@ -10,7 +10,7 @@ export function mountTopbar(container, app) {
     const { root, readOnly, template } = app.state;
     const d = app.dateInfo();
     container.innerHTML = `
-      <div class="brand"><span>自懂填</span> Auto-Fit</div>
+      <div class="brand" data-act="home" title="回首頁"><span>自懂填</span> Auto-Fit</div>
       <span class="pill" title="${esc(root?.name ?? '')}">🗀 資料夾 ${esc(root?.name ?? '')}${readOnly ? '（唯讀複本）' : ''}</span>
       <span class="pill" title="${esc(template?.name ?? '')}">📄 板型 ${template ? esc(template.name) + '（尚未套用，輸出用預設）' : '預設（每頁 3 列 × 2 張）'}</span>
       <span class="pill clickable" data-act="date" title="點選修改">📅 檢查日期 ${d.compact}</span>
@@ -21,7 +21,10 @@ export function mountTopbar(container, app) {
 
   container.addEventListener('click', async (e) => {
     const act = e.target.closest('[data-act]')?.dataset.act;
-    if (act === 'date') {
+    if (act === 'home') {
+      const ok = await confirmDialog('回首頁', '校對結果已暫存在瀏覽器裡，下次開同一個資料夾會接回來。要回首頁嗎？');
+      if (ok) app.goHome();
+    } else if (act === 'date') {
       const v = await promptDialog('修改檢查日期', { label: '民國格式，例如 1150725', value: app.dateInfo().compact });
       if (v == null) return;
       try {
@@ -37,8 +40,9 @@ export function mountTopbar(container, app) {
     }
   });
 
-  app.subscribe((what) => (what === 'page' || what === 'date') && render());
+  const unsubscribe = app.subscribe((what) => (what === 'page' || what === 'date') && render());
   render();
+  return unsubscribe;
 }
 
 async function batchDesign(app) {

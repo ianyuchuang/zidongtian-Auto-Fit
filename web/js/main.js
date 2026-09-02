@@ -9,8 +9,13 @@ globalThis.app = app; // 除錯用
 
 const root = document.getElementById('app');
 mountEntry(root, app);
+let unmount = null;
 app.subscribe((what) => {
-  if (what === 'page' && app.state.page === 'work') mountWorkbench(root, app);
+  if (what !== 'page') return;
+  unmount?.();
+  unmount = null;
+  if (app.state.page === 'work') unmount = mountWorkbench(root, app);
+  else mountEntry(root, app);
 });
 
 window.addEventListener('beforeunload', (e) => {

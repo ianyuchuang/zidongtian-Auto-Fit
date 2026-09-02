@@ -19,6 +19,7 @@ export function mountEntry(container, app) {
       <div class="dropzone" id="dz-folder">
         <div id="folder-text">點選或把資料夾拖到這裡</div>
         <div class="small muted">會連同子資料夾一起讀取（例：帷幕骨架／4F、5F）</div>
+        <div class="small muted alt">Chrome 跳出「無法開啟這個資料夾」？那是 Chrome 不讓網頁碰磁碟根目錄、使用者資料夾本身等位置，請改選照片所在的子資料夾；或 <a href="#" id="readonly-pick">改用唯讀方式開啟</a>（可校對、下載 Word，但不會搬動檔案）。</div>
       </div>
       <input type="file" id="folder-input" webkitdirectory multiple hidden>
     </div>
@@ -74,6 +75,11 @@ export function mountEntry(container, app) {
   };
 
   // ---- 資料夾：點選 ----
+  $('#readonly-pick').addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    $('#folder-input').click();
+  });
   $('#dz-folder').addEventListener('click', async () => {
     if (FS_OK) {
       try {
@@ -81,6 +87,7 @@ export function mountEntry(container, app) {
         setFolder(h, false, h.name);
       } catch (e) {
         if (e.name !== 'AbortError') toast(`無法開啟資料夾：${e.message}`, { error: true });
+        else toast('沒有選到資料夾。若 Chrome 說「包含系統檔案」，請改選照片所在的子資料夾，或用「唯讀方式開啟」。', { ms: 6000 });
       }
     } else {
       $('#folder-input').click();

@@ -74,10 +74,11 @@ export function mountTree(container, app) {
     }
   });
 
-  app.subscribe((what) => {
+  const unsubscribe = app.subscribe((what) => {
     if (what === 'tree' || what === 'filter' || what === 'page') render();
     if (what === 'photos' || what === 'tree' || what === 'page') renderStats();
   });
   render();
   renderStats();
+  return unsubscribe;
 }

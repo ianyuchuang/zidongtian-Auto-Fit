@@ -8,10 +8,7 @@ import { mountViewer } from './viewer.js';
 export function mountWorkbench(container, app) {
   container.innerHTML = '<div class="work"><div></div><div></div><div></div><div></div></div>';
   const [top, left, mid, right] = container.querySelector('.work').children;
-  mountTopbar(top, app);
-  mountTree(left, app);
-  mountTable(mid, app);
-  mountViewer(right, app);
+  const unsubs = [mountTopbar(top, app), mountTree(left, app), mountTable(mid, app), mountViewer(right, app)];
 
   const onKey = (e) => {
     if (app.state.page !== 'work') return;
@@ -28,5 +25,9 @@ export function mountWorkbench(container, app) {
     }
   };
   document.addEventListener('keydown', onKey);
-  return () => document.removeEventListener('keydown', onKey);
+  return () => {
+    document.removeEventListener('keydown', onKey);
+    for (const u of unsubs) u();
+    container.innerHTML = '';
+  };
 }

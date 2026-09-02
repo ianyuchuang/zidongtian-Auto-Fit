@@ -259,6 +259,15 @@ export function createApp() {
       state.date = date;
       emit('date');
     },
+    /** 回入口頁（校對結果已在 localStorage，重開同一個資料夾會接回來）。 */
+    goHome() {
+      for (const p of state.photos) {
+        for (const k of ['thumbUrl', 'fullUrl', 'cropUrl']) if (p[k]) URL.revokeObjectURL(p[k]);
+      }
+      Object.assign(state, { page: 'entry', root: null, tree: null, dirs: [], photos: [], selectedId: null, dirFilter: null, chip: 'all', query: '', recognizing: false });
+      state.collapsed = new Set();
+      emit('page');
+    },
 
     // ---------- 順序 / 搬移 / 資料夾 ----------
     reorder(movingId, targetId, place) {

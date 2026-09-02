@@ -91,7 +91,7 @@ export function mountViewer(container, app) {
     else app.skip(currentId);
   });
 
-  app.subscribe((what) => {
+  const unsubscribe = app.subscribe((what) => {
     if (what === 'date') {
       const s = container.querySelector('.stamp');
       if (s) s.textContent = app.dateInfo().stamp;
@@ -100,4 +100,5 @@ export function mountViewer(container, app) {
     }
   });
   render();
+  return unsubscribe;
 }
