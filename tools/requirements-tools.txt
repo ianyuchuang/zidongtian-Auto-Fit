@@ -1,3 +1,10 @@
+# 開發 / 工具用套件
+#   pip install -r tools\requirements-tools.txt
+
+# 測試（2_推至GitHub.bat 推之前會先跑）
+pytest>=8.0
+
+# Google 雲端硬碟備份（1_備份至Google雲端.bat）
 google-api-python-client>=2.100
 google-auth>=2.23
 google-auth-oauthlib>=1.1

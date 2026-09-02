@@ -33,6 +33,9 @@ import sys
 import zipfile
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import deps  # noqa: E402
+
 # ------------------------- 設定 -------------------------
 REPO_DIR = Path(__file__).resolve().parent.parent
 SOURCE_DIRS = [REPO_DIR, REPO_DIR.parent / "需求及資訊來源"]
@@ -48,6 +51,8 @@ KEEP_LOCAL = 7
 ZIP_PREFIX = "自懂填備份-"
 DRIVE_FOLDER_NAME = "自懂填-Auto-Fit 備份"
 SCOPES = ["https://www.googleapis.com/auth/drive.file"]
+# 上傳需要的套件（import 名稱），缺了先問要不要裝
+GOOGLE_MODULES = ["googleapiclient", "google_auth_oauthlib", "google.oauth2", "google.auth"]
 
 # 打包時略過（.git 要保留，所以不在這裡）
 EXCLUDE_DIRS = {"__pycache__", ".venv", "venv", "node_modules", ".pytest_cache"}
@@ -112,15 +117,14 @@ def rotate(backup_dir: Path, keep: int = KEEP_LOCAL) -> list[Path]:
 # ------------------------- Google 雲端硬碟 -------------------------
 def get_drive_service():
     """取得 Drive API service；token 過期會自動更新，沒有 token 就跑一次授權流程。"""
+    deps.ensure(GOOGLE_MODULES, "Google 雲端硬碟備份")
     try:
         from google.auth.transport.requests import Request
         from google.oauth2.credentials import Credentials
         from google_auth_oauthlib.flow import InstalledAppFlow
         from googleapiclient.discovery import build
     except ImportError as e:
-        raise RuntimeError(
-            "缺少 Google 套件，請先執行: pip install -r tools\\requirements-tools.txt"
-        ) from e
+        raise RuntimeError(f"Google 套件載入失敗（{e}），請重新執行: {deps.INSTALL_HINT}") from e
 
     creds = None
     if TOKEN_PATH.exists():
@@ -213,16 +217,21 @@ def main(argv=None) -> int:
         return 0
 
     log.info("=== 開始備份 ===")
+
+    # 先把「會不會上傳失敗」問完（套件、授權），再花時間打包。
+    service = None
+    if not args.no_upload:
+        service = get_drive_service()
+
     count, _missing = make_zip(SOURCE_DIRS, out_path)
     size_mb = out_path.stat().st_size / 1024 / 1024
     log.info("已打包 %d 個檔案 → %s (%.1f MB)", count, out_path, size_mb)
     rotate(BACKUP_DIR, KEEP_LOCAL)
 
-    if args.no_upload:
+    if service is None:
         log.info("--no-upload：不上傳。")
         return 0
 
-    service = get_drive_service()
     folder_id = find_or_create_folder(service)
     file_id = upload(service, out_path, folder_id)
     log.info("已上傳到雲端資料夾「%s」(file id %s)", DRIVE_FOLDER_NAME, file_id)
