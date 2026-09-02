@@ -167,3 +167,39 @@ def test_describe_client_does_not_crash_on_bad_file(tmp_path):
     cred = tmp_path / "credentials.json"
     cred.write_text("not json", encoding="utf-8")
     assert "讀不出" in b.describe_client(cred)
+
+
+# ---------- 打包前的 Drive API 預檢 ----------
+class _About:
+    def __init__(self, result):
+        self._r = result
+
+    def get(self, fields=None):
+        return _Exec(self._r)
+
+
+class _ServiceWithAbout(_Service):
+    def __init__(self, about_result):
+        super().__init__()
+        self._about = _About(about_result)
+
+    def about(self):
+        return self._about
+
+
+def test_check_drive_ready_returns_email():
+    svc = _ServiceWithAbout({"user": {"emailAddress": "me@example.com"}})
+    assert b.check_drive_ready(svc) == "me@example.com"
+
+
+def test_check_drive_ready_explains_api_not_enabled():
+    err = RuntimeError('<HttpError 403 ... "Google Drive API has not been used in project 123 before or it is disabled." reason: accessNotConfigured')
+    with pytest.raises(RuntimeError) as e:
+        b.check_drive_ready(_ServiceWithAbout(err))
+    assert "還沒啟用 Google Drive API" in str(e.value)
+
+
+def test_check_drive_ready_wraps_other_errors():
+    with pytest.raises(RuntimeError) as e:
+        b.check_drive_ready(_ServiceWithAbout(RuntimeError("boom")))
+    assert "Drive API 連線失敗" in str(e.value)

@@ -186,6 +186,22 @@ def authorize(flow, timeout: int = AUTH_TIMEOUT):
         ) from e
 
 
+def check_drive_ready(service) -> str:
+    """打包前先打一次最便宜的 Drive API，把「API 沒開」「授權失效」提早抓出來。回傳登入的帳號。"""
+    try:
+        about = service.about().get(fields="user(emailAddress)").execute()
+    except Exception as e:
+        msg = str(e)
+        if "accessNotConfigured" in msg or "has not been used in project" in msg:
+            raise RuntimeError(
+                "這個專案還沒啟用 Google Drive API。\n"
+                "  到 Cloud Console →「API 和服務」→「程式庫」搜尋 Google Drive API → 啟用，等一兩分鐘再跑。\n"
+                f"  （{msg.splitlines()[0]}）"
+            ) from e
+        raise RuntimeError(f"Drive API 連線失敗：{msg.splitlines()[0]}") from e
+    return (about.get("user") or {}).get("emailAddress", "?")
+
+
 def find_or_create_folder(service, name: str = DRIVE_FOLDER_NAME, cache_path: Path = FOLDER_ID_PATH) -> str:
     """回傳雲端備份資料夾的 id；先看快取，再用名稱找，都沒有就建一個。"""
     if cache_path.exists():
@@ -263,6 +279,7 @@ def main(argv=None) -> int:
     service = None
     if not args.no_upload:
         service = get_drive_service()
+        log.info("Google 帳號：%s", check_drive_ready(service))
 
     count, _missing = make_zip(SOURCE_DIRS, out_path)
     size_mb = out_path.stat().st_size / 1024 / 1024

@@ -73,5 +73,7 @@ python -m pip install -r tools\requirements-tools.txt
   滑鼠停在按鈕上才會告訴你；隨便指到自己的 GitHub 頁面即可），填了網址就要在「授權網域」加該網域
   （例如 `github.com`）→ 儲存 →「目標對象」使用者類型外部、按「發布應用程式」→ 確認，狀態變「實際運作中」
   →「用戶端」建「桌面應用程式」→ 下載 JSON 改名成 `credentials.json`。
+- Drive API 是**每個專案各自**要啟用的；換專案就要再開一次，沒開會在打包後上傳時才 403
+  `accessNotConfigured`（現在腳本會在打包前先檢查）。
 - 專案很容易建到兩個同名的：發布前對照 bat 印出的「用戶端：專案 …」，或用帶
   `?project=<專案ID>` 的 Console 網址操作，別靠左上角的名稱。
