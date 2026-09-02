@@ -26,10 +26,10 @@ html, body { height: 100%; margin: 0; }
 body { font: 14px/1.45 var(--font); color: var(--text); background: var(--bg); }
 button, input, textarea, select { font: inherit; color: inherit; }
 button { cursor: pointer; }
-input[type="text"] {
+input[type="text"], input[type="password"] {
   border: 1px solid var(--line); border-radius: var(--radius); padding: 5px 8px; background: #fff; width: 100%;
 }
-input[type="text"]:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
+input[type="text"]:focus, input[type="password"]:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
 .btn {
   border: 1px solid var(--line); background: #fff; border-radius: var(--radius); padding: 7px 14px; line-height: 1.2;
 }
@@ -66,6 +66,30 @@ input[type="text"]:focus, textarea:focus { outline: 2px solid var(--accent); out
 .entry .actions { display: flex; align-items: center; gap: 14px; margin-top: 8px; }
 .entry .actions .btn-primary { padding: 10px 26px; font-size: 15px; }
 .entry .warn { background: var(--yellow-bg); border: 1px solid var(--yellow-line); color: var(--yellow-text); padding: 8px 12px; border-radius: var(--radius); margin-bottom: 16px; }
+
+/* 入口頁：LLM API 區塊 */
+.api-panel { border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; margin: -6px 0 18px; background: #fafbfc; }
+.api-panel .warn { margin-bottom: 10px; }
+.providers { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
+.providers .provider { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
+.providers .provider label { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.providers .provider.disabled { color: var(--muted); }
+.providers .links { margin-left: auto; white-space: nowrap; display: flex; align-items: center; gap: 10px; }
+.providers .links a { color: var(--accent); }
+.providers .links .guide { padding: 3px 10px; font-size: 12px; }
+.dialog .guide-steps { margin: 0 0 10px; padding-left: 22px; }
+.dialog .guide-steps li { margin: 4px 0; }
+.dialog .body p { margin: 6px 0; }
+.dialog .body a { color: var(--accent); word-break: break-all; }
+.api-key-row label { display: block; font-weight: 600; margin-bottom: 6px; }
+.api-key-inputs { display: flex; gap: 6px; }
+.api-key-inputs input { flex: 1; font-family: Consolas, monospace; }
+.api-key-inputs .btn { white-space: nowrap; }
+#api-model { margin-top: 4px; }
+#api-status { margin-top: 4px; min-height: 1.4em; }
+#api-status.ok { color: var(--accent); }
+#api-status.err { color: var(--red-text); }
+.api-panel .remember { display: block; margin-top: 8px; }
 
 /* ---------- 工作台 ---------- */
 .work { height: 100vh; display: grid; grid-template-rows: 52px 1fr; grid-template-columns: 200px 1fr 380px; }

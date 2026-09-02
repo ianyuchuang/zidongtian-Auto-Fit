@@ -1,10 +1,13 @@
 // 入口頁：選資料夾、板型、提示詞、檢查日期、辨識方式 → 開始讀取。
 
 import { RECOGNIZERS, DEFAULT_PROMPT } from '../recognizer/index.js';
+import { PROVIDERS, getProvider } from '../recognizer/api/providers.js';
+import { loadApiKeys, saveApiKeys } from '../recognizer/api/keys.js';
+import { testConnection } from '../recognizer/api/call.js';
 import { todayRoc, parseRocInput } from '../rocdate.js';
 import { memoryTreeFromFileList, MemoryDirectoryHandle } from '../fs/memory.js';
 import { scanTree, describeTree, treeSummaryText } from '../fs/adapter.js';
-import { esc, toast } from './dialog.js';
+import { esc, toast, showDialog } from './dialog.js';
 
 const FS_OK = typeof globalThis.showDirectoryPicker === 'function';
 
@@ -54,6 +57,31 @@ export function mountEntry(container, app) {
           ).join('')}
         </div>
       </div>
+    </div>
+
+    <div class="api-panel" id="api-panel" hidden>
+      <div class="warn small">選 LLM API 時，照片會縮圖後送到所選公司的伺服器辨識（機密照片請改用本地模型）。金鑰只存在這台電腦的瀏覽器，不會傳給別人。</div>
+      <div class="providers">
+        ${PROVIDERS.map(
+          (p) => `<div class="provider ${p.available ? '' : 'disabled'}">
+            <label><input type="radio" name="api-provider" value="${p.id}" ${p.available ? '' : 'disabled'}>
+              <span class="name">${esc(p.label)}</span>${p.available ? '' : ` <span class="small muted">（${esc(p.note)}）</span>`}</label>
+            <span class="links small"><button type="button" class="btn guide" data-guide="${p.id}">申請教學</button> <a href="${p.apply}" target="_blank" rel="noopener">前往申請頁 ↗</a></span>
+          </div>`,
+        ).join('')}
+      </div>
+      <div class="api-key-row" id="api-key-row" hidden>
+        <label for="api-key" id="api-key-label">API 金鑰</label>
+        <div class="api-key-inputs">
+          <input type="password" id="api-key" autocomplete="off" spellcheck="false">
+          <button class="btn" id="api-key-eye" type="button" title="顯示／隱藏金鑰">👁</button>
+          <button class="btn" id="api-test" type="button">測試連線</button>
+          <button class="btn" id="api-clear" type="button">清除</button>
+        </div>
+        <div class="small muted" id="api-model"></div>
+        <div class="small" id="api-status"></div>
+      </div>
+      <label class="small remember"><input type="checkbox" id="api-forget"> 不要記住金鑰（關閉分頁就清掉；預設會存在這台電腦的瀏覽器，下次自動帶入）</label>
     </div>
 
     <div class="actions">
@@ -182,6 +210,87 @@ export function mountEntry(container, app) {
     })
     .catch(() => {});
 
+  // ---- LLM API：選到「LLM API」才展開四家；選到某家才出現金鑰輸入格 ----
+  const apiState = loadApiKeys(); // { provider, remember, keys }
+  const persistApi = () => saveApiKeys(apiState);
+  const setApiStatus = (text, cls = '') => {
+    const el = $('#api-status');
+    el.textContent = text;
+    el.className = `small ${cls}`.trim();
+  };
+  const showProvider = (id) => {
+    const p = getProvider(id);
+    apiState.provider = id;
+    $('#api-key-row').hidden = false;
+    $('#api-key-label').textContent = `${p.label} API 金鑰`;
+    $('#api-key').placeholder = `貼上金鑰（長得像 ${p.keyHint}）`;
+    $('#api-key').value = apiState.keys[id] || '';
+    $('#api-model').textContent = `使用型號：${p.model}`;
+    setApiStatus('');
+    persistApi();
+  };
+  const updateApiPanel = () => {
+    $('#api-panel').hidden = container.querySelector('input[name="rec"]:checked')?.value !== 'api';
+  };
+  for (const r of container.querySelectorAll('input[name="rec"]')) r.addEventListener('change', updateApiPanel);
+  for (const r of container.querySelectorAll('input[name="api-provider"]')) {
+    r.addEventListener('change', () => r.checked && showProvider(r.value));
+  }
+  for (const b of container.querySelectorAll('button[data-guide]')) {
+    b.addEventListener('click', () => showApiGuide(getProvider(b.dataset.guide)));
+  }
+  $('#api-forget').checked = !apiState.remember;
+  $('#api-forget').addEventListener('change', (e) => {
+    apiState.remember = !e.target.checked;
+    persistApi(); // 不記住 → 立刻把先前存的金鑰清掉（記憶體裡的這次仍可用）
+  });
+  $('#api-key').addEventListener('input', (e) => {
+    if (!apiState.provider) return;
+    apiState.keys[apiState.provider] = e.target.value.trim();
+    setApiStatus('');
+    persistApi();
+  });
+  $('#api-key-eye').addEventListener('click', () => {
+    const i = $('#api-key');
+    i.type = i.type === 'password' ? 'text' : 'password';
+  });
+  $('#api-clear').addEventListener('click', () => {
+    if (!apiState.provider) return;
+    apiState.keys[apiState.provider] = '';
+    $('#api-key').value = '';
+    setApiStatus('');
+    persistApi();
+  });
+  $('#api-test').addEventListener('click', async () => {
+    const pid = apiState.provider;
+    const key = (apiState.keys[pid] || '').trim();
+    if (!key) {
+      setApiStatus('請先貼上金鑰', 'err');
+      $('#api-key').focus();
+      return;
+    }
+    const btn = $('#api-test');
+    btn.disabled = true;
+    setApiStatus('連線中…');
+    try {
+      const reply = await testConnection(pid, { apiKey: key, model: getProvider(pid).model });
+      setApiStatus(`✅ 連線成功（模型回覆：${reply.trim().slice(0, 40)}）`, 'ok');
+    } catch (e) {
+      setApiStatus(`❌ ${e.message}`, 'err');
+    } finally {
+      btn.disabled = false;
+    }
+  });
+  // 上次選過的供應商自動帶回
+  if (apiState.provider) {
+    const r = container.querySelector(`input[name="api-provider"][value="${apiState.provider}"]`);
+    if (r && !r.disabled) {
+      r.checked = true;
+      showProvider(apiState.provider);
+    }
+  }
+  updateApiPanel();
+
   // ---- 開始 ----
   $('#start').addEventListener('click', async () => {
     let date;
@@ -197,6 +306,21 @@ export function mountEntry(container, app) {
       toast('請選辨識方式', { error: true });
       return;
     }
+    let api = null;
+    if (recognizerId === 'api') {
+      const pid = apiState.provider;
+      if (!pid) {
+        toast('請選一家 LLM API', { error: true });
+        return;
+      }
+      const key = (apiState.keys[pid] || '').trim();
+      if (!key) {
+        toast(`請貼上 ${getProvider(pid).label} 的 API 金鑰`, { error: true });
+        $('#api-key').focus();
+        return;
+      }
+      api = { provider: pid, apiKey: key, model: getProvider(pid).model };
+    }
     $('#start').disabled = true;
     $('#status').textContent = '讀取資料夾中…';
     try {
@@ -207,6 +331,7 @@ export function mountEntry(container, app) {
         template,
         prompt: $('#prompt').value.trim(),
         recognizerId,
+        api,
       });
     } catch (e) {
       console.error(e);
@@ -215,6 +340,24 @@ export function mountEntry(container, app) {
       $('#status').textContent = '';
     }
   });
+}
+
+/** 「申請教學」彈窗：步驟、付費方式、價格、官方連結；「前往申請頁」另開分頁。 */
+async function showApiGuide(p) {
+  const body = `
+    <ol class="guide-steps">${p.steps.map((t) => `<li>${esc(t)}</li>`).join('')}</ol>
+    <p class="small"><b>付費方式：</b>${esc(p.billing)}</p>
+    ${p.price ? `<p class="small"><b>價格：</b>${esc(p.price)}</p>` : ''}
+    <p class="small muted">金鑰只存在這台電腦的瀏覽器；請到該公司主控台設用量上限。官方說明：<a href="${p.guide}" target="_blank" rel="noopener">${esc(p.guide)}</a></p>`;
+  const v = await showDialog({
+    title: `${p.label} API 金鑰申請教學`,
+    body,
+    buttons: [
+      { label: '關閉', value: null },
+      { label: '前往申請頁 ↗', value: 'go', primary: true },
+    ],
+  });
+  if (v === 'go') window.open(p.apply, '_blank', 'noopener');
 }
 
 function bindDrop(zone, onDrop) {
