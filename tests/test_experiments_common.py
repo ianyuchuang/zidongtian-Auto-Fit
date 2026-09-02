@@ -83,3 +83,12 @@ def test_score_without_raw_has_no_found():
 
 def test_header_row_does_not_yield_partial_keyword():
     assert common.extract_fields("| 標準值 | 實際值 |") == {"desc": "", "design": "", "actual": ""}
+
+
+def test_best_row_picks_closest_design_actual():
+    gt = {"desc": "4F帷幕骨架安裝間距尺寸檢查", "design": "700mm±10", "actual": "700mm"}
+    rows = [{"desc": "垂直", "design": "2780mm±5", "actual": "2779mm"},
+            {"desc": "水平", "design": "700mm±10mm", "actual": "700mm"},
+            {"desc": "目視", "design": "完整無缺失", "actual": "完整無缺失"}]
+    assert common.best_row(gt, rows)["desc"] == "水平"
+    assert common.best_row(gt, []) is None

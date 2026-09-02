@@ -190,6 +190,14 @@ def extract_fields(text: str) -> dict:
     return found
 
 
+def best_row(gt: dict, rows: list):
+    """白板一次列多個項目時，模型回傳多列；取「設計＋實際」CER 總和最小的一列當這張照片的預測。
+    （＝假設校對時由人指定是哪一列，量的是那一列讀得對不對。）沒有列回 None。"""
+    if not rows:
+        return None
+    return min(rows, key=lambda r: cer(gt.get("design", ""), r.get("design", "")) + cer(gt.get("actual", ""), r.get("actual", "")))
+
+
 def summarize(rows: list) -> dict:
     """rows: [{name, gt, pred, score, seconds}] → 各欄完全正確率、平均 CER、平均秒數。"""
     n = len([r for r in rows if r.get("gt")])
