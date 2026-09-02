@@ -1,7 +1,7 @@
 // app.js 的動作層（用記憶體 handle，不碰 DOM）：勾選、批次搬移、刪除到回收桶。
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createApp } from '../../web/js/app.js';
+import { createApp, engineId } from '../../web/js/app.js';
 import { MemoryDirectoryHandle } from '../../web/js/fs/memory.js';
 import { TRASH_DIR } from '../../web/js/state.js';
 import { exists } from '../../web/js/fs/adapter.js';
@@ -99,4 +99,33 @@ test('dropIds：多張 JSON 優先，其次單張，壞掉的 JSON 落回單張'
   assert.deepEqual(dropIds(dt({ [DND_MULTI]: '{bad', [DND_SINGLE]: 'a' })), ['a']);
   assert.deepEqual(dropIds(dt({ [DND_MULTI]: '[]' })), []);
   assert.deepEqual(dropIds(dt({})), []);
+});
+
+test('engineId：模擬＝mock、LLM API 帶供應商（換家也算換引擎）', () => {
+  assert.equal(engineId('mock', null), 'mock');
+  assert.equal(engineId('api', { provider: 'claude' }), 'api:claude');
+  assert.equal(engineId('api', { provider: 'gemini' }), 'api:gemini');
+  assert.equal(engineId('local', null), 'local');
+});
+
+test('recognizeAll：結果記引擎；失敗時狀態 error、留下原因並發 recognize-failed（回歸：之前失敗只有 console）', async () => {
+  const { app, events } = await setup();
+  app.state.recognizerId = 'mock';
+  app.state.engine = 'mock';
+  await app.recognizeAll();
+  for (const p of app.state.photos) {
+    assert.equal(p.engine, 'mock');
+    assert.equal(p.source, 'ai');
+  }
+  assert.ok(!events.includes('recognize-failed'));
+
+  const { app: app2, events: ev2 } = await setup();
+  app2.state.recognizerId = 'api';
+  app2.state.api = { provider: 'claude', apiKey: '' }; // 沒金鑰 → 每張都要大聲失敗
+  app2.state.engine = 'api:claude';
+  await app2.recognizeAll();
+  assert.ok(app2.state.photos.every((p) => p.status === 'error'));
+  assert.match(app2.state.photos[0].error, /金鑰/);
+  assert.equal(app2.state.lastFailed.length, 4);
+  assert.ok(ev2.includes('recognize-failed'));
 });

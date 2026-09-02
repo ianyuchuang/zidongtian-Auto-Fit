@@ -22,6 +22,11 @@ import { planExport, exportWarnings, outputFileName } from './docx-model.js';
 import { buildDocxBlob } from './docx-export.js';
 import { rocCompact, rocDisplay, stampText } from './rocdate.js';
 
+/** 辨識引擎識別字串：存進校對暫存，換引擎重開時用來判斷舊的 AI 結果要不要重跑。 */
+export function engineId(recognizerId, api) {
+  return recognizerId === 'api' ? `api:${api?.provider ?? '?'}` : recognizerId;
+}
+
 export function createApp() {
   const listeners = new Set();
   const state = {
@@ -36,6 +41,7 @@ export function createApp() {
     prompt: '',
     recognizerId: 'mock',
     api: null, // LLM API 設定 {provider, apiKey, model}（只在記憶體，不存進校對暫存）
+    engine: 'mock', // 辨識引擎識別（'mock' / 'api:claude'…），存進暫存以便換引擎時重跑
     selectedId: null,
     dirFilter: null, // 左樹點選的資料夾路徑；null = 全部
     chip: 'all',
@@ -90,9 +96,11 @@ export function createApp() {
       state.prompt = prompt;
       state.recognizerId = recognizerId;
       state.api = api;
+      state.engine = engineId(recognizerId, api);
       await app.rescan();
       const saved = loadSaved(rootHandle.name);
-      applySaved(state.photos, saved);
+      const { redo } = applySaved(state.photos, saved, { engine: state.engine });
+      state.lastOpen = { redo };
       state.page = 'work';
       state.selectedId = state.photos[0]?.id ?? null;
       emit('page');
@@ -165,6 +173,7 @@ export function createApp() {
       const queue = state.photos.filter((p) => p.status === STATUS.PENDING);
       if (!queue.length) return;
       state.recognizing = true;
+      const failed = [];
       emit('photos');
       const worker = async () => {
         while (queue.length) {
@@ -183,11 +192,15 @@ export function createApp() {
             p.confidence = r.confidence ?? null;
             p.bbox = r.bbox ?? null;
             p.source = 'ai';
+            p.engine = state.engine;
+            p.error = undefined;
             p.status = statusFromConfidence(p.confidence);
           } catch (e) {
             console.error('辨識失敗', p.name, e);
             p.status = STATUS.ERROR;
+            p.engine = state.engine;
             p.error = e.message;
+            failed.push(p);
           }
           save();
           emit('photos');
@@ -196,6 +209,8 @@ export function createApp() {
       await Promise.all([worker(), worker()]);
       state.recognizing = false;
       emit('photos');
+      state.lastFailed = failed;
+      if (failed.length) emit('recognize-failed');
     },
 
     // ---------- 選取 / 篩選 ----------

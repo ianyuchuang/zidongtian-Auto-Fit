@@ -2,7 +2,7 @@
 // key 以根資料夾名稱區分；每張照片以相對路徑對應。
 
 const PREFIX = 'autofit:v1:';
-const FIELDS = ['desc', 'design', 'actual', 'confidence', 'source', 'status', 'bbox', 'order'];
+const FIELDS = ['desc', 'design', 'actual', 'confidence', 'source', 'status', 'bbox', 'order', 'engine', 'error'];
 
 export function storageKey(rootName) {
   return PREFIX + rootName;
@@ -37,16 +37,27 @@ export function savePhotos(rootName, photos, store = globalThis.localStorage) {
   }
 }
 
-/** 把暫存套回照片清單（就地修改），回傳套用張數。 */
-export function applySaved(photos, saved) {
-  let n = 0;
+/**
+ * 把暫存套回照片清單（就地修改），回傳 { applied, redo }。
+ * engine：這次用的辨識引擎（例 'mock'、'api:claude'）。AI 結果若是別的引擎跑的、又還沒被人確認，
+ * 就不套回（只保留排序），讓它重新辨識——否則換了引擎仍會看到舊引擎（例如模擬辨識）的結果。
+ */
+export function applySaved(photos, saved, { engine = null } = {}) {
+  let applied = 0;
+  let redo = 0;
   for (const p of photos) {
     const rec = saved[p.path];
     if (!rec) continue;
+    const staleAi = rec.source === 'ai' && rec.status !== 'confirmed' && engine != null && rec.engine !== engine;
+    if (staleAi) {
+      if (rec.order !== undefined) p.order = rec.order;
+      redo += 1;
+      continue;
+    }
     for (const f of FIELDS) if (rec[f] !== undefined) p[f] = rec[f];
-    n += 1;
+    applied += 1;
   }
-  return n;
+  return { applied, redo };
 }
 
 export function clearSaved(rootName, store = globalThis.localStorage) {
