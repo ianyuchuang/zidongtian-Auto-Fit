@@ -140,6 +140,15 @@ def _clean_value(v: str) -> str:
     return v
 
 
+_ALL_KEYWORDS = [kw for kws in KEYWORDS.values() for kw in kws]
+
+
+def _is_keyword_cell(c: str) -> bool:
+    """表頭列（| 標準值 | 實際值 |）的儲存格不是值。"""
+    c2 = _clean_value(c)
+    return any(c2.startswith(kw) for kw in _ALL_KEYWORDS)
+
+
 def extract_fields(text: str) -> dict:
     """
     從 OCR 輸出（純文字或 markdown 表格）抽「檢驗項目／標準值／實際值」。
@@ -162,7 +171,7 @@ def extract_fields(text: str) -> dict:
                         if c2.startswith(kw):
                             matched = True
                             rest = _clean_value(c2[len(kw):])
-                            if not rest and ci + 1 < len(cells):
+                            if not rest and ci + 1 < len(cells) and not _is_keyword_cell(cells[ci + 1]):
                                 rest = _clean_value(cells[ci + 1])
                             if rest:
                                 found[f] = rest
