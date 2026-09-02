@@ -67,5 +67,6 @@ python -m pip install -r tools\requirements-tools.txt
   到「Google Auth 平台 → 對象」按「發布應用程式」可以根治（`drive.file` 是非敏感範圍，
   發布不需要審核）。
 - 要自己另建一組用戶端時：Google Cloud Console 建專案 → 啟用 `Google Drive API` →
-  「Google Auth 平台」設定對象（外部）並發布 →「用戶端」建「桌面應用程式」→
-  下載 JSON 改名成 `credentials.json`。
+  「Google Auth 平台」：「品牌」頁填齊應用程式名稱、使用者支援電子郵件、開發人員聯絡電子郵件
+  並儲存（沒填齊的話「目標對象」頁的「發布應用程式」會是灰的）→「目標對象」使用者類型選外部、
+  按「發布應用程式」→ 確認 →「用戶端」建「桌面應用程式」→ 下載 JSON 改名成 `credentials.json`。
