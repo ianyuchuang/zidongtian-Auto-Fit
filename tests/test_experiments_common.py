@@ -22,6 +22,9 @@ def test_is_photo_name_skips_junk():
 def test_normalize_and_cer():
     assert common.normalize("７００ｍｍ ± １０") == "700mm±10"
     assert common.normalize("700mm+-10") == "700mm±10"
+    assert common.normalize("700mm±10mm") == "700mm±10"  # 白板寫法 ≡ 檔名寫法
+    assert common.normalize("2780mm±5mm") == "2780mm±5"
+    assert common.normalize("140+70+140mm") == "140+70+140mm"
     assert common.cer("700mm", "700mm") == 0
     assert common.cer("700mm", "780mm") == 0.2
     assert common.cer("", "") == 0 and common.cer("", "x") == 1

@@ -1,0 +1,144 @@
+{
+  "model": "Qwen3-VL-2B-Instruct Q4_K_M",
+  "mode": "full",
+  "max_side": 1500,
+  "llama_dir": "/sessions/rcw-0131ua8arpgntwmp59w1gutq/mnt/自懂填-Auto-Fit/llama.cpp",
+  "ngl": 0,
+  "photos": "D:\\自懂填-Auto-Fit\\需求及資訊來源\\來源資料夾範例\\帷幕骨架\\4F",
+  "summary": {
+    "n": 3,
+    "desc": {
+      "exact_rate": 0.0,
+      "mean_cer": 0.893,
+      "found_rate": 0.0,
+      "exact_rate_nofloor": 0.0
+    },
+    "design": {
+      "exact_rate": 0.333,
+      "mean_cer": 0.25,
+      "found_rate": 0.333
+    },
+    "actual": {
+      "exact_rate": 0.667,
+      "mean_cer": 0.278,
+      "found_rate": 0.667
+    },
+    "mean_seconds": 85.5
+  },
+  "rows": [
+    {
+      "name": "4F帷幕骨架安裝間距尺寸檢查-2780mm±5-2779mm.jpg",
+      "gt": {
+        "desc": "4F帷幕骨架安裝間距尺寸檢查",
+        "design": "2780mm±5",
+        "actual": "2779mm"
+      },
+      "pred": {
+        "desc": "垂直",
+        "design": "230mm±7mm",
+        "actual": "230mm±7mm"
+      },
+      "rows_found": 6,
+      "score": {
+        "desc": {
+          "exact": false,
+          "cer": 1.0,
+          "found": false,
+          "exact_nofloor": false
+        },
+        "design": {
+          "exact": false,
+          "cer": 0.375,
+          "found": false
+        },
+        "actual": {
+          "exact": false,
+          "cer": 0.833,
+          "found": false
+        }
+      },
+      "seconds": 79.4,
+      "stage_seconds": {
+        "fields": 79.3
+      },
+      "bbox": null,
+      "raw": "```json\n{\n  \"rows\": [\n    {\n      \"desc\": \"檢查項目名稱\",\n      \"design\": \"標準值/設計值\",\n      \"actual\": \"實際值\"\n    },\n    {\n      \"desc\": \"水平\",\n      \"design\": \"700mm±10mm\",\n      \"actual\": \"700mm±10mm\"\n    },\n    {\n      \"desc\": \"垂直\",\n      \"design\": \"230mm±7mm\",\n      \"actual\": \"230mm±7mm\"\n    },\n    {\n      \"desc\": \"焊道高度\",\n      \"design\": \"700mm±10mm\",\n      \"actual\": \"700mm±10mm\"\n    },\n    {\n      \"desc\": \"腳長\",\n      \"design\": \"700mm±10mm\",\n      \"actual\": \"700mm±10mm\"\n    },\n    {\n      \"desc\": \"目視\",\n      \"design\": \"無\",\n      \"actual\": \"無\"\n    }\n  ],\n  \"location\": \"查驗位置\",\n  \"date\": \"查驗日期\"\n}\n```"
+    },
+    {
+      "name": "4F帷幕骨架安裝間距尺寸檢查-700mm±10-700mm.jpg",
+      "gt": {
+        "desc": "4F帷幕骨架安裝間距尺寸檢查",
+        "design": "700mm±10",
+        "actual": "700mm"
+      },
+      "pred": {
+        "desc": "樁架",
+        "design": "700mm",
+        "actual": "700mm"
+      },
+      "rows_found": 7,
+      "score": {
+        "desc": {
+          "exact": false,
+          "cer": 0.929,
+          "found": false,
+          "exact_nofloor": false
+        },
+        "design": {
+          "exact": false,
+          "cer": 0.375,
+          "found": false
+        },
+        "actual": {
+          "exact": true,
+          "cer": 0.0,
+          "found": true
+        }
+      },
+      "seconds": 88.2,
+      "stage_seconds": {
+        "fields": 88.2
+      },
+      "bbox": null,
+      "raw": "```json\n{\n  \"rows\": [\n    {\n      \"desc\": \"檢查項目名稱\",\n      \"design\": \"標準值/設計值\",\n      \"actual\": \"實際值\"\n    },\n    {\n      \"desc\": \"樁架\",\n      \"design\": \"700mm\",\n      \"actual\": \"700mm\"\n    },\n    {\n      \"desc\": \"水平\",\n      \"design\": \"700mm\",\n      \"actual\": \"700mm\"\n    },\n    {\n      \"desc\": \"垂直\",\n      \"design\": \"700mm\",\n      \"actual\": \"700mm\"\n    },\n    {\n      \"desc\": \"焊道高度\",\n      \"design\": \"230mm\",\n      \"actual\": \"230mm\"\n    },\n    {\n      \"desc\": \"腳長\",\n      \"design\": \"230mm\",\n      \"actual\": \"230mm\"\n    },\n    {\n      \"desc\": \"焊道目視\",\n      \"design\": \"目視\",\n      \"actual\": \"目視\"\n    }\n  ],\n  \"location\": \"查驗位置\",\n  \"date\": \"查驗日期\"\n}\n```"
+    },
+    {
+      "name": "4F帷幕骨架銲道目視檢查-完整無缺失-完整無缺失.jpg",
+      "gt": {
+        "desc": "4F帷幕骨架銲道目視檢查",
+        "design": "完整無缺失",
+        "actual": "完整無缺失"
+      },
+      "pred": {
+        "desc": "焊道目視",
+        "design": "完整無缺失",
+        "actual": "完整無缺失"
+      },
+      "rows_found": 5,
+      "score": {
+        "desc": {
+          "exact": false,
+          "cer": 0.75,
+          "found": false,
+          "exact_nofloor": false
+        },
+        "design": {
+          "exact": true,
+          "cer": 0.0,
+          "found": true
+        },
+        "actual": {
+          "exact": true,
+          "cer": 0.0,
+          "found": true
+        }
+      },
+      "seconds": 88.9,
+      "stage_seconds": {
+        "fields": 88.8
+      },
+      "bbox": null,
+      "raw": "```json\n{\n  \"rows\": [\n    {\n      \"desc\": \"骨架水平\",\n      \"design\": \"700mm±10mm\",\n      \"actual\": \"700mm±10mm\"\n    },\n    {\n      \"desc\": \"骨架垂直\",\n      \"design\": \"2180mm±5mm\",\n      \"actual\": \"2180mm±5mm\"\n    },\n    {\n      \"desc\": \"焊通\",\n      \"design\": \"140+70+140mm\",\n      \"actual\": \"140+70+140mm\"\n    },\n    {\n      \"desc\": \"腳長\",\n      \"design\": \"4mm\",\n      \"actual\": \"4mm\"\n    },\n    {\n      \"desc\": \"焊道目視\",\n      \"design\": \"完整無缺失\",\n      \"actual\": \"完整無缺失\"\n    }\n  ],\n  \"location\": \"4F X6-X9、Y2-Y6 (5L)\",\n  \"date\": \"11.9.25\"\n}\n```"
+    }
+  ]
+}

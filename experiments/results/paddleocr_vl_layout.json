@@ -1,6 +1,8 @@
 {
   "model": "PaddleOCR-VL-1.6",
   "mode": "layout",
+  "max_side": 0,
+  "partial": false,
   "photos": "D:\\自懂填-Auto-Fit\\需求及資訊來源\\來源資料夾範例\\帷幕骨架\\4F",
   "summary": {
     "n": 3,

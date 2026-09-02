@@ -64,6 +64,7 @@ def normalize(s: str) -> str:
     s = re.sub(r"\s+", "", s)
     s = s.replace("+-", "±").replace("+/-", "±").replace("±", "±")
     s = s.replace("MM", "mm").replace("Mm", "mm")
+    s = re.sub(r"(\d)(mm|cm|m)±(\d+(?:\.\d+)?)\2\b", r"\1\2±\3", s)  # 700mm±10mm ≡ 700mm±10（檔名慣例）
     s = s.strip("：:。.、,，;；|")
     return s
 
