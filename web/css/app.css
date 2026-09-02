@@ -101,6 +101,7 @@ input[type="text"]:focus, input[type="password"]:focus, textarea:focus { outline
 .brand span { color: var(--accent); }
 .pill { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; background: #fff; max-width: 340px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pill.clickable { cursor: pointer; }
+.pill.engine { max-width: 250px; }
 .pill.clickable:hover { background: #f7f8fa; }
 .topbar .spacer { flex: 1; }
 
@@ -223,3 +224,6 @@ td.conf { color: var(--muted); width: 48px; text-align: right; }
   transform-origin: 0 0; user-select: none; -webkit-user-drag: none;
 }
 .lightbox .lb-hint { color: rgba(255,255,255,.65); font-size: 12px; }
+
+/* 檢視器：辨識失敗原因 */
+.viewer .err { color: var(--red-text); background: var(--red-bg); border-radius: var(--radius); padding: 6px 8px; margin: 6px 0; word-break: break-all; }

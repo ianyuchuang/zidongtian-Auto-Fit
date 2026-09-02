@@ -45,7 +45,7 @@ test('四家供應商都有申請與教學連結；Claude/Gemini/GPT 已接、Gr
     assert.ok(p.billing, `${p.id} 要說明付費方式`);
     if (p.available) assert.ok(p.model, `${p.id} 要有預設型號`);
   }
-  assert.equal(getProvider('claude').model, 'claude-haiku-4-5');
+  assert.equal(getProvider('claude').model, 'claude-haiku-4-5-20251001');
   assert.throws(() => getProvider('nope'), /沒有這家/);
 });
 
@@ -187,7 +187,7 @@ test('apiRecognizer：縮圖 → 呼叫 → 解析；沒選供應商／沒金鑰
   assert.equal(r.desc, '5F水平');
   assert.equal(r.confidence, 90);
   assert.equal(r.bbox, null);
-  assert.equal(f.calls[0].body.model, 'claude-haiku-4-5', '沒指定型號用供應商預設');
+  assert.equal(f.calls[0].body.model, 'claude-haiku-4-5-20251001', '沒指定型號用供應商預設');
   assert.equal(f.calls[0].body.messages[0].content[0].source.data, 'QUJD');
   assert.match(f.calls[0].body.messages[0].content[1].text, /白板/);
 

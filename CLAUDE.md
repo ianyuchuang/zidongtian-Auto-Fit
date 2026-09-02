@@ -31,7 +31,7 @@
 - 網頁（純前端，照片只在瀏覽器本地處理，可直接放 GitHub Pages）：`web/`，無建置步驟。
   - `js/app.js` 狀態與動作；`js/ui/` 入口頁 / 頂列 / 左樹 / 表格 / 檢視器（`dnd.js` 為表格與左樹共用的拖曳格式與提示）；`js/fs/` 資料夾存取（File System Access API，`memory.js` 為唯讀複本）；`js/recognizer/` 辨識模組（`mock`；`api.js` + `api/` 為 LLM API 直打，四家定義與申請方式見 `docs/LLM-API.md`；本地模型待實驗）；`js/docx-export.js` + `docx-model.js` 依 V1.0 版面產 Word（`vendor/docx-*.iife.js`）。
   - 開本機測試：上一層 `3_開啟網頁(localhost).bat` → `tools/dev_server.py`（port 8765，掛範例資料夾成「載入範例」）。需 Chrome / Edge 才能讀寫資料夾。
-  - 校對結果暫存在瀏覽器 localStorage（依根資料夾名），不寫進照片資料夾。
+  - 校對結果暫存在瀏覽器 localStorage（依根資料夾名），不寫進照片資料夾；每筆 AI 結果記 `engine`（`mock` / `api:claude`…），換引擎重開同資料夾時，未確認的 AI 結果會重跑、已確認與檔名解析保留（否則會一直看到模擬辨識的假資料）。
   - 「刪除」＝搬到根資料夾下 `_回收桶`（網頁無法用 Windows 資源回收桶），拖回即還原，產生 Word 時略過；瀏覽器拿不到完整磁碟路徑，入口頁只顯示資料夾名與子資料夾摘要。
 - 測試：`python -m pytest`（tests/；會一併跑 `node --test tests/js/*.test.mjs`，需 Node.js）。
 - 待定：板型 docx 目前只記錄檔名、輸出仍用預設版面；低信心門檻暫 70%；每個資料夾各出一份 docx（同 V1.0）。

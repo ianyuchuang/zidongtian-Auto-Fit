@@ -2,6 +2,8 @@
 
 import { parseRocInput } from '../rocdate.js';
 import { esc, showDialog, alertDialog, confirmDialog, promptDialog, toast } from './dialog.js';
+import { getRecognizer } from '../recognizer/index.js';
+import { PROVIDERS } from '../recognizer/api/providers.js';
 
 export function mountTopbar(container, app) {
   container.className = 'topbar';
@@ -9,11 +11,13 @@ export function mountTopbar(container, app) {
   function render() {
     const { root, readOnly, template } = app.state;
     const d = app.dateInfo();
+    const eng = engineLabel(app.state);
     container.innerHTML = `
       <div class="brand" data-act="home" title="回首頁"><span>自懂填</span> Auto-Fit</div>
       <span class="pill" title="${esc(root?.name ?? '')}">🗀 資料夾 ${esc(root?.name ?? '')}${readOnly ? '（唯讀複本）' : ''}</span>
       <span class="pill" title="${esc(template?.name ?? '')}">📄 板型 ${template ? esc(template.name) + '（尚未套用，輸出用預設）' : '預設（每頁 3 列 × 2 張）'}</span>
       <span class="pill clickable" data-act="date" title="點選修改">📅 檢查日期 ${d.compact}</span>
+      <span class="pill engine" title="${esc(eng.title)}">🤖 ${esc(eng.text)}</span>
       <span class="spacer"></span>
       <button class="btn" data-act="batch">批次修改設計值</button>
       <button class="btn btn-primary" data-act="export">產生 Word 檔</button>`;
@@ -40,9 +44,35 @@ export function mountTopbar(container, app) {
     }
   });
 
-  const unsubscribe = app.subscribe((what) => (what === 'page' || what === 'date') && render());
+  const unsubscribe = app.subscribe((what) => {
+    if (what === 'page' || what === 'date') render();
+    if (what === 'recognize-failed') {
+      const f = app.state.lastFailed || [];
+      const first = f[0]?.error ?? '';
+      toast(`${f.length} 張辨識失敗：${first}${f.length > 1 ? '（其餘見各張的狀態說明）' : ''}`, { error: true, ms: 12000 });
+    }
+  });
   render();
+  if (app.state.lastOpen?.redo) {
+    toast(`換了辨識引擎：${app.state.lastOpen.redo} 張先前未確認的 AI 結果會重新辨識`, { ms: 6000 });
+    app.state.lastOpen = null;
+  }
   return unsubscribe;
+}
+
+/** 頂列顯示這次用哪個引擎（模擬／LLM API 哪一家＋型號）。 */
+function engineLabel({ recognizerId, api }) {
+  const short = (s) => String(s).split('（')[0];
+  if (recognizerId === 'api' && api) {
+    const p = PROVIDERS.find((x) => x.id === api.provider);
+    const model = api.model ?? p?.model ?? '';
+    return { text: `${short(p?.label ?? api.provider)} ${model}`.trim(), title: `LLM API：${p?.label ?? api.provider}，型號 ${model}（照片會送到這家的伺服器辨識）` };
+  }
+  let label = recognizerId;
+  try {
+    label = getRecognizer(recognizerId).label;
+  } catch {}
+  return { text: short(label), title: label };
 }
 
 async function batchDesign(app) {

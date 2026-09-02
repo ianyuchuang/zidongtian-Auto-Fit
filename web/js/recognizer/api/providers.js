@@ -7,7 +7,7 @@ export const PROVIDERS = [
   {
     id: 'claude',
     label: 'Claude（Anthropic）',
-    model: 'claude-haiku-4-5',
+    model: 'claude-haiku-4-5-20251001',
     keyHint: 'sk-ant-api03-…',
     apply: 'https://platform.claude.com/',
     guide: 'https://platform.claude.com/docs/en/get-started',

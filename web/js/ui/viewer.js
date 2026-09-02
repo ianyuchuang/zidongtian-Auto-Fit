@@ -23,6 +23,7 @@ export function mountViewer(container, app) {
         <span class="nav"><button data-nav="-1" title="上一張">‹</button><button data-nav="1" title="下一張">›</button></span>
       </div>
       <div class="big"><img alt=""><span class="stamp">${esc(app.dateInfo().stamp)}</span></div>
+      <div class="err small" ${p.status === 'error' ? '' : 'hidden'}>❌ ${esc(p.error ?? '')}</div>
       <div class="crop-title">白板裁切（AI 定位後從原圖裁出，供對照）</div>
       <div class="crop"><span>尚無裁切</span></div>
       ${FIELDS.map(([f, label]) => `<div class="f"><label>${label}</label><input type="text" data-f="${f}" value="${esc(p[f])}"></div>`).join('')}
@@ -47,6 +48,11 @@ export function mountViewer(container, app) {
     const badge = container.querySelector('.head .badge');
     badge.className = `badge ${p.status}`;
     badge.textContent = STATUS_LABEL[p.status];
+    const err = container.querySelector('.err');
+    if (err) {
+      err.hidden = p.status !== 'error';
+      err.textContent = p.status === 'error' ? `❌ ${p.error ?? ''}` : '';
+    }
     for (const [f] of FIELDS) {
       const inp = container.querySelector(`input[data-f="${f}"]`);
       if (inp !== document.activeElement && inp.value !== p[f]) inp.value = p[f];
