@@ -9,6 +9,8 @@
     python experiments/paddleocr_vl/run.py --mode ocr      # 關版面分析，整張直接當文字讀（prompt_label=ocr）
     python experiments/paddleocr_vl/run.py --mode table    # 關版面分析，整張當表格讀
     python experiments/paddleocr_vl/run.py --rescore       # 不跑模型，用上次存的 raw 文字重新抽欄位＋評分
+    python experiments/paddleocr_vl/run.py --mode ocr --max-side 1024   # 先縮圖再辨識（CPU 慢或卡住時用）
+每張辨識完就先寫檔（Ctrl+C 中斷也保留已完成的），並印秒數與前 120 字。
 模式：layout（預設，PP-DocLayoutV3 先切版面再辨識；對工地照片常誤判成圖片/發票）、ocr、table。
 輸出：experiments/results/paddleocr_vl_<mode>.json（含每張的 raw 文字，供調整抽取規則）。
 """
@@ -44,10 +46,24 @@ def load_pipeline():
     return pipe
 
 
-def run_one(pipe, img: Path, predict_kwargs: dict) -> tuple[str, float]:
+def load_input(img: Path, max_side: int):
+    """max_side>0 時縮圖（依 EXIF 轉正）後以 numpy 陣列（BGR）送模型；否則直接給路徑。"""
+    if not max_side:
+        return str(img)
+    import numpy as np
+    from PIL import Image, ImageOps
+    im = ImageOps.exif_transpose(Image.open(img)).convert("RGB")
+    w, h = im.size
+    s = min(1.0, max_side / max(w, h))
+    if s < 1.0:
+        im = im.resize((round(w * s), round(h * s)))
+    return np.asarray(im)[:, :, ::-1].copy()
+
+
+def run_one(pipe, img: Path, predict_kwargs: dict, max_side: int = 0) -> tuple[str, float]:
     """回傳 (markdown/純文字, 秒數)。用 save_to_markdown 落地再讀回，避免依賴結果物件的內部屬性名。"""
     t = time.perf_counter()
-    outputs = list(pipe.predict(str(img), **predict_kwargs))
+    outputs = list(pipe.predict(load_input(img, max_side), **predict_kwargs))
     secs = time.perf_counter() - t
     texts = []
     with tempfile.TemporaryDirectory() as td:
@@ -73,6 +89,7 @@ def main():
     ap.add_argument("--mode", choices=MODES, default="layout")
     ap.add_argument("--out", type=Path, default=None, help="預設 experiments/results/paddleocr_vl_<mode>.json")
     ap.add_argument("--rescore", action="store_true", help="用 --out 裡存的 raw 文字重算，不跑模型")
+    ap.add_argument("--max-side", type=int, default=0, help="送模型前把最長邊縮到此像素；0＝原圖")
     args = ap.parse_args()
     if args.out is None:
         args.out = RESULT_DIR / f"paddleocr_vl_{args.mode}.json"
@@ -94,10 +111,25 @@ def main():
             sys.exit(f"資料夾裡沒有照片：{args.photos}")
         raw, secs = {}, {}
         pipe = load_pipeline()
-        for p in photos:
-            print(f"辨識 {p.name} …", flush=True)
-            raw[p.name], secs[p.name] = run_one(pipe, p, MODES[args.mode])
+        try:
+            for p in photos:
+                print(f"辨識 {p.name} …", flush=True)
+                raw[p.name], secs[p.name] = run_one(pipe, p, MODES[args.mode], args.max_side)
+                print(f"  {secs[p.name]}s  {raw[p.name][:120]!r}", flush=True)
+                write_results(args, photos, raw, secs, partial=True)  # 每張存一次
+        except KeyboardInterrupt:
+            print("\n中斷，保留已完成的照片", flush=True)
+        photos = [p for p in photos if p.name in raw]
+        if not photos:
+            sys.exit("沒有任何照片完成")
 
+    rows, summary = write_results(args, photos, raw, secs)
+    common.print_report(f"{MODEL} [{args.mode}]", rows, summary)
+    print(f"\n結果已存 {args.out}")
+
+
+def write_results(args, photos, raw, secs, partial=False):
+    photos = [p for p in photos if p.name in raw]
     folder = photos[0].parent.name if photos else ""
     gts = common.load_ground_truth(photos, args.gt, folder)
     rows = []
@@ -111,10 +143,10 @@ def main():
         })
     summary = common.summarize([r for r in rows if r["gt"]])
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps({"model": MODEL, "mode": args.mode, "photos": str(photos[0].parent), "summary": summary, "rows": rows},
+    args.out.write_text(json.dumps({"model": MODEL, "mode": args.mode, "max_side": args.max_side, "partial": partial,
+                                    "photos": str(photos[0].parent), "summary": summary, "rows": rows},
                                    ensure_ascii=False, indent=2), encoding="utf-8")
-    common.print_report(f"{MODEL} [{args.mode}]", rows, summary)
-    print(f"\n結果已存 {args.out}")
+    return rows, summary
 
 
 if __name__ == "__main__":
