@@ -27,5 +27,9 @@
 - 資料夾：本 repo＝`D:\自懂填-Auto-Fit\自懂填-Auto-Fit-V2.0`；需求文件、範例照片、V1.0 程式在上一層 `需求及資訊來源\`（不進 git，只進 Google 備份）。
 - 可留用程式：`需求及資訊來源\自懂填Auto-Fit_V1.0_安裝包\app\self_check_core.py`（docx 排版、日期戳）。
 - 備份與推送（bat 在上一層）：`1_備份至Google雲端.bat` → `tools/backup_to_drive.py`；`2_推至GitHub.bat` → pytest → commit → push（remote `ianyuchuang/zidongtian-Auto-Fit`）。
-- 測試：`python -m pytest`（tests/）。
-- 部署意向：詠郁想放 GitHub 上執行；需與「照片不上傳」相容（純前端、瀏覽器本地處理）——架構在 Code 階段先確認再動工。
+- 網頁（純前端，照片只在瀏覽器本地處理，可直接放 GitHub Pages）：`web/`，無建置步驟。
+  - `js/app.js` 狀態與動作；`js/ui/` 入口頁 / 頂列 / 左樹 / 表格 / 檢視器；`js/fs/` 資料夾存取（File System Access API，`memory.js` 為唯讀複本）；`js/recognizer/` 辨識模組（目前只有 `mock`，本地模型 / API 待實驗）；`js/docx-export.js` + `docx-model.js` 依 V1.0 版面產 Word（`vendor/docx-*.iife.js`）。
+  - 開本機測試：上一層 `3_開啟網頁(localhost).bat` → `tools/dev_server.py`（port 8765，掛範例資料夾成「載入範例」）。需 Chrome / Edge 才能讀寫資料夾。
+  - 校對結果暫存在瀏覽器 localStorage（依根資料夾名），不寫進照片資料夾。
+- 測試：`python -m pytest`（tests/；會一併跑 `node --test tests/js/*.test.mjs`，需 Node.js）。
+- 待定：板型 docx 目前只記錄檔名、輸出仍用預設版面；低信心門檻暫 70%；每個資料夾各出一份 docx（同 V1.0）。
