@@ -57,3 +57,29 @@ def test_summarize_rates():
     ]
     s = common.summarize(rows)
     assert s["n"] == 2 and s["desc"]["exact_rate"] == 1 and s["design"]["exact_rate"] == 0.5 and s["mean_seconds"] == 15
+
+
+def test_html_table_to_text_and_extract():
+    raw = ("<table><tr><td>查驗項目</td><td colspan=\"3\">☑ 自主檢查</td></tr>"
+           "<tr><td></td><td>標準值</td><td colspan=\"2\">實際值</td></tr>"
+           "<tr><td>4F 帷幕骨架</td><td>水平：700mm  $ \\pm $ 10mm 垂直：≥780mm</td><td colspan=\"2\">水平：700mm 垂直：≥781mm</td></tr></table>")
+    txt = common.html_to_text(raw)
+    assert "700mm±10mm" in txt and "$" not in txt and "<" not in txt
+    assert txt.splitlines()[0] == "| 查驗項目 | ☑ 自主檢查 |"
+    # 白板一列多項目：抽取只會拿到整格，found 才看得出辨識品質
+    gt = {"desc": "4F帷幕骨架安裝間距尺寸檢查", "design": "700mm±10", "actual": "700mm"}
+    s = common.score(gt, common.extract_fields(raw), "4F", raw=raw)
+    assert s["design"]["found"] and s["actual"]["found"] and not s["desc"]["found"]
+
+
+def test_html_n_tag_becomes_newline():
+    assert common.html_to_text("<td>名稱：A&lt;n&gt;地址：B</td>") == "名稱：A\n地址：B"
+
+
+def test_score_without_raw_has_no_found():
+    gt = {"desc": "a", "design": "b", "actual": "c"}
+    assert "found" not in common.score(gt, gt)["desc"]
+
+
+def test_header_row_does_not_yield_partial_keyword():
+    assert common.extract_fields("| 標準值 | 實際值 |") == {"desc": "", "design": "", "actual": ""}

@@ -1,0 +1,126 @@
+{
+  "model": "PaddleOCR-VL-1.6",
+  "mode": "layout",
+  "photos": "D:\\自懂填-Auto-Fit\\需求及資訊來源\\來源資料夾範例\\帷幕骨架\\4F",
+  "summary": {
+    "n": 3,
+    "desc": {
+      "exact_rate": 0.0,
+      "mean_cer": 1.25,
+      "found_rate": 0.0,
+      "exact_rate_nofloor": 0.0
+    },
+    "design": {
+      "exact_rate": 0.0,
+      "mean_cer": 1.0,
+      "found_rate": 0.333
+    },
+    "actual": {
+      "exact_rate": 0.0,
+      "mean_cer": 1.0,
+      "found_rate": 0.333
+    },
+    "mean_seconds": 93.8
+  },
+  "rows": [
+    {
+      "name": "4F帷幕骨架安裝間距尺寸檢查-2780mm±5-2779mm.jpg",
+      "gt": {
+        "desc": "4F帷幕骨架安裝間距尺寸檢查",
+        "design": "2780mm±5",
+        "actual": "2779mm"
+      },
+      "pred": {
+        "desc": "",
+        "design": "",
+        "actual": ""
+      },
+      "score": {
+        "desc": {
+          "exact": false,
+          "cer": 1.0,
+          "found": false,
+          "exact_nofloor": false
+        },
+        "design": {
+          "exact": false,
+          "cer": 1.0,
+          "found": false
+        },
+        "actual": {
+          "exact": false,
+          "cer": 1.0,
+          "found": false
+        }
+      },
+      "seconds": 132.5,
+      "raw": "<table border=1 style='margin: auto; word-wrap: break-word;'><tr><td style='text-align: center; word-wrap: break-word;'>购买方</td><td colspan=\"3\">名称：வர ஐக்க ஐக்க 有限公司&lt;n&gt;纳税人识别号：&lt;n&gt;地址、电话：北京市朝阳区天安门西大街1号院A座1号&lt;n&gt;开户行及账号：</td><td style='text-align: center; word-wrap: break-word;'>密码区</td><td colspan=\"3\"></td></tr><tr><td style='text-align: center; word-wrap: break-word;'>货物或应税劳务、服务名称</td><td style='text-align: center; word-wrap: break-word;'>规格型号</td><td style='text-align: center; word-wrap: break-word;'>单位</td><td style='text-align: center; word-wrap: break-word;'>数量</td><td style='text-align: center; word-wrap: break-word;'>单价</td><td style='text-align: center; word-wrap: break-word;'>金额</td><td style='text-align: center; word-wrap: break-word;'>税率</td><td style='text-align: center; word-wrap: break-word;'>税额</td></tr><tr><td style='text-align: center; word-wrap: break-word;'>*</td><td style='text-align: center; word-wrap: break-word;'>15.7.23</td><td style='text-align: center; word-wrap: break-word;'></td><td style='text-align: center; word-wrap: break-word;'>1</td><td style='text-align: center; word-wrap: break-word;'></td><td style='text-align: center; word-wrap: break-word;'>47×6×9.7、2.2-16(L)</td><td style='text-align: center; word-wrap: break-word;'></td><td style='text-align: center; word-wrap: break-word;'></td></tr><tr><td style='text-align: center; word-wrap: break-word;'>合   计</td><td style='text-align: center; word-wrap: break-word;'></td><td style='text-align: center; word-wrap: break-word;'></td><td style='text-align: center; word-wrap: break-word;'></td><td style='text-align: center; word-wrap: break-word;'></td><td style='text-align: center; word-wrap: break-word;'>☑47</td><td style='text-align: center; word-wrap: break-word;'></td><td style='text-align: center; word-wrap: break-word;'></td></tr><tr><td style='text-align: center; word-wrap: break-word;'>价税合计（大写）</td><td colspan=\"7\"></td></tr><tr><td style='text-align: center; word-wrap: break-word;'>销售方</td><td colspan=\"3\">名称：வர ஐக்க ஐக்க 有限公司&lt;n&gt;纳税人识别号：&lt;n&gt;地址、电话：北京市朝阳区天安门西大街1号院A座1号&lt;n&gt;开户行及账号：</td><td style='text-align: center; word-wrap: break-word;'>备注</td><td colspan=\"3\"></td></tr></table>"
+    },
+    {
+      "name": "4F帷幕骨架安裝間距尺寸檢查-700mm±10-700mm.jpg",
+      "gt": {
+        "desc": "4F帷幕骨架安裝間距尺寸檢查",
+        "design": "700mm±10",
+        "actual": "700mm"
+      },
+      "pred": {
+        "desc": "",
+        "design": "",
+        "actual": ""
+      },
+      "score": {
+        "desc": {
+          "exact": false,
+          "cer": 1.0,
+          "found": false,
+          "exact_nofloor": false
+        },
+        "design": {
+          "exact": false,
+          "cer": 1.0,
+          "found": false
+        },
+        "actual": {
+          "exact": false,
+          "cer": 1.0,
+          "found": false
+        }
+      },
+      "seconds": 4.6,
+      "raw": "<div style=\"text-align: center;\"><img src=\"imgs/img_in_image_box_0_0_1475_1109.jpg\" alt=\"Image\" width=\"99%\" /></div>"
+    },
+    {
+      "name": "4F帷幕骨架銲道目視檢查-完整無缺失-完整無缺失.jpg",
+      "gt": {
+        "desc": "4F帷幕骨架銲道目視檢查",
+        "design": "完整無缺失",
+        "actual": "完整無缺失"
+      },
+      "pred": {
+        "desc": "☑ 自主檢查 ☐ 材料查驗 ☐ 施工查驗 ☑ 合格 ☐ 不合格",
+        "design": "實際值",
+        "actual": ""
+      },
+      "score": {
+        "desc": {
+          "exact": false,
+          "cer": 1.75,
+          "found": false,
+          "exact_nofloor": false
+        },
+        "design": {
+          "exact": false,
+          "cer": 1.0,
+          "found": true
+        },
+        "actual": {
+          "exact": false,
+          "cer": 1.0,
+          "found": true
+        }
+      },
+      "seconds": 144.2,
+      "raw": "<table border=1 style='margin: auto; word-wrap: break-word;'><tr><td style='text-align: center; word-wrap: break-word;'>工程名稱</td><td colspan=\"3\">高雄 軟體 園區 第二園區 第一棟大樓 興建統包工程</td></tr><tr><td style='text-align: center; word-wrap: break-word;'>專案管理</td><td style='text-align: center; word-wrap: break-word;'>中興工程顧問股份有限公司</td><td rowspan=\"3\">查驗人員</td><td style='text-align: center; word-wrap: break-word;'>永青：陳挺宇</td></tr><tr><td style='text-align: center; word-wrap: break-word;'>監造單位</td><td style='text-align: center; word-wrap: break-word;'>喻台生建築師事務所</td><td style='text-align: center; word-wrap: break-word;'></td></tr><tr><td style='text-align: center; word-wrap: break-word;'>統包廠商</td><td style='text-align: center; word-wrap: break-word;'>永青營造工程股份有限公司</td><td style='text-align: center; word-wrap: break-word;'></td></tr><tr><td style='text-align: center; word-wrap: break-word;'>查驗日期</td><td style='text-align: center; word-wrap: break-word;'>11.5.7.25</td><td style='text-align: center; word-wrap: break-word;'>查驗位置</td><td style='text-align: center; word-wrap: break-word;'>4F X6-X9、Y2-Y6 (上)</td></tr><tr><td style='text-align: center; word-wrap: break-word;'>查驗項目</td><td colspan=\"3\">☑ 自主檢查 ☐ 材料查驗 ☐ 施工查驗 ☑ 合格 ☐ 不合格</td></tr><tr><td style='text-align: center; word-wrap: break-word;'></td><td style='text-align: center; word-wrap: break-word;'>標準值</td><td colspan=\"2\">實際值</td></tr><tr><td style='text-align: center; word-wrap: break-word;'>4F 帷幕骨架</td><td style='text-align: center; word-wrap: break-word;'>骨架 水平：700mm  $ \\pm $ 10mm 垂直：≥780mm  $ \\pm $ 5mm 焊通：高度：140+70+140mm 脚長：4mm 焊通目標：完整無缺失</td><td colspan=\"2\">水平：700mm 垂直：≥781mm 高度：140+70+140mm 脚長：4mm 目視：完整無缺失</td></tr></table>"
+    }
+  ]
+}

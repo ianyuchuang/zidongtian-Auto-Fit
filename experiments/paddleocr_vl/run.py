@@ -6,8 +6,11 @@
 用法（在 repo 根目錄、裝好 paddleocr 的 Python）:
     python experiments/paddleocr_vl/run.py                 # 預設跑 4F 範例
     python experiments/paddleocr_vl/run.py --photos 路徑    # 指定資料夾
+    python experiments/paddleocr_vl/run.py --mode ocr      # 關版面分析，整張直接當文字讀（prompt_label=ocr）
+    python experiments/paddleocr_vl/run.py --mode table    # 關版面分析，整張當表格讀
     python experiments/paddleocr_vl/run.py --rescore       # 不跑模型，用上次存的 raw 文字重新抽欄位＋評分
-輸出：experiments/results/paddleocr_vl.json（含每張的 raw 文字，供調整抽取規則）。
+模式：layout（預設，PP-DocLayoutV3 先切版面再辨識；對工地照片常誤判成圖片/發票）、ocr、table。
+輸出：experiments/results/paddleocr_vl_<mode>.json（含每張的 raw 文字，供調整抽取規則）。
 """
 import argparse
 import json
@@ -22,7 +25,12 @@ from experiments import common  # noqa: E402
 
 MODEL = "PaddleOCR-VL-1.6"
 DEFAULT_PHOTOS = ROOT.parent / "需求及資訊來源" / "來源資料夾範例" / "帷幕骨架" / "4F"
-RESULT = ROOT / "experiments" / "results" / "paddleocr_vl.json"
+RESULT_DIR = ROOT / "experiments" / "results"
+MODES = {  # mode → predict() 參數
+    "layout": {},
+    "ocr": {"use_layout_detection": False, "prompt_label": "ocr"},
+    "table": {"use_layout_detection": False, "prompt_label": "table"},
+}
 
 
 def load_pipeline():
@@ -36,10 +44,10 @@ def load_pipeline():
     return pipe
 
 
-def run_one(pipe, img: Path) -> tuple[str, float]:
+def run_one(pipe, img: Path, predict_kwargs: dict) -> tuple[str, float]:
     """回傳 (markdown/純文字, 秒數)。用 save_to_markdown 落地再讀回，避免依賴結果物件的內部屬性名。"""
     t = time.perf_counter()
-    outputs = list(pipe.predict(str(img)))
+    outputs = list(pipe.predict(str(img), **predict_kwargs))
     secs = time.perf_counter() - t
     texts = []
     with tempfile.TemporaryDirectory() as td:
@@ -62,9 +70,12 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--photos", type=Path, default=DEFAULT_PHOTOS)
     ap.add_argument("--gt", type=Path, default=None, help="檔名不可解析時的正解 JSON")
-    ap.add_argument("--out", type=Path, default=RESULT)
+    ap.add_argument("--mode", choices=MODES, default="layout")
+    ap.add_argument("--out", type=Path, default=None, help="預設 experiments/results/paddleocr_vl_<mode>.json")
     ap.add_argument("--rescore", action="store_true", help="用 --out 裡存的 raw 文字重算，不跑模型")
     args = ap.parse_args()
+    if args.out is None:
+        args.out = RESULT_DIR / f"paddleocr_vl_{args.mode}.json"
     try:
         sys.stdout.reconfigure(encoding="utf-8")
     except Exception:
@@ -85,7 +96,7 @@ def main():
         pipe = load_pipeline()
         for p in photos:
             print(f"辨識 {p.name} …", flush=True)
-            raw[p.name], secs[p.name] = run_one(pipe, p)
+            raw[p.name], secs[p.name] = run_one(pipe, p, MODES[args.mode])
 
     folder = photos[0].parent.name if photos else ""
     gts = common.load_ground_truth(photos, args.gt, folder)
@@ -95,14 +106,14 @@ def main():
         gt = gts[p.name]
         rows.append({
             "name": p.name, "gt": gt, "pred": pred,
-            "score": common.score(gt, pred, folder) if gt else None,
+            "score": common.score(gt, pred, folder, raw=raw[p.name]) if gt else None,
             "seconds": secs.get(p.name), "raw": raw[p.name],
         })
     summary = common.summarize([r for r in rows if r["gt"]])
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps({"model": MODEL, "photos": str(photos[0].parent), "summary": summary, "rows": rows},
+    args.out.write_text(json.dumps({"model": MODEL, "mode": args.mode, "photos": str(photos[0].parent), "summary": summary, "rows": rows},
                                    ensure_ascii=False, indent=2), encoding="utf-8")
-    common.print_report(MODEL, rows, summary)
+    common.print_report(f"{MODEL} [{args.mode}]", rows, summary)
     print(f"\n結果已存 {args.out}")
 
 

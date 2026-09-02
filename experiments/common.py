@@ -3,6 +3,7 @@
 辨識實驗共用純邏輯（無模型相依）：找照片、檔名→正解、欄位抽取、正規化、CER 評分。
 各模型的 run.py 只負責「跑模型拿到文字」，其餘都用這裡，方便換模型比較。
 """
+import html as _html
 import json
 import re
 import unicodedata
@@ -88,12 +89,19 @@ def strip_floor_prefix(desc: str, folder_name: str) -> str:
     return d[len(f):] if f and d.startswith(f) else d
 
 
-def score(gt: dict, pred: dict, folder_name: str = "") -> dict:
-    """回傳每欄 {exact, cer}；desc 另給 exact_nofloor（去樓層前綴後是否相同）。"""
+def score(gt: dict, pred: dict, folder_name: str = "", raw: str = None) -> dict:
+    """回傳每欄 {exact, cer, found}；found＝正解字串有沒有出現在模型原始輸出裡（純辨識品質，不管欄位對應）。
+    desc 另給 exact_nofloor（去樓層前綴後是否相同）。"""
     res = {}
+    raw_n = normalize(html_to_text(raw)) if raw else None
     for f in FIELDS:
         g, p = gt.get(f, ""), (pred or {}).get(f, "") or ""
         res[f] = {"exact": normalize(g) == normalize(p), "cer": round(cer(g, p), 3)}
+        if raw_n is not None:
+            gn = normalize(g)
+            if f == "desc":
+                gn = strip_floor_prefix(g, folder_name)
+            res[f]["found"] = bool(gn) and gn in raw_n
     g2 = strip_floor_prefix(gt.get("desc", ""), folder_name)
     p2 = strip_floor_prefix((pred or {}).get("desc", "") or "", folder_name)
     res["desc"]["exact_nofloor"] = g2 == p2
@@ -101,6 +109,27 @@ def score(gt: dict, pred: dict, folder_name: str = "") -> dict:
 
 
 # ---------- 從 OCR 文字抽三欄 ----------
+
+def html_to_text(raw: str) -> str:
+    """PaddleOCR-VL 常回 HTML 表格：<td>→以 | 分隔、<tr>→換行、<br>/<n>→換行、去標籤、$ \\pm $→±。純文字原樣回傳。"""
+    if not raw or ("<" not in raw and "&lt;" not in raw):
+        return raw or ""
+    t = _html.unescape(raw)
+    t = re.sub(r"\$\s*\\pm\s*\$|\\pm", "±", t)
+    t = re.sub(r"<n>|<br\s*/?>", "\n", t, flags=re.I)
+    t = re.sub(r"</t[dh]>", " | ", t, flags=re.I)
+    t = re.sub(r"</tr>|</p>|</div>", "\n", t, flags=re.I)
+    t = re.sub(r"<[^>]+>", "", t)
+    lines = []
+    for ln in t.splitlines():
+        ln = re.sub(r"[ \t]+", " ", ln).strip().strip("|").strip()
+        ln = re.sub(r"\s*±\s*", "±", ln)
+        ln = re.sub(r"\s*\|\s*", " | ", ln)
+        ln = re.sub(r"(\s*\|\s*)+$", "", ln)  # 去尾端空儲存格
+        if ln:
+            lines.append("| " + ln + " |" if "|" in ln else ln)
+    return "\n".join(lines)
+
 
 _CELL_SPLIT = re.compile(r"\s*\|\s*")
 
@@ -117,7 +146,7 @@ def extract_fields(text: str) -> dict:
     支援：'標準值：700mm±10'、'標準值 700mm±10'、markdown 列 '| 標準值 | 700mm±10 |'、
     以及「關鍵字一行、值在下一行」。找不到的欄位回空字串。
     """
-    lines = [ln.strip() for ln in (text or "").splitlines()]
+    lines = [ln.strip() for ln in html_to_text(text or "").splitlines()]
     lines = [ln for ln in lines if ln and not re.fullmatch(r"[\|\-\s:]+", ln)]  # 去表格分隔列
     found = {f: "" for f in FIELDS}
     for idx, ln in enumerate(lines):
@@ -127,16 +156,18 @@ def extract_fields(text: str) -> dict:
                 continue
             for kw in KEYWORDS[f]:
                 if cells:
+                    matched = False
                     for ci, c in enumerate(cells):
                         c2 = re.sub(r"<[^>]+>", "", c).strip()
                         if c2.startswith(kw):
+                            matched = True
                             rest = _clean_value(c2[len(kw):])
                             if not rest and ci + 1 < len(cells):
                                 rest = _clean_value(cells[ci + 1])
                             if rest:
                                 found[f] = rest
                             break
-                    if found[f]:
+                    if matched:  # 長關鍵字已命中（即使值是空的）就不再用短關鍵字重試，避免「實際值」被切成「值」
                         break
                 else:
                     m = re.match(r"^\W*" + re.escape(kw) + r"\W*(.*)$", ln)
@@ -160,6 +191,8 @@ def summarize(rows: list) -> dict:
             "exact_rate": round(sum(1 for s in sc if s["exact"]) / n, 3) if n else None,
             "mean_cer": round(sum(s["cer"] for s in sc) / n, 3) if n else None,
         }
+        if n and all("found" in s for s in sc):
+            out[f]["found_rate"] = round(sum(1 for s in sc if s["found"]) / n, 3)
     nf = [r["score"]["desc"]["exact_nofloor"] for r in rows if r.get("gt")]
     out["desc"]["exact_rate_nofloor"] = round(sum(nf) / n, 3) if n else None
     secs = [r["seconds"] for r in rows if r.get("seconds") is not None]
@@ -176,6 +209,7 @@ def print_report(model: str, rows: list, summary: dict):
             p = (r.get("pred") or {}).get(f, "")
             s = r["score"][f] if r.get("score") else {}
             mark = "✔" if s.get("exact") else ("~" if f == "desc" and s.get("exact_nofloor") else "✘")
-            print(f"  {mark} {FIELD_LABELS[f]}: 正解「{g}」 辨識「{p}」 CER={s.get('cer')}")
+            found = "" if "found" not in s else ("  原文有" if s["found"] else "  原文沒有")
+            print(f"  {mark} {FIELD_LABELS[f]}: 正解「{g}」 辨識「{p}」 CER={s.get('cer')}{found}")
     print("\n--- 彙總 ---")
     print(json.dumps(summary, ensure_ascii=False, indent=2))
