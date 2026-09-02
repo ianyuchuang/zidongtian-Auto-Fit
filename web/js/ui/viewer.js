@@ -3,6 +3,7 @@
 import { STATUS_LABEL, TRASH_DIR, isTrashDir } from '../state.js';
 import { esc, toast, confirmDialog } from './dialog.js';
 import { reportMove } from './dnd.js';
+import { openLightbox } from './lightbox.js';
 
 const FIELDS = [
   ['desc', '內容說明'],
@@ -85,6 +86,12 @@ export function mountViewer(container, app) {
     }
   });
   container.addEventListener('click', (e) => {
+    const zoomable = e.target.closest('.big img, .crop img');
+    if (zoomable && zoomable.getAttribute('src')) {
+      const p = app.photo(currentId);
+      const inCrop = !!zoomable.closest('.crop');
+      return openLightbox(zoomable.src, { title: `${p ? p.name : ''}${inCrop ? '（白板裁切）' : ''}` });
+    }
     const nav = e.target.closest('[data-nav]');
     if (nav) return app.stepSelection(Number(nav.dataset.nav));
     const act = e.target.closest('[data-act]');
