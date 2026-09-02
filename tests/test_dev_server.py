@@ -32,3 +32,10 @@ def test_resolve_sample_path_blocks_traversal(tmp_path):
     assert ok == (root / "4F" / "a-1-2.jpg").resolve()
     assert ds.resolve_sample_path(root, "/samples/../secret.txt") is None
     assert ds.resolve_sample_path(root, "/samples/4F/%2e%2e/%2e%2e/x") is None
+
+
+def test_default_samples_points_at_source_folder():
+    # 預設值搬到 Python（.bat 不能放中文路徑），指向 repo 上一層的範例資料夾
+    assert ds.DEFAULT_SAMPLES.name == "帷幕骨架"
+    assert ds.DEFAULT_SAMPLES.parent.parent.name == "需求及資訊來源"
+    assert ds.DEFAULT_SAMPLES.parent.parent.parent == ds.ROOT.parent

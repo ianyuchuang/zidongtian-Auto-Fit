@@ -20,6 +20,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 WEB_DIR = ROOT / "web"
 
+# 預設的範例照片資料夾（在 repo 上一層的「需求及資訊來源」裡）。
+# 放在這裡而不是寫在 .bat 裡：.bat 只能放 ASCII，中文路徑會讓 cmd 解析錯亂。
+DEFAULT_SAMPLES = ROOT.parent / "需求及資訊來源" / "來源資料夾範例" / "帷幕骨架"
+
 # 範例清單要略過的檔案（與 web/js/filename.js 的規則一致，這裡只做粗略過濾）
 IGNORE_NAMES = {"thumbs.db", "desktop.ini"}
 
@@ -100,20 +104,21 @@ class Handler(SimpleHTTPRequestHandler):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--port", type=int, default=8765)
-    ap.add_argument("--samples", help="範例照片資料夾（掛在 /samples/）")
+    ap.add_argument("--samples", help="範例照片資料夾（掛在 /samples/）；不給就用預設的")
     ap.add_argument("--open", action="store_true", help="啟動後自動開瀏覽器")
     args = ap.parse_args(argv)
 
     if not WEB_DIR.is_dir():
         print(f"[X] 找不到 web/ 資料夾：{WEB_DIR}")
         return 1
-    if args.samples:
-        sd = Path(args.samples).resolve()
-        if sd.is_dir():
-            Handler.samples_dir = sd
-            print(f"  範例資料夾：{sd}")
-        else:
-            print(f"  （找不到範例資料夾，略過：{sd}）")
+    sd = Path(args.samples).resolve() if args.samples else DEFAULT_SAMPLES.resolve()
+    if sd.is_dir():
+        Handler.samples_dir = sd
+        print(f"  範例資料夾：{sd}")
+    elif args.samples:
+        print(f"  （找不到範例資料夾，略過：{sd}）")
+    else:
+        print(f"  （沒有預設範例資料夾，「載入範例」不會有東西：{sd}）")
 
     url = f"http://localhost:{args.port}/"
     try:
