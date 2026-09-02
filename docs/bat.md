@@ -41,30 +41,31 @@ cd /d D:\自懂填-Auto-Fit\自懂填-Auto-Fit-V2.0
 python -m pip install -r tools\requirements-tools.txt
 ```
 
-## 第一次備份：申請 Google 授權檔（credentials.json）
+## 第一次備份：Google 授權與雲端資料夾
 
-備份用的是自己的 OAuth 用戶端，範圍只有 `drive.file`（只碰這支程式自己建立／上傳的檔案，
-看不到雲端硬碟其他東西）。到 [Google Cloud Console](https://console.cloud.google.com/) 用要存
-備份的那個 Google 帳號登入，然後：
+需要 `%USERPROFILE%\.autofit\credentials.json`（OAuth「桌面應用程式」用戶端）。
+**目前沿用施工儀錶板那組**，把它的 `credentials.json` 複製到 `C:\Users\<你>\.autofit\` 就好；
+第一次執行會開瀏覽器授權一次（同意畫面顯示的是那支 app 的名稱，出現「Google 尚未驗證
+這個應用程式」→「進階」→「繼續」），之後授權存在 `.autofit\token.json`，不用再授權。
 
-1. **建專案**：左上角專案選單 →「新增專案」，名稱例如 `autofit-backup` → 建立，
-   之後每一步都確認右上角選的是這個專案。
-2. **開 Drive API**：「API 和服務」→「已啟用的 API 和服務」→「啟用 API 和服務」→
-   搜尋 `Google Drive API` → 啟用。
-3. **設定 Google Auth 平台**（第一次會要求）：左側「Google Auth 平台」→「開始使用」，
-   填應用程式名稱（例如 `自懂填 Auto-Fit 備份`）與支援電子郵件；對象（Audience）選 **外部**。
-   接著到「對象」頁按 **發布應用程式**，狀態變成「正式版」。
-   （`drive.file` 屬於非敏感範圍，發布不需要 Google 審核。留在「測試中」的話，
-   授權**七天就過期**，而且只有列在測試使用者清單裡的帳號能授權，
-   否則會看到「已封鎖存取權…403 access_denied」。要留在測試中就得把自己的 Gmail
-   加進「測試使用者」，並且每七天重新授權一次。）
-4. **建用戶端**：「Google Auth 平台」→「用戶端」→「建立用戶端」→
-   應用程式類型選 **桌面應用程式** → 命名 → 建立 → 下載 JSON。
-5. **放檔案**：把下載的檔案改名成 `credentials.json`，放到 `C:\Users\<你>\.autofit\`。
-6. 再點一次 `1_備份至Google雲端.bat`：會開瀏覽器要你授權一次
-   （出現「Google 尚未驗證這個應用程式」→「進階」→「繼續」，因為是自己建的用戶端），
-   之後授權存在 `.autofit\token.json`，不用再授權。
+### 雲端資料夾為什麼要讓程式自己建
 
-授權過期或想換帳號：刪掉 `%USERPROFILE%\.autofit\token.json` 再跑一次。
+授權範圍只有 `drive.file`：程式只碰**自己建立或上傳**的檔案，看不到雲端硬碟其他東西
+（安全，也不必送 Google 審核）。代價是**不能**直接指定一個你手動建的資料夾，
+那樣 API 會回 404。
 
-改了對象／測試使用者設定後要等一兩分鐘才生效，而且要用同一個 Google 帳號登入。
+所以第一次備份時程式會自己建「自懂填-Auto-Fit 備份」，並把資料夾 id 記在
+`%USERPROFILE%\.autofit\drive_folder_id.txt`。**建好之後你可以在雲端硬碟把它拖到任何位置、
+改任何名字**，程式認的是 id，照樣上傳到同一個資料夾。要放進哪個資料夾底下，拖進去就好。
+
+（`drive_folder_id.txt` 刪掉的話，程式會用名稱重找，找不到就再建一個新的。）
+
+### 其他
+
+- 授權過期或想換帳號：刪掉 `%USERPROFILE%\.autofit\token.json` 再跑一次。
+- 那支 app 若還停在 Google Auth 平台的「測試中」，授權**七天就過期**；
+  到「Google Auth 平台 → 對象」按「發布應用程式」可以根治（`drive.file` 是非敏感範圍，
+  發布不需要審核）。
+- 要自己另建一組用戶端時：Google Cloud Console 建專案 → 啟用 `Google Drive API` →
+  「Google Auth 平台」設定對象（外部）並發布 →「用戶端」建「桌面應用程式」→
+  下載 JSON 改名成 `credentials.json`。
