@@ -7,7 +7,7 @@
     python experiments/qwen3vl/run.py --size 4b                 # 單階段：整張縮到 1500px 直接讀
     python experiments/qwen3vl/run.py --size 2b --mode twostage # 兩階段：768px 找白板框 → 原圖裁切再讀
     python experiments/qwen3vl/run.py --size 4b --rescore       # 用上次 raw 重算，不跑模型
-    python experiments/qwen3vl/run.py --size 4b --llama-dir ..\llama.cpp-vulkan --ngl 99 --tag vulkan  # 核顯
+    python experiments/qwen3vl/run.py --size 4b --llama-dir D:/自懂填-Auto-Fit/llama.cpp-vulkan --ngl 99 --tag vulkan  # 核顯
 輸出：experiments/results/qwen3vl_<size>_<mode>.json
 模型要求輸出白板上「所有列」的 JSON；評分時取與正解最接近的一列（見 common.best_row）。
 """

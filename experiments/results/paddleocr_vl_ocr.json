@@ -1,0 +1,62 @@
+{
+  "model": "PaddleOCR-VL-1.6",
+  "mode": "ocr",
+  "max_side": 1024,
+  "partial": true,
+  "photos": "D:\\自懂填-Auto-Fit\\需求及資訊來源\\來源資料夾範例\\帷幕骨架\\4F",
+  "summary": {
+    "n": 1,
+    "desc": {
+      "exact_rate": 0.0,
+      "mean_cer": 1.0,
+      "found_rate": 0.0,
+      "exact_rate_nofloor": 0.0
+    },
+    "design": {
+      "exact_rate": 0.0,
+      "mean_cer": 1.0,
+      "found_rate": 0.0
+    },
+    "actual": {
+      "exact_rate": 0.0,
+      "mean_cer": 1.0,
+      "found_rate": 0.0
+    },
+    "mean_seconds": 146.8
+  },
+  "rows": [
+    {
+      "name": "4F帷幕骨架安裝間距尺寸檢查-2780mm±5-2779mm.jpg",
+      "gt": {
+        "desc": "4F帷幕骨架安裝間距尺寸檢查",
+        "design": "2780mm±5",
+        "actual": "2779mm"
+      },
+      "pred": {
+        "desc": "",
+        "design": "",
+        "actual": ""
+      },
+      "score": {
+        "desc": {
+          "exact": false,
+          "cer": 1.0,
+          "found": false,
+          "exact_nofloor": false
+        },
+        "design": {
+          "exact": false,
+          "cer": 1.0,
+          "found": false
+        },
+        "actual": {
+          "exact": false,
+          "cer": 1.0,
+          "found": false
+        }
+      },
+      "seconds": 146.8,
+      "raw": "JIEF. EUZ1-02-2017-02-02"
+    }
+  ]
+}
