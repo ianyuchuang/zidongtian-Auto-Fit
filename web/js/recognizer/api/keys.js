@@ -1,10 +1,23 @@
-// 個人 API 金鑰的保存（瀏覽器 localStorage，與照片校對暫存分開）。
-// 結構：{ provider: 'claude', remember: true, keys: { claude: '…', gemini: '…' } }
-// remember=false 時只存 provider 與 remember 旗標，金鑰一律不落地（並清掉先前存的）。
+// 個人 API 金鑰與型號選擇的保存（瀏覽器 localStorage，與照片校對暫存分開）。
+// 結構：{ provider, remember, keys: { claude: '…' }, models: { claude: '…' }, extras: { claude: { workspaceId } } }
+// remember=false 時只存 provider / remember / models / extras，金鑰一律不落地（並清掉先前存的）。
+// models 與 extras 不是機密（型號名稱、Workspace ID），一律保存，免得每次開對話框都要重按「測試連線」。
 
 export const KEYS_STORAGE_KEY = 'autofit:v1:api-keys';
 
-const EMPTY = () => ({ provider: null, remember: true, keys: {} });
+const EMPTY = () => ({ provider: null, remember: true, keys: {}, models: {}, extras: {} });
+
+const strMap = (o) => {
+  const out = {};
+  if (o && typeof o === 'object') for (const [k, v] of Object.entries(o)) if (typeof v === 'string' && v.trim()) out[k] = v.trim();
+  return out;
+};
+
+const extraMap = (o) => {
+  const out = {};
+  if (o && typeof o === 'object') for (const [k, v] of Object.entries(o)) if (v && typeof v === 'object') out[k] = strMap(v);
+  return out;
+};
 
 export function loadApiKeys(store = globalThis.localStorage) {
   try {
@@ -15,6 +28,8 @@ export function loadApiKeys(store = globalThis.localStorage) {
       provider: typeof obj.provider === 'string' ? obj.provider : null,
       remember: obj.remember !== false,
       keys: obj.keys && typeof obj.keys === 'object' ? { ...obj.keys } : {},
+      models: strMap(obj.models),
+      extras: extraMap(obj.extras),
     };
   } catch (e) {
     console.warn('讀取 API 金鑰設定失敗', e);
@@ -23,9 +38,9 @@ export function loadApiKeys(store = globalThis.localStorage) {
 }
 
 /** 存設定；remember=false 時金鑰不寫入。回傳實際寫入的物件。 */
-export function saveApiKeys({ provider = null, remember = true, keys = {} }, store = globalThis.localStorage) {
-  const out = { provider, remember, keys: {} };
-  if (remember) for (const [k, v] of Object.entries(keys)) if (typeof v === 'string' && v.trim()) out.keys[k] = v.trim();
+export function saveApiKeys({ provider = null, remember = true, keys = {}, models = {}, extras = {} }, store = globalThis.localStorage) {
+  const out = { provider, remember, keys: {}, models: strMap(models), extras: extraMap(extras) };
+  if (remember) out.keys = strMap(keys);
   try {
     store?.setItem(KEYS_STORAGE_KEY, JSON.stringify(out));
   } catch (e) {

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { PROVIDERS, getProvider } from '../../web/js/recognizer/api/providers.js';
 import { loadApiKeys, saveApiKeys, clearApiKeys, KEYS_STORAGE_KEY } from '../../web/js/recognizer/api/keys.js';
-import { buildRequest, callLLM, testConnection, errorMessage, hasAdapter } from '../../web/js/recognizer/api/call.js';
+import { buildRequest, callLLM, listModels, testConnection, errorMessage, hasAdapter } from '../../web/js/recognizer/api/call.js';
 import { buildPrompt, parseResult } from '../../web/js/recognizer/api/prompt.js';
 import { createApiRecognizer } from '../../web/js/recognizer/api.js';
 
@@ -24,7 +24,7 @@ class FakeStorage {
 const fakeFetch = (status, body) => {
   const calls = [];
   const fn = async (url, init) => {
-    calls.push({ url, init, body: JSON.parse(init.body) });
+    calls.push({ url, init, body: init.body ? JSON.parse(init.body) : null });
     return { ok: status >= 200 && status < 300, status, text: async () => (typeof body === 'string' ? body : JSON.stringify(body)) };
   };
   fn.calls = calls;
@@ -43,29 +43,46 @@ test('四家供應商都有申請與教學連結；Claude/Gemini/GPT 已接、Gr
     assert.equal(hasAdapter(p.id), p.available, p.id);
     assert.ok(Array.isArray(p.steps) && p.steps.length >= 3, `${p.id} 要有申請教學步驟`);
     assert.ok(p.billing, `${p.id} 要說明付費方式`);
-    if (p.available) assert.ok(p.model, `${p.id} 要有預設型號`);
+    if (p.available) assert.ok(p.model, `${p.id} 要有預設偏好型號`);
   }
   assert.equal(getProvider('claude').model, 'claude-haiku-4-5-20251001');
+  // Claude 公司帳號的識別碼型金鑰要多填 Workspace ID
+  assert.deepEqual(getProvider('claude').extraFields.map((f) => f.id), ['workspaceId']);
+  for (const p of PROVIDERS) for (const f of p.extraFields ?? []) assert.ok(f.label && f.help, `${p.id}.${f.id} 要有說明`);
   assert.throws(() => getProvider('nope'), /沒有這家/);
 });
 
 // ---------- keys ----------
+const EMPTY_KEYS = { provider: null, remember: true, keys: {}, models: {}, extras: {} };
+
 test('金鑰：記住 → 存進去；不記住 → 只存旗標，金鑰不落地', () => {
   const st = new FakeStorage();
-  assert.deepEqual(loadApiKeys(st), { provider: null, remember: true, keys: {} });
+  assert.deepEqual(loadApiKeys(st), EMPTY_KEYS);
   saveApiKeys({ provider: 'claude', remember: true, keys: { claude: ' sk-ant-x ', gemini: '' } }, st);
-  assert.deepEqual(loadApiKeys(st), { provider: 'claude', remember: true, keys: { claude: 'sk-ant-x' } });
+  assert.deepEqual(loadApiKeys(st), { ...EMPTY_KEYS, provider: 'claude', keys: { claude: 'sk-ant-x' } });
   saveApiKeys({ provider: 'claude', remember: false, keys: { claude: 'sk-ant-x' } }, st);
-  assert.deepEqual(loadApiKeys(st), { provider: 'claude', remember: false, keys: {} });
+  assert.deepEqual(loadApiKeys(st), { ...EMPTY_KEYS, provider: 'claude', remember: false });
   assert.ok(!st.getItem(KEYS_STORAGE_KEY).includes('sk-ant'));
   clearApiKeys(st);
   assert.equal(st.getItem(KEYS_STORAGE_KEY), null);
 });
 
+test('金鑰：選過的型號與 Workspace ID 不是機密，不記金鑰時照樣留著（省得每次重測連線）', () => {
+  const st = new FakeStorage();
+  saveApiKeys(
+    { provider: 'claude', remember: false, keys: { claude: 'sk-ant-x' }, models: { claude: ' claude-x ', gemini: '' }, extras: { claude: { workspaceId: ' wrkspc_1 ' }, gemini: 'x' } },
+    st,
+  );
+  const got = loadApiKeys(st);
+  assert.deepEqual(got.keys, {});
+  assert.deepEqual(got.models, { claude: 'claude-x' });
+  assert.deepEqual(got.extras, { claude: { workspaceId: 'wrkspc_1' } });
+});
+
 test('金鑰：壞掉的 JSON 不炸，回空設定', () => {
   const st = new FakeStorage();
   st.setItem(KEYS_STORAGE_KEY, '{oops');
-  assert.deepEqual(loadApiKeys(st), { provider: null, remember: true, keys: {} });
+  assert.deepEqual(loadApiKeys(st), EMPTY_KEYS);
 });
 
 // ---------- request 格式 ----------
@@ -82,6 +99,19 @@ test('Claude request：端點、三個 header、瀏覽器直打 header、base64 
   const c = r.body.messages[0].content;
   assert.deepEqual(c[0], { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: 'QUJD' } });
   assert.deepEqual(c[1], { type: 'text', text: 'hi' });
+});
+
+test('Claude request：公司帳號的識別碼型金鑰要帶 anthropic-workspace-id（回歸：HTTP 400）', () => {
+  const bare = buildRequest('claude', { apiKey: 'K', model: 'm', text: 'hi' });
+  assert.equal('anthropic-workspace-id' in bare.headers, false, '個人金鑰不要多送這個 header');
+  const ws = buildRequest('claude', { apiKey: 'K', model: 'm', text: 'hi', extra: { workspaceId: 'wrkspc_1' } });
+  assert.equal(ws.headers['anthropic-workspace-id'], 'wrkspc_1');
+});
+
+test('errorMessage：workspace 沒填的 400 要指路到 Workspace ID 欄位', () => {
+  const msg = errorMessage(400, { error: { message: 'anthropic-workspace-id is required when authenticating with an identity-linked API key' } });
+  assert.match(msg, /Workspace ID/);
+  assert.match(msg, /wrkspc_/);
 });
 
 test('Gemini request：型號進 URL、x-goog-api-key、inline_data', () => {
@@ -150,6 +180,38 @@ test('testConnection：純文字小請求，回模型文字', async () => {
   assert.equal(f.calls[0].body.messages[0].content.length, 1);
 });
 
+// ---------- listModels：型號向伺服器要，不寫死 ----------
+test('listModels：三家的清單格式都讀得出來；能看圖的排前面', async () => {
+  const fc = fakeFetch(200, { data: [{ id: 'claude-haiku-4-5', display_name: 'Claude Haiku 4.5' }] });
+  assert.deepEqual(await listModels('claude', { apiKey: 'k', fetchFn: fc }), [{ id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5', usable: true }]);
+  assert.equal(fc.calls[0].init.method, 'GET');
+  assert.match(fc.calls[0].url, /api\.anthropic\.com\/v1\/models/);
+
+  const fg = fakeFetch(200, {
+    models: [
+      { name: 'models/text-embedding-004', supportedGenerationMethods: ['embedContent'] },
+      { name: 'models/gemini-3.7-flash', displayName: 'Gemini 3.7 Flash', supportedGenerationMethods: ['generateContent'] },
+    ],
+  });
+  const g = await listModels('gemini', { apiKey: 'k', fetchFn: fg });
+  assert.deepEqual(g.map((m) => [m.id, m.usable]), [['gemini-3.7-flash', true], ['text-embedding-004', false]]);
+  assert.equal(fg.calls[0].init.headers['x-goog-api-key'], 'k');
+
+  const fo = fakeFetch(200, { data: [{ id: 'text-embedding-3-small' }, { id: 'gpt-5.6-terra' }, { id: 'gpt-4o-audio-preview' }] });
+  const o = await listModels('openai', { apiKey: 'k', fetchFn: fo });
+  assert.deepEqual(o.map((m) => [m.id, m.usable]), [['gpt-5.6-terra', true], ['text-embedding-3-small', false], ['gpt-4o-audio-preview', false]]);
+});
+
+test('listModels：Claude 帶 workspace header；沒金鑰、空清單、HTTP 錯誤都大聲失敗', async () => {
+  const f = fakeFetch(200, { data: [{ id: 'claude-x' }] });
+  await listModels('claude', { apiKey: 'k', extra: { workspaceId: 'wrkspc_1' }, fetchFn: f });
+  assert.equal(f.calls[0].init.headers['anthropic-workspace-id'], 'wrkspc_1');
+  await assert.rejects(listModels('claude', { apiKey: '', fetchFn: f }), /沒有 API 金鑰/);
+  await assert.rejects(listModels('grok', { apiKey: 'k', fetchFn: f }), /尚未接上/);
+  await assert.rejects(listModels('claude', { apiKey: 'k', fetchFn: fakeFetch(200, { data: [] }) }), /沒有回傳任何型號/);
+  await assert.rejects(listModels('claude', { apiKey: 'k', fetchFn: fakeFetch(400, { error: { message: 'anthropic-workspace-id is required' } }) }), /Workspace ID/);
+});
+
 // ---------- prompt / parse ----------
 test('buildPrompt：使用者提示詞優先，空的用預設；含輸出格式說明', () => {
   assert.match(buildPrompt('  ', '預設'), /預設/);
@@ -202,4 +264,11 @@ test('apiRecognizer：可指定型號覆蓋預設', async () => {
   const rec = createApiRecognizer({ encode: async () => ({ data: 'QUJD', mimeType: 'image/jpeg' }), fetchFn: f });
   await rec.recognize(new File(['x'], 'a.jpg'), { api: { provider: 'openai', apiKey: 'k', model: 'gpt-5.6-luna' } });
   assert.equal(f.calls[0].body.model, 'gpt-5.6-luna');
+});
+
+test('apiRecognizer：辨識時也要把 Workspace ID 一起送出去', async () => {
+  const f = fakeFetch(200, { content: [{ type: 'text', text: '{"desc":"a","design":"b","actual":"c","confidence":80}' }] });
+  const rec = createApiRecognizer({ encode: async () => ({ data: 'QUJD', mimeType: 'image/jpeg' }), fetchFn: f });
+  await rec.recognize(new File(['x'], 'a.jpg'), { api: { provider: 'claude', apiKey: 'k', model: 'm', extra: { workspaceId: 'wrkspc_9' } } });
+  assert.equal(f.calls[0].init.headers['anthropic-workspace-id'], 'wrkspc_9');
 });

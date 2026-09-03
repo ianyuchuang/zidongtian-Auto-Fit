@@ -1,6 +1,7 @@
 // LLM API 辨識器：照片縮到 1500px → base64 → 送到使用者選的供應商 → 解析 JSON 填三欄。
 // 注意：這條路會把照片送出機器（需求 1 的例外），入口頁有明確標示。
-// ctx.api = { provider, apiKey, model? } 由 app.state.api 帶進來。
+// ctx.api = { provider, apiKey, model?, extra? } 由 app.state.api 帶進來；
+// model 由「AI 辨識」對話框從伺服器抓回的清單選出來，extra 是各家的額外設定（Claude 的 workspaceId）。
 
 import { getProvider } from './api/providers.js';
 import { callLLM, hasAdapter } from './api/call.js';
@@ -27,6 +28,7 @@ export function createApiRecognizer({ encode, fetchFn } = {}) {
       const text = await callLLM(p.id, {
         apiKey: api.apiKey,
         model: api.model || p.model,
+        extra: api.extra || {},
         text: buildPrompt(ctx.prompt, DEFAULT_PROMPT),
         image,
         maxTokens: 2048,

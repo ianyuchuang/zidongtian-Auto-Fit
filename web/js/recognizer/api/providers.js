@@ -1,7 +1,9 @@
 // LLM API 供應商定義（純資料，不打網路）。每家一筆：
-//   id / label / model（預設型號）/ keyHint（金鑰長相）/ apply（申請金鑰頁）/ guide（官方教學）
-//   steps（入口頁「申請教學」彈窗的步驟）/ billing（付費方式）/ price（型號價格）/ available（辨識已接上）
-// 型號與價格依 2026-09 官方文件，摘要在 docs/LLM-API.md；改型號只要改這裡。
+//   id / label / model（預設偏好型號）/ keyHint（金鑰長相）/ apply（申請金鑰頁）/ guide（官方教學）
+//   steps（「申請教學」彈窗的步驟）/ billing（付費方式）/ price（型號價格）/ available（辨識已接上）
+//   extraFields（除了金鑰以外還要填的欄位，例如 Claude 公司帳號的 Workspace ID）
+// 可用型號一律按「測試連線」時向該公司伺服器要（call.js 的 listModels），這裡的 model 只是
+// 清單抓回來時預設幫使用者選哪一個；抓不到清單時才拿來當後備。價格摘要在 docs/LLM-API.md。
 
 export const PROVIDERS = [
   {
@@ -16,6 +18,14 @@ export const PROVIDERS = [
       '左側「Billing」→「Add credits」儲值（預付，最低約 US$5；建議順手設每月上限 Spend limit）。',
       '左側「API Keys」→「Create Key」→ 取個名字（例：autofit）→ Create。',
       '金鑰 sk-ant-api03-… 只會顯示這一次，立刻複製、貼到下面的輸入格，再按「測試連線」。',
+    ],
+    extraFields: [
+      {
+        id: 'workspaceId',
+        label: 'Workspace ID',
+        placeholder: 'wrkspc_…（個人金鑰免填）',
+        help: '公司／團隊帳號發的「識別碼型金鑰」才需要：Claude Console → Settings → Workspaces 的 ID 欄。不填會收到 HTTP 400。',
+      },
     ],
     billing: 'Claude Pro／Max 月費不含 API，要在 Console 另外儲值。',
     price: 'Haiku 4.5：輸入 $1／輸出 $5（每百萬 token），一張照片約 NT$0.05–0.1。',

@@ -4,7 +4,7 @@
 import { RECOGNIZERS, DEFAULT_PROMPT } from '../recognizer/index.js';
 import { PROVIDERS, getProvider } from '../recognizer/api/providers.js';
 import { loadApiKeys, saveApiKeys } from '../recognizer/api/keys.js';
-import { testConnection } from '../recognizer/api/call.js';
+import { testConnection, listModels } from '../recognizer/api/call.js';
 import { isTrashed } from '../state.js';
 import { esc, showDialog, alertDialog, toast } from './dialog.js';
 
@@ -97,7 +97,12 @@ async function askSettings(app) {
             <button class="btn" id="api-test" type="button">測試連線</button>
             <button class="btn" id="api-clear" type="button">清除</button>
           </div>
-          <div class="small muted" id="api-model"></div>
+          <div id="api-extra"></div>
+          <div class="api-model-row">
+            <label for="api-model">型號（按「測試連線」向伺服器要，不寫死在程式裡）</label>
+            <select id="api-model" disabled><option value="">按「測試連線」取得可用型號</option></select>
+            <label class="small"><input type="checkbox" id="api-model-all"> 連不能看圖的型號也列出來</label>
+          </div>
           <div class="small" id="api-status"></div>
         </div>
         <label class="small remember"><input type="checkbox" id="api-forget"> 不要記住金鑰（關閉分頁就清掉）</label>
@@ -122,15 +127,64 @@ async function askSettings(app) {
         $('#api-status').textContent = text;
         $('#api-status').className = `small ${cls}`.trim();
       };
+      // 型號清單：只有按過「測試連線」才會有東西；上次選過的先當成單筆清單帶回來
+      let modelList = [];
+      const rememberModel = (id) => {
+        if (!apiState.provider) return;
+        if (id) apiState.models[apiState.provider] = id;
+        else delete apiState.models[apiState.provider];
+        saveApiKeys(apiState);
+      };
+      const fillModels = (chosen) => {
+        const sel = $('#api-model');
+        const use = modelList.filter((m) => $('#api-model-all').checked || m.usable);
+        if (!use.length) {
+          sel.disabled = true;
+          sel.innerHTML = `<option value="">${modelList.length ? '這家沒有看得懂圖的型號，勾下面那格再挑' : '按「測試連線」取得可用型號'}</option>`;
+          return;
+        }
+        const pref = getProvider(apiState.provider).model; // 只是預設幫忙選，清單還是伺服器給的
+        const pick = [chosen, pref].find((id) => id && use.some((m) => m.id === id)) || use[0].id;
+        sel.disabled = false;
+        sel.innerHTML = use
+          .map(
+            (m) =>
+              `<option value="${esc(m.id)}" ${m.id === pick ? 'selected' : ''}>${esc(m.label)}${m.label === m.id ? '' : `（${esc(m.id)}）`}${m.usable ? '' : '　※ 不是看圖用的'}</option>`,
+          )
+          .join('');
+        sel.value = pick;
+        rememberModel(pick);
+      };
       const showProvider = (id) => {
         const p = getProvider(id);
         apiState.provider = id;
+        apiState.extras[id] ||= {};
         $('#api-key-row').hidden = false;
         $('#api-key-label').textContent = `${p.label} API 金鑰`;
         $('#api-key').placeholder = `貼上金鑰（長得像 ${p.keyHint}）`;
         $('#api-key').value = apiState.keys[id] || '';
-        $('#api-model').textContent = `使用型號：${p.model}`;
-        setStatus('');
+        // 這家除了金鑰以外還要填的欄位（Claude 公司帳號的 Workspace ID）
+        $('#api-extra').innerHTML = (p.extraFields || [])
+          .map(
+            (f) => `<div class="api-extra-field">
+              <label for="x-${esc(f.id)}">${esc(f.label)}</label>
+              <input type="text" id="x-${esc(f.id)}" data-extra="${esc(f.id)}" placeholder="${esc(f.placeholder ?? '')}" autocomplete="off" spellcheck="false">
+              ${f.help ? `<div class="small muted">${esc(f.help)}</div>` : ''}
+            </div>`,
+          )
+          .join('');
+        for (const i of $('#api-extra').querySelectorAll('[data-extra]')) {
+          i.value = apiState.extras[id][i.dataset.extra] || '';
+          i.addEventListener('input', (e) => {
+            apiState.extras[apiState.provider][i.dataset.extra] = e.target.value.trim();
+            saveApiKeys(apiState);
+          });
+        }
+        const saved = apiState.models[id] || '';
+        modelList = saved ? [{ id: saved, label: saved, usable: true }] : [];
+        $('#api-model-all').checked = false;
+        fillModels(saved);
+        setStatus(saved ? '上次選的型號；按「測試連線」重新取得清單' : '', 'muted');
         saveApiKeys(apiState);
       };
       const syncPanel = () => {
@@ -150,6 +204,11 @@ async function askSettings(app) {
         setStatus('');
         saveApiKeys(apiState);
       });
+      $('#api-model').addEventListener('change', (e) => {
+        rememberModel(e.target.value);
+        setStatus('');
+      });
+      $('#api-model-all').addEventListener('change', () => fillModels($('#api-model').value));
       $('#api-key-eye').addEventListener('click', () => {
         const i = $('#api-key');
         i.type = i.type === 'password' ? 'text' : 'password';
@@ -171,12 +230,21 @@ async function askSettings(app) {
         }
         const btn = $('#api-test');
         btn.disabled = true;
-        setStatus('連線中…');
+        const extra = { ...(apiState.extras[pid] || {}) };
         try {
-          const reply = await testConnection(pid, { apiKey: key, model: getProvider(pid).model });
-          setStatus(`✅ 連線成功（模型回覆：${reply.trim().slice(0, 40)}）`, 'ok');
+          setStatus('取得型號清單…');
+          modelList = await listModels(pid, { apiKey: key, extra });
+          fillModels(apiState.models[pid] || '');
+          const model = $('#api-model').value;
+          if (!model) throw new Error('伺服器沒有回傳看得懂圖的型號（勾「連不能看圖的型號也列出來」可自己挑）');
+          setStatus(`型號清單 ${modelList.length} 個，正在用 ${model} 試打…`);
+          const reply = await testConnection(pid, { apiKey: key, model, extra });
+          setStatus(`✅ 連線成功，可用型號 ${modelList.filter((m) => m.usable).length} 個；${model} 回覆「${reply.trim().slice(0, 20)}」`, 'ok');
         } catch (e) {
           setStatus(`❌ ${e.message}`, 'err');
+          // workspace 沒填就是這個錯，直接把游標送到那一格
+          const ws = d.querySelector('[data-extra="workspaceId"]');
+          if (ws && /workspace-id/i.test(e.message)) ws.focus();
         } finally {
           btn.disabled = false;
         }
@@ -218,7 +286,12 @@ async function askSettings(app) {
           d.querySelector('#api-key').focus();
           return false;
         }
-        api = { provider: pid, apiKey: key, model: getProvider(pid).model };
+        const model = (d.querySelector('#api-model').value || '').trim();
+        if (!model) {
+          toast('請先按「測試連線」取得型號清單，再挑一個型號', { error: true });
+          return false;
+        }
+        api = { provider: pid, apiKey: key, model, extra: { ...(apiState.extras[pid] || {}) } };
       }
       const scope = d.querySelector('#rec-scope').value;
       const includeConfirmed = d.querySelector('#rec-confirmed').checked;

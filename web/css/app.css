@@ -88,7 +88,12 @@ input[type="text"]:focus, input[type="password"]:focus, textarea:focus { outline
 .api-key-inputs { display: flex; gap: 6px; }
 .api-key-inputs input { flex: 1; font-family: Consolas, monospace; }
 .api-key-inputs .btn { white-space: nowrap; }
-#api-model { margin-top: 4px; }
+.api-extra-field { margin-top: 10px; }
+.api-extra-field input { width: 100%; font-family: Consolas, monospace; }
+.api-model-row { margin-top: 10px; }
+.api-model-row select { width: 100%; border: 1px solid var(--line); border-radius: var(--radius); padding: 6px; background: #fff; font: inherit; }
+.api-model-row select:disabled { color: var(--muted); background: #f2f3f5; }
+.api-model-row > label.small { display: flex; align-items: center; gap: 6px; font-weight: 400; margin: 6px 0 0; }
 #api-status { margin-top: 4px; min-height: 1.4em; }
 #api-status.ok { color: var(--accent); }
 #api-status.err { color: var(--red-text); }
