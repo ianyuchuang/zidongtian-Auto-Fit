@@ -184,6 +184,8 @@ td.conf { color: var(--muted); text-align: right; }
 .big { position: relative; background: #1a1a1a; border-radius: 4px; overflow: hidden; aspect-ratio: 4 / 3; }
 .big img { width: 100%; height: 100%; object-fit: contain; display: block; cursor: zoom-in; }
 .big .stamp { position: absolute; left: 8px; bottom: 6px; color: #fff; font-size: 11px; text-shadow: 0 1px 2px rgba(0,0,0,.8); pointer-events: none; }
+.big .load-err { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: #fff; background: rgba(0,0,0,.55); text-align: center; padding: 12px; }
+.big .load-err .small { color: rgba(255,255,255,.75); word-break: break-all; }
 .viewer .crop-title { margin: 12px 0 6px; color: var(--muted); font-size: 12px; }
 .crop { background: #eceff3; border-radius: 4px; min-height: 120px; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 12px; overflow: hidden; }
 .crop img { width: 100%; display: block; cursor: zoom-in; }

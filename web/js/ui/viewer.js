@@ -15,6 +15,10 @@ export function mountViewer(container, app) {
   container.className = 'viewer';
   let currentId = null;
   let zoomKind = null; // 燈箱正在看哪張圖：'big' | 'crop' | null
+  // 每次換照片就 +1。非同步載圖回來時用它判斷有沒有過期——不能用 p.id，
+  // 因為搬移資料夾時 app 會就地改掉 p.id，導致回呼永遠對不上、圖片停在沒有 src 的狀態。
+  let viewSeq = 0;
+  let bigLoading = false;
 
   function zoomTitle(p, kind) {
     return `${p ? p.name : ''}${kind === 'crop' ? '（白板裁切）' : ''}`;
@@ -43,28 +47,62 @@ export function mountViewer(container, app) {
         <button class="btn" data-act="skip">跳過</button>
         <button class="btn btn-primary" data-act="confirm">✓ 確認，下一張<kbd>Enter</kbd></button>
       </div>`;
-    const img = container.querySelector('.big img');
+    loadBig(p, viewSeq);
+    loadCrop(p, viewSeq);
+  }
+
+  /** 大圖：載入失敗要在畫面上講清楚並給「重試」，不能只 console.error 讓圖悄悄空著。 */
+  function loadBig(p, seq) {
+    const box = container.querySelector('.big');
+    const img = box?.querySelector('img');
+    if (!img || bigLoading) return;
+    box.querySelector('.load-err')?.remove();
+    box.classList.remove('failed');
+    bigLoading = true;
     app
       .fullUrl(p)
       .then((u) => {
-        if (currentId !== p.id) return;
+        if (seq !== viewSeq) return;
         img.src = u;
         syncLightbox(p, 'big', u);
       })
-      .catch(console.error);
+      .catch((e) => {
+        console.error('讀取照片失敗', p.name, e);
+        if (seq !== viewSeq) return;
+        box.classList.add('failed');
+        const el = document.createElement('div');
+        el.className = 'load-err';
+        el.innerHTML = `<div>❌ 讀不到這張照片</div><div class="small">${esc(e.message)}</div><button class="btn" data-act="reload">重試</button>`;
+        box.appendChild(el);
+      })
+      .finally(() => {
+        bigLoading = false;
+      });
+  }
+
+  function loadCrop(p, seq) {
     app
       .cropUrl(p)
       .then((u) => {
-        if (currentId !== p.id) return;
+        if (seq !== viewSeq) return;
         const c = container.querySelector('.crop');
+        if (!c) return;
         c.innerHTML = u ? `<img alt="白板裁切" src="${u}">` : `<span>${p.source === 'filename' ? '檔名解析，無需辨識' : '尚無裁切'}</span>`;
         syncLightbox(p, 'crop', u);
         if (!u && zoomKind === 'crop') closeLightbox();
       })
-      .catch(console.error);
+      .catch((e) => {
+        console.error('白板裁切失敗', p.name, e);
+        if (seq !== viewSeq) return;
+        const c = container.querySelector('.crop');
+        if (c) c.innerHTML = `<span>裁切失敗：${esc(e.message)}</span>`;
+      });
   }
 
   function patch(p) {
+    // 上一輪載圖失敗或被取消時，這裡補救——否則畫面會一直停在黑框、點了也沒反應
+    const bigImg = container.querySelector('.big img');
+    if (bigImg && !bigImg.getAttribute('src')) loadBig(p, viewSeq);
     const badge = container.querySelector('.head .badge');
     badge.className = `badge ${p.status}`;
     badge.textContent = STATUS_LABEL[p.status];
@@ -93,6 +131,8 @@ export function mountViewer(container, app) {
       container.className = 'viewer';
       container.innerHTML = '<div class="empty">左邊點一列，這裡會顯示大圖與白板裁切。</div>';
       currentId = null;
+      viewSeq += 1;
+      bigLoading = false;
       closeLightbox();
       return;
     }
@@ -101,6 +141,8 @@ export function mountViewer(container, app) {
       patch(p);
     } else {
       currentId = p.id;
+      viewSeq += 1;
+      bigLoading = false;
       renderFull(p);
     }
   }
@@ -132,9 +174,11 @@ export function mountViewer(container, app) {
     if (nav) return app.stepSelection(Number(nav.dataset.nav));
     const act = e.target.closest('[data-act]');
     if (!act || !currentId) return;
-    if (act.dataset.act === 'confirm') app.confirm(currentId);
-    else if (act.dataset.act === 'trash') trashCurrent();
-    else app.skip(currentId);
+    const what = act.dataset.act;
+    if (what === 'confirm') app.confirm(currentId);
+    else if (what === 'trash') trashCurrent();
+    else if (what === 'reload') loadBig(app.photo(currentId), viewSeq);
+    else if (what === 'skip') app.skip(currentId);
   });
 
   async function trashCurrent() {
