@@ -43,9 +43,13 @@ test('四家供應商都有申請與教學連結；Claude/Gemini/GPT 已接、Gr
     assert.equal(hasAdapter(p.id), p.available, p.id);
     assert.ok(Array.isArray(p.steps) && p.steps.length >= 3, `${p.id} 要有申請教學步驟`);
     assert.ok(p.billing, `${p.id} 要說明付費方式`);
-    if (p.available) assert.ok(p.model, `${p.id} 要有預設偏好型號`);
+    assert.ok(Array.isArray(p.prefer), `${p.id} 要有 prefer 陣列`);
+    if (p.available) assert.ok(p.model, `${p.id} 要有後備型號`);
   }
-  assert.equal(getProvider('claude').model, 'claude-haiku-4-5-20251001');
+  // 實測 Haiku 讀不動手寫白板，預設挑 Sonnet；寫關鍵字不寫版本號，廠商出新版自動跟上
+  assert.deepEqual(getProvider('claude').prefer, ['sonnet']);
+  assert.match(getProvider('claude').model, /sonnet/);
+  for (const p of PROVIDERS) for (const k of p.prefer) assert.doesNotMatch(k, /\d{8}/, `${p.id} 的 prefer 不要寫死日期版本`);
   // Claude 公司帳號的識別碼型金鑰要多填 Workspace ID
   assert.deepEqual(getProvider('claude').extraFields.map((f) => f.id), ['workspaceId']);
   for (const p of PROVIDERS) for (const f of p.extraFields ?? []) assert.ok(f.label && f.help, `${p.id}.${f.id} 要有說明`);
@@ -249,7 +253,7 @@ test('apiRecognizer：縮圖 → 呼叫 → 解析；沒選供應商／沒金鑰
   assert.equal(r.desc, '5F水平');
   assert.equal(r.confidence, 90);
   assert.equal(r.bbox, null);
-  assert.equal(f.calls[0].body.model, 'claude-haiku-4-5-20251001', '沒指定型號用供應商預設');
+  assert.equal(f.calls[0].body.model, 'claude-sonnet-5', '沒指定型號用供應商的後備型號');
   assert.equal(f.calls[0].body.messages[0].content[0].source.data, 'QUJD');
   assert.match(f.calls[0].body.messages[0].content[1].text, /白板/);
 

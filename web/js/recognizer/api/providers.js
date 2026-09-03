@@ -1,15 +1,19 @@
 // LLM API 供應商定義（純資料，不打網路）。每家一筆：
-//   id / label / model（預設偏好型號）/ keyHint（金鑰長相）/ apply（申請金鑰頁）/ guide（官方教學）
-//   steps（「申請教學」彈窗的步驟）/ billing（付費方式）/ price（型號價格）/ available（辨識已接上）
+//   id / label / prefer（預設挑哪個型號）/ model（抓不到清單時的後備）/ keyHint（金鑰長相）
+//   apply（申請金鑰頁）/ guide（官方教學）/ steps（「申請教學」彈窗的步驟）
+//   billing（付費方式）/ price（型號價格）/ available（辨識已接上）
 //   extraFields（除了金鑰以外還要填的欄位，例如 Claude 公司帳號的 Workspace ID）
-// 可用型號一律按「測試連線」時向該公司伺服器要（call.js 的 listModels），這裡的 model 只是
-// 清單抓回來時預設幫使用者選哪一個；抓不到清單時才拿來當後備。價格摘要在 docs/LLM-API.md。
+// 可用型號一律按「測試連線」時向該公司伺服器要（call.js 的 listModels）。prefer 是關鍵字，
+// 依序拿去比對抓回來的型號 id（不分大小寫），第一個命中的當預設選項——寫關鍵字不寫版本號，
+// 廠商出新版就自動跟上。價格摘要在 docs/LLM-API.md。
 
 export const PROVIDERS = [
   {
     id: 'claude',
     label: 'Claude（Anthropic）',
-    model: 'claude-haiku-4-5-20251001',
+    // 實測：Haiku 讀不動這種手寫白板（12 張 0 對），Sonnet 9/12。見 docs/LLM-API.md
+    prefer: ['sonnet'],
+    model: 'claude-sonnet-5',
     keyHint: 'sk-ant-api03-…',
     apply: 'https://platform.claude.com/',
     guide: 'https://platform.claude.com/docs/en/get-started',
@@ -28,12 +32,14 @@ export const PROVIDERS = [
       },
     ],
     billing: 'Claude Pro／Max 月費不含 API，要在 Console 另外儲值。',
-    price: 'Haiku 4.5：輸入 $1／輸出 $5（每百萬 token），一張照片約 NT$0.05–0.1。',
+    price: 'Sonnet 5：輸入 $2／輸出 $10（每百萬 token），一張照片約 NT$0.1–0.2；Haiku 4.5 便宜一半但實測讀不動手寫白板。',
     available: true,
   },
   {
     id: 'gemini',
     label: 'Gemini（Google）',
+    // 未實測；先挑中階（pro）而不是最小的，理由同 Claude 那條
+    prefer: ['pro', 'flash'],
     model: 'gemini-3.7-flash',
     keyHint: 'AIza…',
     apply: 'https://aistudio.google.com/apikey',
@@ -51,6 +57,8 @@ export const PROVIDERS = [
   {
     id: 'openai',
     label: 'GPT（OpenAI）',
+    // 未實測；同上，不要預設挑 mini／nano
+    prefer: ['gpt-5'],
     model: 'gpt-5.6-terra',
     keyHint: 'sk-…',
     apply: 'https://platform.openai.com/api-keys',
@@ -68,6 +76,7 @@ export const PROVIDERS = [
   {
     id: 'grok',
     label: 'Grok（xAI）',
+    prefer: [],
     model: '',
     keyHint: 'xai-…',
     apply: 'https://console.x.ai/',

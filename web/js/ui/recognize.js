@@ -143,8 +143,11 @@ async function askSettings(app) {
           sel.innerHTML = `<option value="">${modelList.length ? '這家沒有看得懂圖的型號，勾下面那格再挑' : '按「測試連線」取得可用型號'}</option>`;
           return;
         }
-        const pref = getProvider(apiState.provider).model; // 只是預設幫忙選，清單還是伺服器給的
-        const pick = [chosen, pref].find((id) => id && use.some((m) => m.id === id)) || use[0].id;
+        // 預設選誰：上次選過的 → providers.js 的 prefer 關鍵字（依序）→ 後備型號 → 清單第一個。
+        // 清單永遠是伺服器給的，這裡只決定游標停在哪一個。
+        const p = getProvider(apiState.provider);
+        const byKeyword = (p.prefer || []).map((k) => use.find((m) => m.id.toLowerCase().includes(k.toLowerCase()))?.id);
+        const pick = [chosen, ...byKeyword, p.model].find((id) => id && use.some((m) => m.id === id)) || use[0].id;
         sel.disabled = false;
         sel.innerHTML = use
           .map(
