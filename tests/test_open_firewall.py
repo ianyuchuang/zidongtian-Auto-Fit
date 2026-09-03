@@ -35,9 +35,54 @@ def test_refuses_off_windows(monkeypatch, capsys):
     assert "Windows" in capsys.readouterr().out
 
 
+def test_any_profile_opens_all_profiles():
+    assert "profile=any" in " ".join(fw.add_rule_cmd(profile="any"))
+
+
+def test_public_only_network_is_not_enough():
+    # 辦公室網路被歸成「公用網路」時，profile=private 的規則對不上，同事會連不到
+    assert fw.private_profile_is_enough(["Public"]) is False
+    assert fw.private_profile_is_enough(["Public", "Private"]) is True
+    assert fw.private_profile_is_enough(["DomainAuthenticated"]) is True
+    assert fw.private_profile_is_enough([]) is True, "偵測不到就別亂猜"
+
+
+def test_public_network_prompts_and_switches_to_any(monkeypatch):
+    monkeypatch.setattr(fw.sys, "platform", "win32")
+    monkeypatch.setattr(fw, "is_admin", lambda: True)
+    monkeypatch.setattr(fw, "network_categories", lambda: ["Public"])
+    monkeypatch.setattr("builtins.input", lambda *a: "y")
+    calls = []
+
+    class _R:
+        returncode = 0
+        stdout = stderr = ""
+
+    monkeypatch.setattr(fw.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or _R())
+    assert fw.main([]) == 0
+    assert "profile=any" in " ".join(calls[1])
+
+
+def test_public_network_answered_no_keeps_private(monkeypatch):
+    monkeypatch.setattr(fw.sys, "platform", "win32")
+    monkeypatch.setattr(fw, "is_admin", lambda: True)
+    monkeypatch.setattr(fw, "network_categories", lambda: ["Public"])
+    monkeypatch.setattr("builtins.input", lambda *a: "")
+    calls = []
+
+    class _R:
+        returncode = 0
+        stdout = stderr = ""
+
+    monkeypatch.setattr(fw.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or _R())
+    assert fw.main([]) == 0
+    assert "profile=private" in " ".join(calls[1])
+
+
 def test_add_deletes_first_so_reruns_do_not_stack(monkeypatch):
     monkeypatch.setattr(fw.sys, "platform", "win32")
     monkeypatch.setattr(fw, "is_admin", lambda: True)
+    monkeypatch.setattr(fw, "network_categories", lambda: ["Private"])
     calls = []
 
     class _R:
