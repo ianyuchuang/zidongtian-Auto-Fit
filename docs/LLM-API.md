@@ -1,7 +1,7 @@
 # LLM API（個人金鑰）— 申請與使用
 
-入口頁「辨識方式」選 **LLM API** → 選一家 → 貼金鑰 → 「測試連線」。照片會縮到 1500px 後送到該公司伺服器（需求 1 的例外，介面有標示）。
-程式：`web/js/recognizer/api.js`（辨識器）、`api/providers.js`（四家定義與預設型號）、`api/call.js`（HTTP）、`api/keys.js`（金鑰存 localStorage `autofit:v1:api-keys`）、`api/prompt.js`（提示詞與 JSON 解析）。
+頂列「🤖 AI 辨識」→「辨識方式」選 **LLM API** → 選一家 → 貼金鑰 →「測試連線」→ **從清單挑型號** → 開始辨識。照片會縮到 1500px 後送到該公司伺服器（需求 1 的例外，介面有標示）。
+程式：`web/js/recognizer/api.js`（辨識器）、`api/providers.js`（四家定義與申請教學）、`api/call.js`（HTTP、列型號）、`api/keys.js`（金鑰／型號／Workspace ID 存 localStorage `autofit:v1:api-keys`）、`api/prompt.js`（提示詞與 JSON 解析）。
 
 ## 四家申請方式（2026-09 官方文件）
 
@@ -22,5 +22,22 @@
 ## 換引擎重開同一個資料夾
 校對暫存每筆 AI 結果都記 `engine`；引擎不同（例：先用模擬辨識、再用 Claude）時，未確認的 AI 結果不套回、重新辨識；已確認的保留。同引擎重開沿用暫存，不重複花錢。頂列 🤖 pill 顯示這次用的引擎與型號；辨識失敗會彈出彙整提示，檢視器顯示各張原因。
 
-## 換型號
-改 `api/providers.js` 的 `model` 即可；`ctx.api.model` 也可個別覆蓋（目前介面沒開放）。
+## 型號清單（不寫死）
+按「測試連線」時 `listModels()` 先向該公司要清單，再用選到的型號試打一次；型號下拉只列這份清單。
+
+| 家 | 列型號端點 | 挑選規則 |
+|---|---|---|
+| Claude | `GET /v1/models?limit=1000` | 全部都能看圖，直接列 |
+| Gemini | `GET /v1beta/models?pageSize=1000` | 只有 `supportedGenerationMethods` 含 `generateContent` 的算可用 |
+| GPT | `GET /v1/models` | 這個端點連向量／語音／繪圖型號都列，用型號名稱篩掉 |
+
+不能看圖的型號預設收起來，勾「連不能看圖的型號也列出來」才顯示（篩錯了還挑得到，不會被卡死）。選好的型號記在 localStorage，下次開對話框直接帶回來，不必每次重測。`providers.js` 的 `model` 只是「清單抓回來時預設選哪個」與抓不到時的後備，不是寫死的唯一選擇。
+
+## Claude 公司／團隊帳號：Workspace ID
+公司帳號發的「識別碼型金鑰」（personal / service account key）每次請求都要帶 header `anthropic-workspace-id`，否則：
+
+```
+HTTP 400：anthropic-workspace-id is required when authenticating with an identity-linked API key
+```
+
+對話框在 Claude 金鑰下面有「Workspace ID」欄（選填，個人金鑰免填）：**Claude Console → Settings → Workspaces → ID 欄**，長得像 `wrkspc_01JwQvzr7rXLA5AGx3HKfFUJ`。收到這個 400 時錯誤訊息會直接指路並把游標送到該欄。欄位定義在 `providers.js` 的 `extraFields`（其他家要加額外欄位照這個加）。
