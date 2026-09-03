@@ -30,7 +30,7 @@ cmd.exe 執行批次檔時是「跑一行 → 記住位元組位置 → 再開�
 | `1_備份至Google雲端.bat` | `tools/backup_to_drive.py`：把 repo（含 `.git`）和上一層 `需求及資訊來源\` 打包成 zip，放 `%USERPROFILE%\.autofit\backups\`（只留最近 7 份），上傳雲端資料夾「自懂填-Auto-Fit 備份」。雲端舊備份不自動刪。第一次要先把 OAuth 的 `credentials.json` 放到 `%USERPROFILE%\.autofit\`，執行時會開瀏覽器授權一次。 |
 | `2_推至GitHub.bat` | `tools/push_to_github.py`：pytest → `git add -A` → commit（會問說明）→ `git push origin main`。測試沒過就停，不推。 |
 | `3_開啟網頁(localhost).bat` | `tools/dev_server.py`：把 `web/` 掛在 http://localhost:8765/ 並開瀏覽器（要 Chrome / Edge 才能讀寫資料夾），範例資料夾掛成「載入範例」。照片只在瀏覽器本地處理。只有這台電腦連得到。 |
-| `4_開啟網頁(內網).bat` | 同上但加 `--lan`（綁 `0.0.0.0`），同事用 `http://<你的IP>:8765/` 連得到。同事的 Chrome 要先設一次旗標，否則只能唯讀 —— 步驟、防火牆與注意事項見 `docs/內網測試.md`。 |
+| `4_架設到內網.bat` | 同上但加 `--lan`（綁 `0.0.0.0`），同事用 `http://<你的IP>:8765/` 連得到。同事的 Chrome 要先設一次旗標，否則只能唯讀 —— 步驟、防火牆與注意事項見 `docs/內網測試.md`。 |
 
 ## 缺套件
 
