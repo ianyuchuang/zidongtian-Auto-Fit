@@ -10,8 +10,12 @@ globalThis.app = app; // 除錯用
 const root = document.getElementById('app');
 mountEntry(root, app);
 let unmount = null;
+let mounted = app.state.page; // 已經掛在畫面上的是哪一頁
+// 只有「真的換頁」才重掛。工作台拆掉時會 history.back() 收回自己推的那筆歷史，
+// 白重掛一次就會被自己的 popstate 打回首頁（bug 2026-09-03）。
 app.subscribe((what) => {
-  if (what !== 'page') return;
+  if (what !== 'page' || app.state.page === mounted) return;
+  mounted = app.state.page;
   unmount?.();
   unmount = null;
   if (app.state.page === 'work') unmount = mountWorkbench(root, app);

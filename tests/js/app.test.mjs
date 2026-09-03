@@ -200,3 +200,14 @@ test('recognizeAll：回收桶裡的照片不辨識', async () => {
   assert.equal(gone.status, 'pending', '已刪除的不該被排進辨識');
   assert.ok(!app.pendingPhotos().includes(gone));
 });
+
+test('setRecognizer：只發 engine，不發 page（回歸：按「開始辨識」被打回首頁）', async () => {
+  const { app, events } = await setup();
+  app.state.page = 'work';
+  events.length = 0;
+  app.setRecognizer({ recognizerId: 'api', api: { provider: 'claude', apiKey: 'k', model: 'm' }, prompt: '白板' });
+  assert.deepEqual(events, ['engine']);
+  assert.equal(app.state.page, 'work', '設定辨識方式不是換頁');
+  assert.equal(app.state.engine, engineId('api', { provider: 'claude' }));
+  assert.equal(app.state.prompt, '白板');
+});

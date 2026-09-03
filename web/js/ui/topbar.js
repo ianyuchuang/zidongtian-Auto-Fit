@@ -55,7 +55,7 @@ export function mountTopbar(container, app) {
   });
 
   const unsubscribe = app.subscribe((what) => {
-    if (what === 'page' || what === 'date' || what === 'recognize-progress') render();
+    if (what === 'page' || what === 'engine' || what === 'date' || what === 'recognize-progress') render();
     if (what === 'recognize-failed') {
       const f = app.state.lastFailed || [];
       const first = f[0]?.error ?? '';

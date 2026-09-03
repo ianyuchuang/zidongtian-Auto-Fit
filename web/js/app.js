@@ -115,13 +115,17 @@ export function createApp() {
       // 在那裡才選辨識方式與提示詞（沒有 AI 也能純手打三欄）。
     },
 
-    /** 設定這次要用的辨識方式（頂列「AI 辨識」對話框按下確定時呼叫）。 */
+    /**
+     * 設定這次要用的辨識方式（頂列「AI 辨識」對話框按下確定時呼叫）。
+     * 只發 'engine'：這裡沒有換頁，發 'page' 會害 main.js 重掛整個工作台，
+     * 拆掉的那一輪 history.back() 又被新掛上的 popstate 接到 → 直接跳回首頁（bug 2026-09-03）。
+     */
     setRecognizer({ recognizerId, api = null, prompt = '' }) {
       state.recognizerId = recognizerId;
       state.api = api;
       state.prompt = prompt;
       state.engine = engineId(recognizerId, api);
-      emit('page');
+      emit('engine');
     },
 
     /** 還沒辨識過的照片（不含回收桶）。 */
