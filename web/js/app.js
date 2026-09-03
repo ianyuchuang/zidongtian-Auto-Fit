@@ -4,7 +4,8 @@ import { scanTree, flattenDirs, findDir, moveFile, createDir, ensureDir, writeFi
 import { parsePhotoName } from './filename.js';
 import {
   STATUS,
-  statusFromConfidence,
+  statusFromResult,
+  fieldWarnings,
   sortPhotos,
   filterPhotos,
   counts,
@@ -20,7 +21,7 @@ import {
   pruneChecked,
 } from './state.js';
 import { loadSaved, savePhotos, applySaved } from './storage.js';
-import { makeThumbUrl, makeCropUrl } from './imaging.js';
+import { makeThumbUrl, makeCropUrl, usableBbox } from './imaging.js';
 import { getRecognizer } from './recognizer/index.js';
 import { planExport, exportWarnings, outputFileName } from './docx-model.js';
 import { buildDocxBlob } from './docx-export.js';
@@ -193,8 +194,9 @@ export function createApp() {
       if (!p.fullUrl) p.fullUrl = URL.createObjectURL(await app.fileOf(p));
       return p.fullUrl;
     },
+    /** 白板對照圖。框不合理（框到整張／小到不像白板）就不裁，右欄會說明原因。 */
     async cropUrl(p) {
-      if (!p.bbox) return null;
+      if (!usableBbox(p.bbox)) return null;
       if (!p.cropUrl) p.cropUrl = await makeCropUrl(await app.fileOf(p), p.bbox);
       return p.cropUrl;
     },
@@ -243,7 +245,8 @@ export function createApp() {
               p.design = r.design ?? '';
               p.actual = r.actual ?? '';
               p.source = 'ai';
-              p.status = statusFromConfidence(p.confidence);
+              p.warn = fieldWarnings(p).join('；') || undefined; // 欄位一眼可見的毛病，右欄顯示
+              p.status = statusFromResult(p);
             }
           } catch (e) {
             console.error('辨識失敗', p.name, e);

@@ -18,11 +18,40 @@ export const STATUS_LABEL = {
   [STATUS.ERROR]: '辨識失敗',
 };
 
-/** 低信心門檻（草稿 <70%，見 docs/介面規格.md） */
-export const LOW_CONF = 70;
+/**
+ * 模型自報信心的門檻。2026-09-03 實測（docs/辨識實測-尺寸11F.md）：Haiku 對三欄全錯的照片
+ * 仍給 68%，自報信心普遍高估，所以門檻從 70 拉到 85，而且不再只看這個數字——
+ * 先過下面的欄位健全度檢查，任何一項不對就直接算低信心。
+ */
+export const LOW_CONF = 85;
 
-export function statusFromConfidence(confidence) {
-  if (confidence == null || Number.isNaN(confidence)) return STATUS.AI;
+const NUMS = (s) => String(s ?? '').match(/\d+(?:\.\d+)?/g) || [];
+/** 模型讀不出來時常回的推託話，這種內容不該被當成讀到了 */
+const EXCUSE = /未能|無法|讀不|看不清|不清楚|辨識不出|not\s*visible|unclear|unable/i;
+
+/**
+ * 欄位健全度：三欄有沒有一眼就看得出來的毛病。回傳問題描述陣列（空陣列＝看起來正常）。
+ * 這是「模型自己不知道自己錯了」時的第二道網，每一條都對應實測看過的壞法。
+ */
+export function fieldWarnings({ desc = '', design = '', actual = '' } = {}) {
+  const d = String(desc).trim();
+  const g = String(design).trim();
+  const a = String(actual).trim();
+  const w = [];
+  if (!d) w.push('內容說明是空的');
+  if (!g || !a) w.push('設計或實際是空的');
+  if ([d, g, a].some((x) => EXCUSE.test(x))) w.push('欄位裡是「讀不出來」之類的話，不是白板上的字');
+  if (g && a && NUMS(g).length !== NUMS(a).length) w.push('設計與實際的數字個數對不上');
+  return w;
+}
+
+/**
+ * 辨識結果 → 狀態。欄位有毛病、沒給信心、或信心低於門檻，都算「低信心・請確認」。
+ * 寧可多叫使用者看一眼，也不要靜靜把錯的當成可用（工作規則 7）。
+ */
+export function statusFromResult({ confidence, desc, design, actual } = {}) {
+  if (fieldWarnings({ desc, design, actual }).length) return STATUS.LOW;
+  if (confidence == null || Number.isNaN(confidence)) return STATUS.LOW;
   return confidence < LOW_CONF ? STATUS.LOW : STATUS.AI;
 }
 

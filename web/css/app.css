@@ -97,6 +97,7 @@ input[type="text"]:focus, input[type="password"]:focus, textarea:focus { outline
 #api-status { margin-top: 4px; min-height: 1.4em; }
 #api-status.ok { color: var(--accent); }
 #api-status.err { color: var(--red-text); }
+.viewer .warn-note { color: var(--yellow-text); background: var(--yellow-bg); border: 1px solid var(--yellow-line); border-radius: var(--radius); padding: 5px 8px; margin-top: 4px; }
 .api-panel .remember { display: block; margin-top: 8px; }
 
 /* ---------- 工作台 ---------- */

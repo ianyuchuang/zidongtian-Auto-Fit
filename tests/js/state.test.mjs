@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   STATUS,
-  statusFromConfidence,
+  statusFromResult,
+  fieldWarnings,
   filterPhotos,
   counts,
   nextPendingReview,
@@ -29,11 +30,32 @@ const photos = [
   mk('f', '', STATUS.PENDING, { order: 0 }),
 ];
 
-test('statusFromConfidence：門檻 70', () => {
-  assert.equal(statusFromConfidence(92), STATUS.AI);
-  assert.equal(statusFromConfidence(70), STATUS.AI);
-  assert.equal(statusFromConfidence(69.9), STATUS.LOW);
-  assert.equal(statusFromConfidence(null), STATUS.AI);
+const OK = { desc: '輕隔間 1107梯廳', design: '555×450', actual: '556×450 cm' };
+
+test('statusFromResult：門檻 85，欄位健全才看信心', () => {
+  assert.equal(statusFromResult({ ...OK, confidence: 92 }), STATUS.AI);
+  assert.equal(statusFromResult({ ...OK, confidence: 85 }), STATUS.AI);
+  assert.equal(statusFromResult({ ...OK, confidence: 84.9 }), STATUS.LOW);
+  // 沒給信心 → 當低信心，不要靜靜當成可用（回歸：舊版當成 AI 待校對）
+  assert.equal(statusFromResult({ ...OK, confidence: null }), STATUS.LOW);
+  assert.equal(statusFromResult({}), STATUS.LOW);
+});
+
+test('statusFromResult：欄位有毛病時，信心再高也算低信心（回歸：Haiku 全錯卻給 68%）', () => {
+  assert.equal(statusFromResult({ ...OK, desc: '', confidence: 99 }), STATUS.LOW);
+  assert.equal(statusFromResult({ ...OK, actual: '', confidence: 99 }), STATUS.LOW);
+  assert.equal(statusFromResult({ ...OK, design: '標準尺寸未能完全辨識', confidence: 99 }), STATUS.LOW);
+  assert.equal(statusFromResult({ ...OK, actual: '106', confidence: 99 }), STATUS.LOW);
+});
+
+test('fieldWarnings：每種毛病都說得出原因；正常的三欄沒有警告', () => {
+  assert.deepEqual(fieldWarnings(OK), []);
+  assert.deepEqual(fieldWarnings({ ...OK, desc: '  ' }), ['內容說明是空的']);
+  assert.deepEqual(fieldWarnings({ ...OK, design: '' }), ['設計或實際是空的']);
+  assert.match(fieldWarnings({ ...OK, actual: '無法辨識' })[0], /讀不出來/);
+  assert.match(fieldWarnings({ ...OK, design: '443×182 cm', actual: '182' })[0], /數字個數/);
+  // 單位不同但數字組數一樣 → 不算毛病（443×182 vs 443x182cm）
+  assert.deepEqual(fieldWarnings({ ...OK, design: '443×182', actual: '443x182cm' }), []);
 });
 
 test('filterPhotos：chip / 搜尋 / 資料夾', () => {

@@ -1,9 +1,18 @@
 // 右欄：檢視器（大圖 + 日期戳、白板裁切、三欄同步編輯、跳過 / 確認）。
 
 import { STATUS_LABEL, TRASH_DIR, isTrashDir, isTrashed, ownerOfTrash } from '../state.js';
+import { usableBbox } from '../imaging.js';
 import { esc, toast, confirmDialog } from './dialog.js';
 import { reportMove } from './dnd.js';
 import { openLightbox, isLightboxOpen, updateLightbox, closeLightbox } from './lightbox.js';
+
+/** 沒有裁切圖時，說清楚是哪一種情況，不要只寫「尚無裁切」讓人猜。 */
+function cropNote(p) {
+  if (p.source === 'filename') return '檔名解析，無需辨識';
+  if (!p.bbox) return p.status === 'pending' ? '尚未辨識' : 'AI 沒有回傳白板位置';
+  if (!usableBbox(p.bbox)) return 'AI 框到的範圍不像一塊白板（框住整張或小得不合理），請看上面的原圖';
+  return '尚無裁切';
+}
 
 const FIELDS = [
   ['desc', '內容說明'],
@@ -43,6 +52,7 @@ export function mountViewer(container, app) {
       <div class="big"><img alt=""><span class="stamp">${esc(app.dateInfo().stamp)}</span></div>
       <div class="off-filter small muted" hidden>這張目前不在篩選結果中</div>
       <div class="err small" ${p.status === 'error' ? '' : 'hidden'}>❌ ${esc(p.error ?? '')}</div>
+      <div class="warn-note small" ${p.warn ? '' : 'hidden'}>⚠ ${esc(p.warn ?? '')}</div>
       <div class="crop-title">白板裁切（AI 定位後從原圖裁出，供對照）</div>
       <div class="crop"><span>尚無裁切</span></div>
       ${FIELDS.map(([f, label]) => `<div class="f"><label>${label}</label><input type="text" data-f="${f}" value="${esc(p[f])}"${locked(p) ? ' disabled' : ''}></div>`).join('')}
@@ -98,7 +108,7 @@ export function mountViewer(container, app) {
         if (seq !== viewSeq) return;
         const c = container.querySelector('.crop');
         if (!c) return;
-        c.innerHTML = u ? `<img alt="白板裁切" src="${u}">` : `<span>${p.source === 'filename' ? '檔名解析，無需辨識' : '尚無裁切'}</span>`;
+        c.innerHTML = u ? `<img alt="白板裁切" src="${u}">` : `<span>${esc(cropNote(p))}</span>`;
         syncLightbox(p, 'crop', u);
         if (!u && zoomKind === 'crop') closeLightbox();
       })
@@ -124,6 +134,11 @@ export function mountViewer(container, app) {
       err.hidden = p.status !== 'error';
       err.textContent = p.status === 'error' ? `❌ ${p.error ?? ''}` : '';
     }
+    const warn = container.querySelector('.warn-note');
+    if (warn) {
+      warn.hidden = !p.warn;
+      warn.textContent = p.warn ? `⚠ ${p.warn}` : '';
+    }
     const lock = locked(p);
     for (const [f] of FIELDS) {
       const inp = container.querySelector(`input[data-f="${f}"]`);
@@ -133,7 +148,7 @@ export function mountViewer(container, app) {
     }
     for (const b of container.querySelectorAll('.actions .btn')) b.disabled = app.state.recognizing;
     // 辨識完成後才有裁切
-    if (p.bbox && !container.querySelector('.crop img')) {
+    if (usableBbox(p.bbox) && !container.querySelector('.crop img')) {
       app.cropUrl(p).then((u) => {
         if (!u || currentId !== p.id) return;
         container.querySelector('.crop').innerHTML = `<img alt="白板裁切" src="${u}">`;
