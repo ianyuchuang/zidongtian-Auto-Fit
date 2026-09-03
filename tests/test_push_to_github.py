@@ -12,10 +12,11 @@ import push_to_github as g  # noqa: E402
 class FakeGit:
     """記錄跑過哪些指令；codes 指定某些指令的回傳碼（用開頭幾個字比對）。"""
 
-    def __init__(self, codes=None, dirty=True):
+    def __init__(self, codes=None, dirty=True, ahead="2"):
         self.cmds = []
         self.codes = codes or {}
         self.dirty = dirty
+        self.ahead = ahead  # 還沒推上去的 commit 數；None = 問不到（遠端還沒建）
 
     def call(self, cmd):
         self.cmds.append(cmd)
@@ -28,6 +29,8 @@ class FakeGit:
 
     def capture(self, cmd):
         self.cmds.append(cmd)
+        if cmd[:3] == ["git", "rev-list", "--count"]:
+            return (1, "fatal: bad revision\n") if self.ahead is None else (0, self.ahead + "\n")
         return 0, "M\tweb/js/app.js\n"
 
     def ran(self, prefix):
@@ -62,11 +65,28 @@ def test_message_argument_skips_the_prompt(git, monkeypatch):
     assert ["git", "commit", "-m", "指定訊息"] in git.cmds
 
 
-def test_no_changes_still_pushes(git):
+def test_no_changes_still_pushes(git, capsys):
     git.dirty = False
     assert g.main([]) == 0
     assert not git.ran(["git", "commit"])
     assert git.ran(["git", "push"])
+    # 訊息要講清楚是「沒有未 commit 的檔案」，不是「什麼都沒改」
+    out = capsys.readouterr().out
+    assert "工作區乾淨" in out
+    assert "2 個 commit 還沒推上去" in out
+
+
+def test_push_reports_nothing_to_push(git, capsys):
+    git.ahead = "0"
+    assert g.main([]) == 0
+    assert "已經是最新的" in capsys.readouterr().out
+
+
+def test_push_survives_unknown_remote_state(git, capsys):
+    git.ahead = None  # 遠端還沒建 / 沒 fetch 過，問不到數量也要照樣推
+    assert g.main([]) == 0
+    assert git.ran(["git", "push"])
+    assert "commit 還沒推上去" not in capsys.readouterr().out
 
 
 def test_push_failure_returns_error(git):

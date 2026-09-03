@@ -77,7 +77,7 @@ def commit_changes(message=None) -> bool:
 
     # --quiet: 有差異回 1，沒差異回 0
     if call(["git", "diff", "--cached", "--quiet"]) == 0:
-        print("    沒有任何檔案變更，直接嘗試推送。")
+        print("    工作區乾淨：沒有還沒 commit 的檔案（Claude 改的都已經 commit 過了）。")
         return True
 
     _code, out = capture(["git", "diff", "--cached", "--name-status"])
@@ -89,8 +89,22 @@ def commit_changes(message=None) -> bool:
     return True
 
 
+def pending_commits() -> str | None:
+    """本機還沒推上去的 commit 數；問不到（遠端還沒建、沒 fetch 過）回 None。"""
+    code, out = capture(["git", "rev-list", "--count", f"origin/{BRANCH}..{BRANCH}"])
+    out = out.strip()
+    if code != 0 or not out.isdigit():
+        return None
+    return out
+
+
 def push() -> bool:
     print("\n[3/3] 推送到 GitHub...")
+    n = pending_commits()
+    if n == "0":
+        print("    本機沒有新的 commit，GitHub 上應該已經是最新的。")
+    elif n is not None:
+        print(f"    有 {n} 個 commit 還沒推上去。")
     if call(["git", "push", "-u", "origin", BRANCH]) != 0:
         print(PUSH_HINTS)
         return False
