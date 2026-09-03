@@ -35,31 +35,53 @@ def add_rule_cmd(rule=RULE_NAME, port=PORT, profile="private"):
     ]
 
 
-def network_categories():
-    """目前連線中的網路被 Windows 歸成哪一類（Private / Public / DomainAuthenticated）。
+def delete_rule_cmd(rule=RULE_NAME):
+    return ["netsh", "advfirewall", "firewall", "delete", "rule", f"name={rule}"]
+
+
+def network_profiles():
+    """回傳 [(IPv4, NetworkCategory)]，例如 [("192.168.1.95", "Public"), ("100.x.x.x", "Private")]。
+
+    要對到「實際在用的那張網卡」。只問「有沒有任何一張是 Private」會被騙：
+    Tailscale / VMware / Hyper-V 的虛擬網卡常常是 Private，但同事走的是乙太網路那張。
 
     拿不到就回空 list —— 寧可少講一句話，也不要卡住整支腳本。
     """
+    ps = (
+        "Get-NetConnectionProfile | ForEach-Object { "
+        "$i=$_.InterfaceIndex; $c=$_.NetworkCategory; "
+        "Get-NetIPAddress -InterfaceIndex $i -AddressFamily IPv4 -ErrorAction SilentlyContinue | "
+        "ForEach-Object { \"$($_.IPAddress),$c\" } }"
+    )
     try:
         r = subprocess.run(
-            ["powershell", "-NoProfile", "-Command",
-             "Get-NetConnectionProfile | ForEach-Object { $_.NetworkCategory }"],
-            capture_output=True, text=True, timeout=20,
+            ["powershell", "-NoProfile", "-Command", ps],
+            capture_output=True, text=True, timeout=30,
         )
     except (OSError, subprocess.SubprocessError):
         return []
-    return [line.strip() for line in r.stdout.splitlines() if line.strip()]
+    out = []
+    for line in r.stdout.splitlines():
+        ip, _, cat = line.strip().partition(",")
+        if ip and cat:
+            out.append((ip, cat))
+    return out
 
 
-def private_profile_is_enough(cats):
-    """有任何一個連線是私人 / 網域，profile=private 的規則才會對得上。"""
-    if not cats:
+def category_for_ip(profiles, ip):
+    """那個 IP 所在網卡的類別；對不到回 None。"""
+    for addr, cat in profiles:
+        if addr == ip:
+            return cat
+    return None
+
+
+def private_profile_is_enough(profiles, ip):
+    """同事要連的那個 IP，它那張網卡是私人 / 網域，profile=private 的規則才對得上。"""
+    cat = category_for_ip(profiles, ip)
+    if cat is None:
         return True  # 偵測不到就別亂猜，維持保守的預設
-    return any(c in ("Private", "DomainAuthenticated") for c in cats)
-
-
-def delete_rule_cmd(rule=RULE_NAME):
-    return ["netsh", "advfirewall", "firewall", "delete", "rule", f"name={rule}"]
+    return cat in ("Private", "DomainAuthenticated")
 
 
 def is_admin():
@@ -88,11 +110,13 @@ def main(argv=None):
         print("  已刪掉規則。" if rc == 0 else f"  沒有這條規則可刪（{RULE_NAME}）。")
         return 0
 
+    ip = lan_ip()
     profile = "any" if args.any_profile else "private"
     if profile == "private":
-        cats = network_categories()
-        if not private_profile_is_enough(cats):
-            print(f"  你目前的網路被 Windows 歸成「{'、'.join(cats)}」，不是私人網路。")
+        profiles = network_profiles()
+        if not private_profile_is_enough(profiles, ip):
+            cat = category_for_ip(profiles, ip)
+            print(f"  同事要連的 {ip} 那張網卡被 Windows 歸成「{cat}」，不是私人網路。")
             print("  只開私人網路的規則不會生效，同事會看到「回應時間過長」。")
             ans = input("  要改成所有網路設定檔都開嗎？(y/N) ").strip().lower()
             if ans in ("y", "yes"):
@@ -107,7 +131,6 @@ def main(argv=None):
         print(f"[X] 加規則失敗：{(r.stderr or r.stdout).strip()}")
         return 1
 
-    ip = lan_ip()
     scope = "所有網路設定檔" if profile == "any" else "只開私人網路"
     print(f"  [OK] 已開通 TCP {PORT}（{scope}）。")
     print()

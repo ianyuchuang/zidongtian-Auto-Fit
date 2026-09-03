@@ -39,18 +39,32 @@ def test_any_profile_opens_all_profiles():
     assert "profile=any" in " ".join(fw.add_rule_cmd(profile="any"))
 
 
+# 2026-09-03 實測：這台同時有 Tailscale(Private) 和乙太網路(Public)
+REAL = [("100.64.0.1", "Private"), ("192.168.1.95", "Public")]
+
+
 def test_public_only_network_is_not_enough():
     # 辦公室網路被歸成「公用網路」時，profile=private 的規則對不上，同事會連不到
-    assert fw.private_profile_is_enough(["Public"]) is False
-    assert fw.private_profile_is_enough(["Public", "Private"]) is True
-    assert fw.private_profile_is_enough(["DomainAuthenticated"]) is True
-    assert fw.private_profile_is_enough([]) is True, "偵測不到就別亂猜"
+    assert fw.private_profile_is_enough([("192.168.1.95", "Public")], "192.168.1.95") is False
+    assert fw.private_profile_is_enough([("192.168.1.95", "Private")], "192.168.1.95") is True
+    assert fw.private_profile_is_enough([("192.168.1.95", "DomainAuthenticated")], "192.168.1.95") is True
+    assert fw.private_profile_is_enough([], "192.168.1.95") is True, "偵測不到就別亂猜"
+
+
+def test_virtual_adapter_does_not_mask_a_public_lan():
+    # 回歸測試：舊版只問「有沒有任何一張是 Private」，Tailscale 那張就把判斷騙過去，
+    # 於是不會問使用者，規則加了也沒用。要看的是同事實際要連的那個 IP。
+    assert fw.private_profile_is_enough(REAL, "192.168.1.95") is False
+    assert fw.private_profile_is_enough(REAL, "100.64.0.1") is True
+    assert fw.category_for_ip(REAL, "192.168.1.95") == "Public"
+    assert fw.category_for_ip(REAL, "10.0.0.1") is None
 
 
 def test_public_network_prompts_and_switches_to_any(monkeypatch):
     monkeypatch.setattr(fw.sys, "platform", "win32")
     monkeypatch.setattr(fw, "is_admin", lambda: True)
-    monkeypatch.setattr(fw, "network_categories", lambda: ["Public"])
+    monkeypatch.setattr(fw, "network_profiles", lambda: REAL)
+    monkeypatch.setattr(fw, "lan_ip", lambda: "192.168.1.95")
     monkeypatch.setattr("builtins.input", lambda *a: "y")
     calls = []
 
@@ -66,7 +80,8 @@ def test_public_network_prompts_and_switches_to_any(monkeypatch):
 def test_public_network_answered_no_keeps_private(monkeypatch):
     monkeypatch.setattr(fw.sys, "platform", "win32")
     monkeypatch.setattr(fw, "is_admin", lambda: True)
-    monkeypatch.setattr(fw, "network_categories", lambda: ["Public"])
+    monkeypatch.setattr(fw, "network_profiles", lambda: REAL)
+    monkeypatch.setattr(fw, "lan_ip", lambda: "192.168.1.95")
     monkeypatch.setattr("builtins.input", lambda *a: "")
     calls = []
 
@@ -82,7 +97,8 @@ def test_public_network_answered_no_keeps_private(monkeypatch):
 def test_add_deletes_first_so_reruns_do_not_stack(monkeypatch):
     monkeypatch.setattr(fw.sys, "platform", "win32")
     monkeypatch.setattr(fw, "is_admin", lambda: True)
-    monkeypatch.setattr(fw, "network_categories", lambda: ["Private"])
+    monkeypatch.setattr(fw, "network_profiles", lambda: [("192.168.1.95", "Private")])
+    monkeypatch.setattr(fw, "lan_ip", lambda: "192.168.1.95")
     calls = []
 
     class _R:
