@@ -1,7 +1,7 @@
 // 中欄：篩選 chip、搜尋、依資料夾分組的可編輯表格、拖曳換序 / 拖到群組列搬移、
 // 勾選多選（批次搬到資料夾、刪除到 _回收桶；拖任一勾選列＝整批拖走）。
 
-import { CHIPS, CHIP_LABEL, STATUS_LABEL, TRASH_DIR, isTrashDir } from '../state.js';
+import { CHIPS, CHIP_LABEL, STATUS_LABEL, TRASH_DIR, isTrashDir, isTrashed, groupDirOf } from '../state.js';
 import { esc, toast, confirmDialog } from './dialog.js';
 import { DND_MULTI, DND_SINGLE, dropIds, reportMove } from './dnd.js';
 
@@ -15,7 +15,7 @@ export function mountTable(container, app) {
       <input type="text" class="search" placeholder="搜尋內容說明…">
     </div>
     <div class="bulkbar off">
-      <span>已勾選 <b class="n">0</b> 張</span>
+      <span>已勾選 <b class="n">0</b> 張<span class="hidden-note muted"></span></span>
       <select class="move-to" title="把勾選的照片搬到資料夾"><option value="">搬到資料夾…</option></select>
       <button class="btn btn-danger" data-bulk="trash" title="搬到根資料夾下的 ${TRASH_DIR}，可再拖回來">🗑 刪除（移到 ${TRASH_DIR}）</button>
       <button class="btn" data-bulk="clear">取消勾選</button>
@@ -27,7 +27,7 @@ export function mountTable(container, app) {
       </table>
       <div class="empty" hidden>沒有符合的照片</div>
     </div>
-    <div class="table-hint">拖把手改順序（＝Word 順序）；拖到左側資料夾或群組列即搬移。右側勾選可多選：批次搬移、刪除（移到 ${TRASH_DIR}），拖任一勾選列＝整批拖走。點列 → 右側顯示大圖與白板裁切。Tab / Enter 在儲存格間移動。</div>`;
+    <div class="table-hint">拖把手改順序（＝Word 順序）；拖到左側資料夾或群組列即搬移。右側勾選可多選：批次搬移、刪除（移到該資料夾的 ${TRASH_DIR}）；刪掉的會留在原位反灰，按「↩ 還原」就回來。點列 → 右側顯示大圖與白板裁切。Tab / Enter 在儲存格間移動。</div>`;
 
   const tbody = container.querySelector('tbody');
   const emptyEl = container.querySelector('.empty');
@@ -38,28 +38,31 @@ export function mountTable(container, app) {
   let lastKey = '';
 
   function rowHtml(p) {
+    const gone = isTrashed(p); // 已刪除：留在原位反灰、欄位鎖住，只留「還原」
+    const dis = gone ? ' disabled' : '';
     return `
       <td class="handle" draggable="true" title="拖曳改順序 / 搬移">⋮⋮</td>
       <td><img class="thumb" alt="" ${p.thumbUrl ? `src="${p.thumbUrl}"` : ''}></td>
-      <td class="desc"><input type="text" data-f="desc" value="${esc(p.desc)}"></td>
-      <td class="design"><input type="text" data-f="design" value="${esc(p.design)}"></td>
-      <td class="actual"><input type="text" data-f="actual" value="${esc(p.actual)}"></td>
+      <td class="desc"><input type="text" data-f="desc" value="${esc(p.desc)}"${dis}></td>
+      <td class="design"><input type="text" data-f="design" value="${esc(p.design)}"${dis}></td>
+      <td class="actual"><input type="text" data-f="actual" value="${esc(p.actual)}"${dis}></td>
       <td class="conf"></td>
-      <td><span class="badge"></span></td>
-      <td class="chk"><input type="checkbox" data-chk title="勾選（批次搬移 / 刪除）"></td>`;
+      <td class="status"><span class="badge"></span>${gone ? '<button class="btn tiny" data-act="restore" title="搬回原本的資料夾">↩ 還原</button>' : ''}</td>
+      <td class="chk"><input type="checkbox" data-chk tabindex="-1" title="勾選（批次搬移 / 刪除）"${dis}></td>`;
   }
 
   function patchRow(tr, p) {
-    tr.className = `photo ${p.status} ${p.id === app.state.selectedId ? 'selected' : ''} ${app.isChecked(p.id) ? 'checked' : ''}`;
+    const gone = isTrashed(p);
+    tr.className = `photo ${p.status} ${gone ? 'trashed' : ''} ${p.id === app.state.selectedId ? 'selected' : ''} ${app.isChecked(p.id) ? 'checked' : ''}`;
     for (const f of FIELDS) {
       const inp = tr.querySelector(`input[data-f="${f}"]`);
       if (inp !== document.activeElement && inp.value !== p[f]) inp.value = p[f];
     }
     tr.querySelector('.conf').textContent = p.confidence == null ? '—' : `${Math.round(p.confidence)}%`;
     const badge = tr.querySelector('.badge');
-    badge.className = `badge ${p.status}`;
-    badge.textContent = STATUS_LABEL[p.status] ?? p.status;
-    badge.title = p.error ?? '';
+    badge.className = `badge ${gone ? 'trashed' : p.status}`;
+    badge.textContent = gone ? '已刪除' : (STATUS_LABEL[p.status] ?? p.status);
+    badge.title = gone ? '已搬到這個資料夾的回收桶，按「↩ 還原」搬回來' : (p.error ?? '');
     tr.querySelector('[data-chk]').checked = app.isChecked(p.id);
     const img = tr.querySelector('.thumb');
     if (p.thumbUrl && img.getAttribute('src') !== p.thumbUrl) img.src = p.thumbUrl;
@@ -79,13 +82,16 @@ export function mountTable(container, app) {
     tbody.innerHTML = '';
     emptyEl.hidden = visible.length > 0;
     for (const d of dirs) {
-      const group = visible.filter((p) => p.dir === d.path);
+      if (isTrashDir(d.path)) continue; // 回收桶不自成群組：裡面的照片掛在原資料夾底下反灰顯示
+      const group = visible.filter((p) => groupDirOf(p) === d.path);
       if (!group.length) continue;
+      const live = group.filter((p) => !isTrashed(p)).length;
+      const gone = group.length - live;
       const gtr = document.createElement('tr');
-      gtr.className = `group ${collapsed.has(d.path) ? 'collapsed' : ''} ${isTrashDir(d.path) ? 'trash' : ''}`;
+      gtr.className = `group ${collapsed.has(d.path) ? 'collapsed' : ''}`;
       gtr.dataset.dir = d.path;
-      gtr.innerHTML = `<td colspan="7"><span class="toggle">▾</span> ${isTrashDir(d.path) ? '🗑' : '🗀'} ${esc(d.path || d.name)}<span class="n">${group.length} 張</span></td>
-        <td class="chk"><input type="checkbox" data-chk-group title="全選 / 取消這個資料夾顯示中的照片"></td>`;
+      gtr.innerHTML = `<td colspan="7"><span class="toggle">▾</span> 🗀 ${esc(d.path || d.name)}<span class="n">${live} 張${gone ? `・已刪除 ${gone}` : ''}</span></td>
+        <td class="chk"><input type="checkbox" data-chk-group tabindex="-1" title="全選 / 取消這個資料夾顯示中的照片"></td>`;
       tbody.appendChild(gtr);
       if (collapsed.has(d.path)) continue;
       for (const p of group) {
@@ -100,26 +106,35 @@ export function mountTable(container, app) {
     renderChecks();
   }
 
+  /** 目前看得到、而且還沒被刪除的照片（勾選只作用在這些上面）。 */
+  const selectable = () => app.visiblePhotos().filter((p) => !isTrashed(p));
+
   /** 勾選狀態：列的 checkbox / 群組與全選框（含半選）/ 工具列。 */
   function renderChecks() {
-    const visible = app.visiblePhotos();
+    const pickable = selectable();
     for (const [id, tr] of rows) {
       const on = app.isChecked(id);
       tr.classList.toggle('checked', on);
       tr.querySelector('[data-chk]').checked = on;
     }
     for (const gtr of tbody.querySelectorAll('tr.group')) {
-      const ids = visible.filter((p) => p.dir === gtr.dataset.dir).map((p) => p.id);
+      const ids = pickable.filter((p) => groupDirOf(p) === gtr.dataset.dir).map((p) => p.id);
       setTri(gtr.querySelector('[data-chk-group]'), ids.filter((id) => app.isChecked(id)).length, ids.length);
     }
-    setTri(chkAll, visible.filter((p) => app.isChecked(p.id)).length, visible.length);
+    setTri(chkAll, pickable.filter((p) => app.isChecked(p.id)).length, pickable.length);
 
+    // 勾選會跨篩選累積（換 chip 再勾下一批也留著），所以要明講有幾張現在看不到，
+    // 否則按下刪除會刪到畫面上看不見的照片。
     const n = app.state.checked.size;
+    const shown = new Set(pickable.map((p) => p.id));
+    const hidden = [...app.state.checked].filter((id) => !shown.has(id)).length;
     // 用 visibility 而不是 hidden：工具列出現／消失若改變表格高度，整張表會上下跳（bug清單 A3）
     bulkbar.classList.toggle('off', n === 0);
     bulkbar.querySelector('.n').textContent = n;
+    bulkbar.querySelector('.hidden-note').textContent = hidden ? `（其中 ${hidden} 張目前被篩選隱藏）` : '';
     const opts = app.state.dirs
-      .map((d) => `<option value="d:${esc(d.path)}">${isTrashDir(d.path) ? '🗑' : '🗀'} ${esc(d.path || `${d.name}（根資料夾）`)}</option>`)
+      .filter((d) => !isTrashDir(d.path)) // 回收桶不放進搬移下拉，刪除請用「刪除」按鈕（會跳確認）
+      .map((d) => `<option value="d:${esc(d.path)}">🗀 ${esc(d.path || `${d.name}（根資料夾）`)}</option>`)
       .join('');
     moveSel.innerHTML = `<option value="">搬到資料夾…</option>${opts}`;
   }
@@ -147,7 +162,7 @@ export function mountTable(container, app) {
 
   chkAll.addEventListener('change', () => {
     app.setChecked(
-      app.visiblePhotos().map((p) => p.id),
+      selectable().map((p) => p.id),
       chkAll.checked,
     );
   });
@@ -174,15 +189,35 @@ export function mountTable(container, app) {
   }
   async function bulkTrash(ids) {
     if (!ids.length) return;
-    const ok = await confirmDialog('刪除照片', `把勾選的 ${ids.length} 張搬到「${TRASH_DIR}」？（不會真的刪檔，之後可從左側資料夾樹拖回來。）`);
+    // 勾選會跨篩選累積，所以一定要把要刪的檔名列出來，不能只講「勾選的 N 張」
+    const names = ids.map((id) => app.photo(id)?.name ?? id);
+    const shown = names.slice(0, 15).map((n) => `<li>${esc(n)}</li>`).join('');
+    const more = names.length > 15 ? `<li class="muted">…等 ${names.length} 張</li>` : '';
+    const ok = await confirmDialog(
+      '刪除照片',
+      `把這 ${ids.length} 張搬到各自資料夾的「${TRASH_DIR}」？（不會真的刪檔，會留在原位反灰，按「↩ 還原」就回來。）<ul class="name-list">${shown}${more}</ul>`,
+    );
     if (!ok) return;
     try {
       const r = await app.trash(ids);
       reportMove(app, r, TRASH_DIR);
-      if (r.alreadyTrashed) toast(`${r.alreadyTrashed} 張本來就在「${TRASH_DIR}」`);
+      if (r.alreadyTrashed) toast(`${r.alreadyTrashed} 張本來就已經刪除了`);
     } catch (err) {
       console.error(err);
       toast(`刪除失敗：${err.message}`, { error: true });
+    }
+  }
+
+  async function bulkRestore(ids) {
+    if (!ids.length) return;
+    try {
+      const r = await app.restore(ids);
+      if (r.moved) toast(`已還原 ${r.moved} 張`);
+      if (r.failed.length)
+        toast(`${r.failed.length} 張還原失敗：${r.failed.map((f) => `${f.name}（${f.error}）`).join('；')}`, { error: true, ms: 6000 });
+    } catch (err) {
+      console.error(err);
+      toast(`還原失敗：${err.message}`, { error: true });
     }
   }
 
@@ -192,9 +227,8 @@ export function mountTable(container, app) {
     } else if (e.target.matches('[data-chk-group]')) {
       const dir = e.target.closest('tr.group').dataset.dir;
       app.setChecked(
-        app
-          .visiblePhotos()
-          .filter((p) => p.dir === dir)
+        selectable()
+          .filter((p) => groupDirOf(p) === dir)
           .map((p) => p.id),
         e.target.checked,
       );
@@ -202,6 +236,11 @@ export function mountTable(container, app) {
   });
   tbody.addEventListener('click', (e) => {
     if (e.target.matches('input[type="checkbox"]')) return; // 勾選不觸發選列 / 收合
+    const restoreBtn = e.target.closest('[data-act="restore"]');
+    if (restoreBtn) {
+      bulkRestore([restoreBtn.closest('tr.photo').dataset.id]);
+      return;
+    }
     const g = e.target.closest('tr.group');
     if (g) {
       app.toggleCollapse(g.dataset.dir);

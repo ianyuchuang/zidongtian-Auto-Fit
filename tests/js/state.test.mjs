@@ -11,11 +11,15 @@ import {
   assignOrder,
   TRASH_DIR,
   isTrashDir,
+  isTrashed,
+  trashDirOf,
+  ownerOfTrash,
+  groupDirOf,
   pruneChecked,
   moveSummary,
 } from '../../web/js/state.js';
 
-const mk = (id, dir, status, extra = {}) => ({ id, dir, status, desc: id, order: 0, ...extra });
+const mk = (id, dir, status, extra = {}) => ({ id, dir, status, desc: id, name: `${id}.jpg`, order: 0, ...extra });
 const photos = [
   mk('a', '4F', STATUS.PARSED, { order: 0 }),
   mk('b', '4F', STATUS.PARSED, { order: 1 }),
@@ -76,14 +80,51 @@ test('reorderWithinDir：同資料夾前後插入；跨資料夾回 null', () =>
   assert.equal(order.get('d'), 2);
 });
 
-test('isTrashDir：回收桶本身與其下層', () => {
+test('回收桶：每個資料夾各一個，路徑任何一層叫 _回收桶 都算', () => {
   assert.equal(TRASH_DIR, '_回收桶');
   assert.equal(isTrashDir('_回收桶'), true);
-  assert.equal(isTrashDir('_回收桶/舊'), true);
+  assert.equal(isTrashDir('4F/_回收桶'), true);
+  assert.equal(isTrashDir('4F/_回收桶/舊'), true);
   assert.equal(isTrashDir('_回收桶2'), false);
-  assert.equal(isTrashDir('4F/_回收桶'), false);
+  assert.equal(isTrashDir('4F'), false);
   assert.equal(isTrashDir(''), false);
   assert.equal(isTrashDir(undefined), false);
+  assert.equal(isTrashed({ dir: '4F/_回收桶' }), true);
+  assert.equal(isTrashed({ dir: '4F' }), false);
+});
+
+test('trashDirOf / ownerOfTrash / groupDirOf：刪除的去處與還原的目的地', () => {
+  assert.equal(trashDirOf(''), '_回收桶');
+  assert.equal(trashDirOf('4F'), '4F/_回收桶');
+  assert.equal(trashDirOf('4F/東側'), '4F/東側/_回收桶');
+  assert.equal(ownerOfTrash('4F/_回收桶'), '4F');
+  assert.equal(ownerOfTrash('_回收桶'), '');
+  assert.equal(ownerOfTrash('4F'), '4F');
+  // 已刪除的照片在表格裡仍歸原資料夾
+  assert.equal(groupDirOf({ dir: '4F/_回收桶' }), '4F');
+  assert.equal(groupDirOf({ dir: '4F' }), '4F');
+});
+
+test('已刪除的照片：只在「全部」出現、不進統計、排在該資料夾最後', () => {
+  const withTrash = [...photos, mk('t1', '4F/_回收桶', STATUS.LOW, { order: 0, confidence: 50 })];
+  // chip
+  assert.ok(filterPhotos(withTrash, { chip: 'all' }).some((p) => p.id === 't1'));
+  assert.ok(!filterPhotos(withTrash, { chip: 'low' }).some((p) => p.id === 't1'));
+  assert.ok(!filterPhotos(withTrash, { chip: 'ai' }).some((p) => p.id === 't1'));
+  // 資料夾篩選看的是「原本的資料夾」
+  assert.deepEqual(filterPhotos(withTrash, { dir: '4F' }).map((p) => p.id), ['a', 'b', 't1']);
+  // 統計
+  const c = counts(withTrash);
+  assert.equal(c.all, 6, '已刪除的不算進全部');
+  assert.equal(c.low, 1);
+  assert.equal(c.trashed, 1);
+  // 排序：留在 4F 群組，但排最後
+  assert.deepEqual(sortPhotos(withTrash, ['', '4F', '5F']).map((p) => p.id), ['f', 'a', 'b', 't1', 'c', 'd', 'e']);
+});
+
+test('搜尋：內容說明找不到時也比對檔名', () => {
+  assert.deepEqual(filterPhotos(photos, { query: 'e.jpg' }).map((p) => p.id), ['e']);
+  assert.deepEqual(filterPhotos(photos, { query: 'zzz' }), []);
 });
 
 test('pruneChecked：只留還存在的 id', () => {

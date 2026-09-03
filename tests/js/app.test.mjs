@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createApp, engineId } from '../../web/js/app.js';
 import { MemoryDirectoryHandle } from '../../web/js/fs/memory.js';
-import { TRASH_DIR } from '../../web/js/state.js';
+import { TRASH_DIR, trashDirOf } from '../../web/js/state.js';
 import { exists } from '../../web/js/fs/adapter.js';
 import { dropIds, DND_MULTI, DND_SINGLE } from '../../web/js/ui/dnd.js';
 
@@ -68,28 +68,51 @@ test('moveToDir：單張介面不變（同資料夾 false、失敗丟錯）', as
   assert.ok(app.photo('b.jpg'));
 });
 
-test('trash：自動建 _回收桶、搬進去、已在回收桶的略過；再拖回來即還原', async () => {
+test('trash：搬進「所在資料夾」自己的 _回收桶（不是全部丟到根目錄）', async () => {
   const { app, root } = await setup();
-  assert.equal(app.dirOf(TRASH_DIR), null);
+  assert.equal(app.dirOf(trashDirOf('4F')), null);
   const r = await app.trash(['4F/a.jpg', '5F/c.jpg']);
   assert.deepEqual({ moved: r.moved, failed: r.failed, alreadyTrashed: r.alreadyTrashed }, { moved: 2, failed: [], alreadyTrashed: 0 });
-  assert.ok(app.dirOf(TRASH_DIR), '樹裡要看得到回收桶');
-  const trash = await root.getDirectoryHandle(TRASH_DIR);
-  assert.equal(await exists(trash, 'a.jpg'), true);
-  assert.equal(await exists(trash, 'c.jpg'), true);
-  const r2 = await app.trash([`${TRASH_DIR}/a.jpg`, '4F/b.jpg']);
+  assert.ok(app.dirOf('4F/_回收桶'), '4F 要有自己的回收桶');
+  assert.ok(app.dirOf('5F/_回收桶'), '5F 要有自己的回收桶');
+  const t4 = await (await root.getDirectoryHandle('4F')).getDirectoryHandle(TRASH_DIR);
+  const t5 = await (await root.getDirectoryHandle('5F')).getDirectoryHandle(TRASH_DIR);
+  assert.equal(await exists(t4, 'a.jpg'), true);
+  assert.equal(await exists(t5, 'c.jpg'), true);
+  assert.equal(await exists(t4, 'c.jpg'), false, 'c 是 5F 的，不能跑到 4F 的回收桶');
+  // 已在回收桶的略過
+  const r2 = await app.trash(['4F/_回收桶/a.jpg', '4F/b.jpg']);
   assert.equal(r2.moved, 1);
   assert.equal(r2.alreadyTrashed, 1);
-  // 還原
-  const r3 = await app.moveManyToDir([`${TRASH_DIR}/c.jpg`], '5F');
-  assert.equal(r3.moved, 1);
-  assert.ok(app.photo('5F/c.jpg'));
   // 回收桶已存在（例如上次留下的）也能用
   const app2 = createApp();
   app2.state.root = root;
   await app2.rescan();
-  const r4 = await app2.trash(['5F/c.jpg']);
-  assert.equal(r4.moved, 1);
+  const r3 = await app2.trash(['5F/a.jpg']);
+  assert.equal(r3.moved, 1);
+});
+
+test('restore：從回收桶搬回原本那個資料夾，不需要使用者自己拖', async () => {
+  const { app, root } = await setup();
+  await app.trash(['4F/a.jpg', '5F/c.jpg']);
+  const r = await app.restore(['4F/_回收桶/a.jpg', '5F/_回收桶/c.jpg']);
+  assert.deepEqual({ moved: r.moved, failed: r.failed }, { moved: 2, failed: [] });
+  assert.ok(app.photo('4F/a.jpg'), 'a 要回到 4F');
+  assert.ok(app.photo('5F/c.jpg'), 'c 要回到 5F');
+  assert.equal(await exists(await root.getDirectoryHandle('4F'), 'a.jpg'), true);
+  // 不在回收桶的照片呼叫 restore 不動作
+  const r2 = await app.restore(['4F/b.jpg']);
+  assert.deepEqual({ moved: r2.moved, failed: r2.failed }, { moved: 0, failed: [] });
+});
+
+test('已刪除的照片不進統計、不被批次修改設計值掃到', async () => {
+  const { app } = await setup();
+  await app.trash(['4F/a.jpg']);
+  assert.equal(app.counts().all, 3);
+  assert.equal(app.counts().trashed, 1);
+  app.batchDesign('X', 'all');
+  assert.equal(app.photo('4F/_回收桶/a.jpg').design, '', '已刪除的不跟著改');
+  assert.equal(app.photo('4F/b.jpg').design, 'X');
 });
 
 test('dropIds：多張 JSON 優先，其次單張，壞掉的 JSON 落回單張', () => {

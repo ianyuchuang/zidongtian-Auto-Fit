@@ -1,6 +1,6 @@
 // 右欄：檢視器（大圖 + 日期戳、白板裁切、三欄同步編輯、跳過 / 確認）。
 
-import { STATUS_LABEL, TRASH_DIR, isTrashDir } from '../state.js';
+import { STATUS_LABEL, TRASH_DIR, isTrashDir, isTrashed, ownerOfTrash } from '../state.js';
 import { esc, toast, confirmDialog } from './dialog.js';
 import { reportMove } from './dnd.js';
 import { openLightbox, isLightboxOpen, updateLightbox, closeLightbox } from './lightbox.js';
@@ -34,7 +34,7 @@ export function mountViewer(container, app) {
     container.innerHTML = `
       <div class="head">
         <span class="name" title="${esc(p.name)}">${esc(p.name)}</span>
-        <span class="badge ${p.status}">${STATUS_LABEL[p.status]}</span>
+        <span class="badge ${isTrashed(p) ? 'trashed' : p.status}">${isTrashed(p) ? '已刪除' : STATUS_LABEL[p.status]}</span>
         <span class="nav"><button data-nav="-1" title="上一張">‹</button><button data-nav="1" title="下一張">›</button></span>
       </div>
       <div class="big"><img alt=""><span class="stamp">${esc(app.dateInfo().stamp)}</span></div>
@@ -43,7 +43,11 @@ export function mountViewer(container, app) {
       <div class="crop"><span>尚無裁切</span></div>
       ${FIELDS.map(([f, label]) => `<div class="f"><label>${label}</label><input type="text" data-f="${f}" value="${esc(p[f])}"></div>`).join('')}
       <div class="actions">
-        <button class="btn btn-danger" data-act="trash" title="${isTrashDir(p.dir) ? `已在「${TRASH_DIR}」，拖回其他資料夾即還原` : `移到「${TRASH_DIR}」（可從左側資料夾樹拖回來）`}" ${isTrashDir(p.dir) ? 'disabled' : ''}>🗑</button>
+        ${
+          isTrashed(p)
+            ? `<button class="btn" data-act="restore" title="搬回「${esc(ownerOfTrash(p.dir) || '根資料夾')}」">↩ 還原</button>`
+            : `<button class="btn btn-danger" data-act="trash" title="移到「${TRASH_DIR}」（會留在原位反灰，隨時可還原）">🗑</button>`
+        }
         <button class="btn" data-act="skip">跳過</button>
         <button class="btn btn-primary" data-act="confirm">✓ 確認，下一張<kbd>Enter</kbd></button>
       </div>`;
@@ -104,8 +108,8 @@ export function mountViewer(container, app) {
     const bigImg = container.querySelector('.big img');
     if (bigImg && !bigImg.getAttribute('src')) loadBig(p, viewSeq);
     const badge = container.querySelector('.head .badge');
-    badge.className = `badge ${p.status}`;
-    badge.textContent = STATUS_LABEL[p.status];
+    badge.className = `badge ${isTrashed(p) ? 'trashed' : p.status}`;
+    badge.textContent = isTrashed(p) ? '已刪除' : STATUS_LABEL[p.status];
     const err = container.querySelector('.err');
     if (err) {
       err.hidden = p.status !== 'error';
@@ -178,13 +182,27 @@ export function mountViewer(container, app) {
     if (what === 'confirm') app.confirm(currentId);
     else if (what === 'trash') trashCurrent();
     else if (what === 'reload') loadBig(app.photo(currentId), viewSeq);
+    else if (what === 'restore') restoreCurrent();
     else if (what === 'skip') app.skip(currentId);
   });
+
+  async function restoreCurrent() {
+    const p = app.photo(currentId);
+    if (!p) return;
+    try {
+      const r = await app.restore([p.id]);
+      if (r.moved) toast(`已還原「${p.name}」`);
+      if (r.failed.length) toast(`還原失敗：${r.failed[0].error}`, { error: true });
+    } catch (err) {
+      console.error(err);
+      toast(`還原失敗：${err.message}`, { error: true });
+    }
+  }
 
   async function trashCurrent() {
     const p = app.photo(currentId);
     if (!p) return;
-    const ok = await confirmDialog('刪除照片', `把「${esc(p.name)}」搬到「${TRASH_DIR}」？（不會真的刪檔，之後可從左側資料夾樹拖回來。）`);
+    const ok = await confirmDialog('刪除照片', `把「${esc(p.name)}」搬到這個資料夾的「${TRASH_DIR}」？（不會真的刪檔，會留在原位反灰，按「↩ 還原」就回來。）`);
     if (!ok) return;
     try {
       const r = await app.trash([p.id]);

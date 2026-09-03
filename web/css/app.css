@@ -156,7 +156,15 @@ tr.photo.dragging { opacity: .4; }
 tr.photo.checked td { background: #f3f8f5; }
 td.chk, th.chk { width: 38px; text-align: center; }
 td.chk input, th.chk input { width: 16px; height: 16px; cursor: pointer; margin: 0; }
-tr.group.trash td { color: var(--red-text); }
+/* 已刪除：留在原資料夾群組裡反灰，欄位鎖住只留「還原」 */
+tr.photo.trashed td { background: #f6f7f8; color: var(--muted); }
+tr.photo.trashed:hover td { background: #f2f3f5; }
+tr.photo.trashed .thumb { opacity: .45; }
+tr.photo.trashed input[type="text"] { background: #f2f3f5; color: var(--muted); border-style: solid; border-color: var(--line); text-decoration: line-through; }
+.badge.trashed { background: #e9ecef; color: #6b7280; }
+.btn.tiny { padding: 1px 8px; font-size: 12px; margin-left: 6px; vertical-align: middle; }
+.bulkbar .hidden-note { margin-left: 4px; }
+.dialog .name-list { max-height: 180px; overflow: auto; margin: 8px 0 0; padding-left: 20px; font-size: 13px; }
 tr.photo.drop-before td { box-shadow: inset 0 2px 0 var(--accent); }
 tr.photo.drop-after td { box-shadow: inset 0 -2px 0 var(--accent); }
 .handle { color: #9aa1ab; cursor: grab; font-size: 16px; user-select: none; text-align: center; }

@@ -1,6 +1,6 @@
 // 左欄：資料夾樹（點選篩選、拖列到資料夾即搬移）、新增資料夾、底部進度。
 
-import { isTrashDir } from '../state.js';
+import { isTrashDir, ownerOfTrash } from '../state.js';
 import { esc, promptDialog, toast } from './dialog.js';
 import { DND_MULTI, DND_SINGLE, dropIds, reportMove } from './dnd.js';
 
@@ -20,7 +20,7 @@ export function mountTree(container, app) {
       .map(
         (d) => `
       <div class="tree-node ${(dirFilter ?? null) === (d.depth === 0 ? null : d.path) ? 'active' : ''} ${isTrashDir(d.path) ? 'trash' : ''}"
-           data-path="${esc(d.path)}" style="padding-left:${10 + d.depth * 16}px" title="${esc(d.path || d.name)}${isTrashDir(d.path) ? '（回收桶：不輸出 Word，拖回其他資料夾即還原）' : ''}">
+           data-path="${esc(d.path)}" style="padding-left:${10 + d.depth * 16}px" title="${esc(d.path || d.name)}${isTrashDir(d.path) ? '（這個資料夾的回收桶：不輸出 Word；表格裡按「↩ 還原」或拖到別的資料夾即可還原）' : ''}">
         <span>${isTrashDir(d.path) ? '🗑' : '🗀'}</span><span>${esc(d.name)}</span>
         <span class="count">${d.fileCount}</span>
       </div>`,
@@ -30,14 +30,17 @@ export function mountTree(container, app) {
 
   function renderStats() {
     const c = app.counts();
-    statsEl.innerHTML = `辨識進度 ${c.recognized} / ${c.all}<br>已確認 ${c.confirmed}・待校對 ${c.toReview}`;
+    statsEl.innerHTML =
+      `辨識進度 ${c.recognized} / ${c.all}<br>已確認 ${c.confirmed}・待校對 ${c.toReview}` + (c.trashed ? `<br>已刪除 ${c.trashed}（不輸出 Word）` : '');
   }
 
   treeEl.addEventListener('click', (e) => {
     const node = e.target.closest('.tree-node');
     if (!node) return;
     const path = node.dataset.path;
-    app.setDirFilter(path === '' ? null : path);
+    // 點回收桶＝看它所屬的那個資料夾（已刪除的照片本來就掛在原資料夾底下反灰顯示）
+    const dir = isTrashDir(path) ? ownerOfTrash(path) : path;
+    app.setDirFilter(dir === '' && path === '' ? null : dir);
   });
 
   // 拖曳搬移

@@ -2,6 +2,7 @@
 // handle 可以是瀏覽器 File System Access API 的 handle，或 fs/memory.js 的記憶體 handle。
 
 import { isPhotoName, naturalCompare } from '../filename.js';
+import { TRASH_DIR } from '../state.js';
 
 /**
  * 遞迴掃描資料夾 → 樹。每個節點：{ name, path, handle, files: [{name, path, handle}], children: [節點] }
@@ -18,7 +19,13 @@ export async function scanTree(dirHandle, path = '') {
     }
   }
   node.files.sort((a, b) => naturalCompare(a.name, b.name));
-  node.children.sort((a, b) => naturalCompare(a.name, b.name));
+  // 回收桶固定排在同一層的最後，不要夾在樓層資料夾中間
+  node.children.sort((a, b) => {
+    const ta = a.name === TRASH_DIR ? 1 : 0;
+    const tb = b.name === TRASH_DIR ? 1 : 0;
+    if (ta !== tb) return ta - tb;
+    return naturalCompare(a.name, b.name);
+  });
   return node;
 }
 
@@ -81,6 +88,17 @@ export async function createDir(dirHandle, name) {
     if (e.name !== 'NotFoundError') throw e;
   }
   return dirHandle.getDirectoryHandle(clean, { create: true });
+}
+
+/** 依路徑逐層建立資料夾（已存在就直接用），回傳最底層的 handle。'4F/_回收桶' → 兩層。 */
+export async function ensureDir(rootHandle, path) {
+  let dir = rootHandle;
+  for (const seg of String(path ?? '')
+    .split('/')
+    .filter(Boolean)) {
+    dir = await dir.getDirectoryHandle(seg, { create: true });
+  }
+  return dir;
 }
 
 /**

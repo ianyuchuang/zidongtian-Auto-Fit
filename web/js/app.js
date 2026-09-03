@@ -1,6 +1,6 @@
 // 應用狀態與動作（不碰 DOM）。UI 模組訂閱 app.subscribe() 並呼叫這裡的動作。
 
-import { scanTree, flattenDirs, findDir, moveFile, createDir, writeFile } from './fs/adapter.js';
+import { scanTree, flattenDirs, findDir, moveFile, createDir, ensureDir, writeFile } from './fs/adapter.js';
 import { parsePhotoName } from './filename.js';
 import {
   STATUS,
@@ -13,6 +13,10 @@ import {
   nextPendingReview,
   TRASH_DIR,
   isTrashDir,
+  isTrashed,
+  trashDirOf,
+  ownerOfTrash,
+  groupDirOf,
   pruneChecked,
 } from './state.js';
 import { loadSaved, savePhotos, applySaved } from './storage.js';
@@ -102,7 +106,8 @@ export function createApp() {
       const { redo } = applySaved(state.photos, saved, { engine: state.engine });
       state.lastOpen = { redo };
       state.page = 'work';
-      state.selectedId = state.photos[0]?.id ?? null;
+      // 預選表格上的第一列（照 order 排），不是掃描順序的第一張，否則反白的常常不是最上面那列
+      state.selectedId = app.visiblePhotos()[0]?.id ?? state.photos[0]?.id ?? null;
       emit('page');
       loadThumbs();
       app.recognizeAll();
@@ -170,7 +175,7 @@ export function createApp() {
     // ---------- 辨識 ----------
     async recognizeAll() {
       const rec = getRecognizer(state.recognizerId);
-      const queue = state.photos.filter((p) => p.status === STATUS.PENDING);
+      const queue = state.photos.filter((p) => p.status === STATUS.PENDING && !isTrashed(p));
       if (!queue.length) return;
       state.recognizing = true;
       const failed = [];
@@ -295,8 +300,9 @@ export function createApp() {
     batchDesign(value, scope) {
       let targets;
       if (scope === 'visible') targets = app.visiblePhotos();
-      else if (scope === 'dir') targets = state.photos.filter((p) => p.dir === (state.dirFilter ?? ''));
+      else if (scope === 'dir') targets = state.photos.filter((p) => groupDirOf(p) === (state.dirFilter ?? ''));
       else targets = state.photos;
+      targets = targets.filter((p) => !isTrashed(p)); // 已刪除的不跟著改
       for (const p of targets) p.design = value;
       save();
       emit('photos');
@@ -372,27 +378,65 @@ export function createApp() {
       }
       return result;
     },
-    /** 刪除＝搬到根資料夾下的 _回收桶（沒有就建）。已在回收桶的略過。回傳同 moveManyToDir，外加 alreadyTrashed。 */
+    /**
+     * 刪除＝搬進「照片所在資料夾」的 `_回收桶`（沒有就建），不是全部丟到根目錄，
+     * 這樣表格可以把它留在原資料夾群組裡反灰顯示、一鍵還原。已在回收桶的略過。
+     * 回傳 { moved, failed, alreadyTrashed }；一張失敗不影響其他張。
+     */
     async trash(ids) {
-      if (!app.dirOf(TRASH_DIR)) {
-        try {
-          await createDir(state.root, TRASH_DIR);
-        } catch (e) {
-          if (!/已存在/.test(e.message)) throw e;
-        }
-        await app.rescan();
-        if (!app.dirOf(TRASH_DIR)) throw new Error(`建立回收桶資料夾「${TRASH_DIR}」失敗`);
-      }
-      const targets = [];
+      const byTrash = new Map(); // 回收桶路徑 → 要搬進去的 id
       let alreadyTrashed = 0;
       for (const id of ids) {
         const p = byId(id);
         if (!p) continue;
-        if (isTrashDir(p.dir)) alreadyTrashed += 1;
-        else targets.push(id);
+        if (isTrashDir(p.dir)) {
+          alreadyTrashed += 1;
+          continue;
+        }
+        const t = trashDirOf(p.dir);
+        if (!byTrash.has(t)) byTrash.set(t, []);
+        byTrash.get(t).push(id);
       }
-      const r = await app.moveManyToDir(targets, TRASH_DIR);
-      return { ...r, alreadyTrashed };
+      const result = { moved: 0, failed: [], alreadyTrashed };
+      for (const [t, list] of byTrash) {
+        try {
+          if (!app.dirOf(t)) {
+            await ensureDir(state.root, t);
+            await app.rescan();
+            if (!app.dirOf(t)) throw new Error(`建立回收桶資料夾「${t}」失敗`);
+          }
+          const r = await app.moveManyToDir(list, t);
+          result.moved += r.moved;
+          result.failed.push(...r.failed);
+        } catch (e) {
+          console.error('刪除失敗', t, e);
+          for (const id of list) result.failed.push({ name: byId(id)?.name ?? id, error: e.message });
+        }
+      }
+      return result;
+    },
+    /** 還原＝從回收桶搬回它原本所屬的那個資料夾。回傳 { moved, failed }。 */
+    async restore(ids) {
+      const byHome = new Map();
+      for (const id of ids) {
+        const p = byId(id);
+        if (!p || !isTrashDir(p.dir)) continue;
+        const home = ownerOfTrash(p.dir);
+        if (!byHome.has(home)) byHome.set(home, []);
+        byHome.get(home).push(id);
+      }
+      const result = { moved: 0, failed: [] };
+      for (const [home, list] of byHome) {
+        try {
+          const r = await app.moveManyToDir(list, home);
+          result.moved += r.moved;
+          result.failed.push(...r.failed);
+        } catch (e) {
+          console.error('還原失敗', home, e);
+          for (const id of list) result.failed.push({ name: byId(id)?.name ?? id, error: e.message });
+        }
+      }
+      return result;
     },
     async addFolder(name) {
       await createDir(state.root, name);
