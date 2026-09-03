@@ -29,10 +29,11 @@
 - 可留用程式：`需求及資訊來源\自懂填Auto-Fit_V1.0_安裝包\app\self_check_core.py`（docx 排版、日期戳）。
 - 三個 .bat 放在上一層，原始檔在 `tools/bat/`（改完要複製過去）；**內容只能是 ASCII**，中文訊息一律由 Python 印，原因與用法見 `docs/bat.md`。備份 → `tools/backup_to_drive.py`；推送 → `tools/push_to_github.py`（pytest → commit → push，remote `ianyuchuang/zidongtian-Auto-Fit`）；開網頁 → `tools/dev_server.py`。
 - 網頁（純前端，照片只在瀏覽器本地處理，可直接放 GitHub Pages）：`web/`，無建置步驟。
-  - `js/app.js` 狀態與動作；`js/ui/` 入口頁 / 頂列 / 左樹 / 表格 / 檢視器（`dnd.js` 為表格與左樹共用的拖曳格式與提示）；`js/fs/` 資料夾存取（File System Access API，`memory.js` 為唯讀複本）；`js/recognizer/` 辨識模組（`mock`；`api.js` + `api/` 為 LLM API 直打，四家定義與申請方式見 `docs/LLM-API.md`；本地模型待實驗）；`js/docx-export.js` + `docx-model.js` 依 V1.0 版面產 Word（`vendor/docx-*.iife.js`）。
+  - `js/app.js` 狀態與動作；`js/ui/` 入口頁 / 頂列 / 左樹 / 表格 / 檢視器 / 燈箱（`dnd.js` 為表格與左樹共用的拖曳格式與提示；`recognize.js` 為頂列「AI 辨識」的設定對話框與進度）；`js/fs/` 資料夾存取（File System Access API，`memory.js` 為唯讀複本，`handle-store.js` 用 IndexedDB 記住上次的資料夾）；`js/recognizer/` 辨識模組（`mock`；`api.js` + `api/` 為 LLM API 直打，四家定義與申請方式見 `docs/LLM-API.md`；本地模型待實驗）；`js/docx-export.js` + `docx-model.js` 依 V1.0 版面產 Word（`vendor/docx-*.iife.js`）。
   - 開本機測試：上一層 `3_開啟網頁(localhost).bat` → `tools/dev_server.py`（port 8765；範例資料夾預設值寫在 `dev_server.py` 的 `DEFAULT_SAMPLES`，掛成「載入範例」）。需 Chrome / Edge 才能讀寫資料夾。
-  - 校對結果暫存在瀏覽器 localStorage（依根資料夾名），不寫進照片資料夾；每筆 AI 結果記 `engine`（`mock` / `api:claude`…），換引擎重開同資料夾時，未確認的 AI 結果會重跑、已確認與檔名解析保留（否則會一直看到模擬辨識的假資料）。
-  - 「刪除」＝搬到根資料夾下 `_回收桶`（網頁無法用 Windows 資源回收桶），拖回即還原，產生 Word 時略過；瀏覽器拿不到完整磁碟路徑，入口頁只顯示資料夾名與子資料夾摘要。
+  - 辨識不在入口頁決定：讀取後照片是「待辨識」，由頂列「🤖 AI 辨識」選方式／提示詞／範圍才開跑（辨識期間欄位與篩選鎖住，並顯示進度）。
+  - 校對結果暫存在瀏覽器 localStorage（依根資料夾名），不寫進照片資料夾；每筆 AI 結果記 `engine`（`mock` / `api:claude`…）。
+  - 「刪除」＝搬進**該照片所在資料夾**自己的 `_回收桶`（網頁無法用 Windows 資源回收桶）；表格把它留在原位反灰、按「↩ 還原」搬回同一層，統計不含它、產生 Word 時略過。瀏覽器拿不到完整磁碟路徑，入口頁只顯示資料夾名與子資料夾摘要。
 - 測試：`python -m pytest`（tests/；會一併跑 `node --test tests/js/*.test.mjs`，需 Node.js）。
 - 工具套件清單 `tools/requirements-tools.txt`（pytest、pillow、Google API）；缺的時候 `tools/deps.py` 會問要不要現在裝。
 - 待定：板型 docx 目前只記錄檔名、輸出仍用預設版面；低信心門檻暫 70%；每個資料夾各出一份 docx（同 V1.0）。
