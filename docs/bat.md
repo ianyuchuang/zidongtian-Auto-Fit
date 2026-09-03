@@ -1,6 +1,6 @@
-# 三個 .bat（放在 repo 上一層 `D:\自懂填-Auto-Fit\`）
+# 四個 .bat（放在 repo 上一層 `D:\自懂填-Auto-Fit\`）
 
-原始檔在 repo 內 `tools/bat/`（才會進 git、進備份）；上一層那三個是複本，
+原始檔在 repo 內 `tools/bat/`（才會進 git、進備份）；上一層那幾個是複本，
 改完要一起複製過去。
 
 ## 為什麼 .bat 裡不能有中文
@@ -15,7 +15,7 @@ cmd.exe 執行批次檔時是「跑一行 → 記住位元組位置 → 再開�
 '裝包（不進' is not recognized as an internal or external command
 ```
 
-所以三個 .bat 一律只放 ASCII：
+所以 .bat 一律只放 ASCII：
 - 中文說明搬到這份文件；
 - 中文執行訊息由 Python 印（`tools/*.py` 是 UTF-8，沒有這個問題）；
 - 中文資料夾路徑不寫進 .bat：repo 位置由 `_repo.cmd` 用 `*-V2.0` 在執行時找，
@@ -29,11 +29,12 @@ cmd.exe 執行批次檔時是「跑一行 → 記住位元組位置 → 再開�
 | --- | --- |
 | `1_備份至Google雲端.bat` | `tools/backup_to_drive.py`：把 repo（含 `.git`）和上一層 `需求及資訊來源\` 打包成 zip，放 `%USERPROFILE%\.autofit\backups\`（只留最近 7 份），上傳雲端資料夾「自懂填-Auto-Fit 備份」。雲端舊備份不自動刪。第一次要先把 OAuth 的 `credentials.json` 放到 `%USERPROFILE%\.autofit\`，執行時會開瀏覽器授權一次。 |
 | `2_推至GitHub.bat` | `tools/push_to_github.py`：pytest → `git add -A` → commit（會問說明）→ `git push origin main`。測試沒過就停，不推。 |
-| `3_開啟網頁(localhost).bat` | `tools/dev_server.py`：把 `web/` 掛在 http://localhost:8765/ 並開瀏覽器（要 Chrome / Edge 才能讀寫資料夾），範例資料夾掛成「載入範例」。照片只在瀏覽器本地處理。 |
+| `3_開啟網頁(localhost).bat` | `tools/dev_server.py`：把 `web/` 掛在 http://localhost:8765/ 並開瀏覽器（要 Chrome / Edge 才能讀寫資料夾），範例資料夾掛成「載入範例」。照片只在瀏覽器本地處理。只有這台電腦連得到。 |
+| `4_開啟網頁(內網).bat` | 同上但加 `--lan`（綁 `0.0.0.0`），同事用 `http://<你的IP>:8765/` 連得到。同事的 Chrome 要先設一次旗標，否則只能唯讀 —— 步驟、防火牆與注意事項見 `docs/內網測試.md`。 |
 
 ## 缺套件
 
-三個腳本用到的套件都在 `tools/requirements-tools.txt`（pytest、pillow、Google API）。
+這些腳本用到的套件都在 `tools/requirements-tools.txt`（pytest、pillow、Google API）。
 缺的時候腳本會問要不要現在裝；也可以自己開命令視窗跑：
 
 ```
