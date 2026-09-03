@@ -41,6 +41,7 @@ export function mountViewer(container, app) {
         <span class="nav"><button data-nav="-1" title="上一張">‹</button><button data-nav="1" title="下一張">›</button></span>
       </div>
       <div class="big"><img alt=""><span class="stamp">${esc(app.dateInfo().stamp)}</span></div>
+      <div class="off-filter small muted" hidden>這張目前不在篩選結果中</div>
       <div class="err small" ${p.status === 'error' ? '' : 'hidden'}>❌ ${esc(p.error ?? '')}</div>
       <div class="crop-title">白板裁切（AI 定位後從原圖裁出，供對照）</div>
       <div class="crop"><span>尚無裁切</span></div>
@@ -54,6 +55,8 @@ export function mountViewer(container, app) {
         <button class="btn" data-act="skip">跳過</button>
         <button class="btn btn-primary" data-act="confirm">✓ 確認，下一張<kbd>Enter</kbd></button>
       </div>`;
+    const off = container.querySelector('.off-filter');
+    if (off) off.hidden = app.visiblePhotos().some((x) => x.id === p.id);
     loadBig(p, viewSeq);
     loadCrop(p, viewSeq);
   }
@@ -110,6 +113,8 @@ export function mountViewer(container, app) {
     // 上一輪載圖失敗或被取消時，這裡補救——否則畫面會一直停在黑框、點了也沒反應
     const bigImg = container.querySelector('.big img');
     if (bigImg && !bigImg.getAttribute('src')) loadBig(p, viewSeq);
+    const off = container.querySelector('.off-filter');
+    if (off) off.hidden = app.visiblePhotos().some((x) => x.id === p.id);
     const badge = container.querySelector('.head .badge');
     badge.className = `badge ${isTrashed(p) ? 'trashed' : p.status}`;
     badge.textContent = isTrashed(p) ? '已刪除' : STATUS_LABEL[p.status];
@@ -182,7 +187,11 @@ export function mountViewer(container, app) {
       return;
     }
     const nav = e.target.closest('[data-nav]');
-    if (nav) return app.stepSelection(Number(nav.dataset.nav));
+    if (nav) {
+      const step = Number(nav.dataset.nav);
+      if (!app.stepSelection(step)) toast(step < 0 ? '已經是第一張了' : '已經是最後一張了');
+      return;
+    }
     const act = e.target.closest('[data-act]');
     if (!act || !currentId) return;
     const what = act.dataset.act;
@@ -190,7 +199,9 @@ export function mountViewer(container, app) {
     else if (what === 'trash') trashCurrent();
     else if (what === 'reload') loadBig(app.photo(currentId), viewSeq);
     else if (what === 'restore') restoreCurrent();
-    else if (what === 'skip') app.skip(currentId);
+    else if (what === 'skip') {
+      if (!app.skip(currentId)) toast('沒有其他待校對的照片了');
+    }
   });
 
   async function restoreCurrent() {
@@ -225,7 +236,7 @@ export function mountViewer(container, app) {
     if (what === 'date') {
       const s = container.querySelector('.stamp');
       if (s) s.textContent = app.dateInfo().stamp;
-    } else if (what === 'selection' || what === 'page' || what === 'photos' || what === 'recognize-progress') {
+    } else if (what === 'selection' || what === 'page' || what === 'photos' || what === 'recognize-progress' || what === 'filter') {
       render();
     }
   });

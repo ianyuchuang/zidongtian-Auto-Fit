@@ -30,14 +30,21 @@ export function mountTopbar(container, app) {
       const ok = await confirmDialog('回首頁', '校對結果已暫存在瀏覽器裡，下次開同一個資料夾會接回來。要回首頁嗎？');
       if (ok) app.goHome();
     } else if (act === 'date') {
-      const v = await promptDialog('修改檢查日期', { label: '民國格式，例如 1150725', value: app.dateInfo().compact });
+      const v = await promptDialog('修改檢查日期', {
+        label: '民國格式，例如 1150725',
+        value: app.dateInfo().compact,
+        validate: (x) => {
+          try {
+            parseRocInput(x);
+            return null;
+          } catch (err) {
+            return err.message;
+          }
+        },
+      });
       if (v == null) return;
-      try {
-        app.setDate(parseRocInput(v));
-        render();
-      } catch (err) {
-        toast(err.message, { error: true });
-      }
+      app.setDate(parseRocInput(v));
+      render();
     } else if (act === 'recognize') {
       await runRecognize(app);
     } else if (act === 'batch') {

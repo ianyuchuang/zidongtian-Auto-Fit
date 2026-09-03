@@ -75,7 +75,7 @@ export async function confirmDialog(title, body) {
   })) === true;
 }
 
-export async function promptDialog(title, { label = '', value = '', placeholder = '' } = {}) {
+export async function promptDialog(title, { label = '', value = '', placeholder = '', validate = null } = {}) {
   let input;
   const v = await showDialog({
     title,
@@ -88,6 +88,15 @@ export async function promptDialog(title, { label = '', value = '', placeholder 
       input = d.querySelector('input');
       input.focus();
       input.select();
+    },
+    // 輸入不合法時留在對話框裡改，不要關掉害使用者重打（bug清單 C2）
+    beforeClose: (val, d) => {
+      if (val !== true || !validate) return true;
+      const err = validate(d.querySelector('input').value);
+      if (!err) return true;
+      toast(err, { error: true });
+      d.querySelector('input').focus();
+      return false;
     },
   });
   return v === true ? input.value : null;

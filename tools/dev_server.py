@@ -29,16 +29,24 @@ IGNORE_NAMES = {"thumbs.db", "desktop.ini"}
 
 
 def list_samples(samples_dir: Path):
-    """回傳 {'root': 資料夾名, 'files': [{'path': '4F/x.jpg', 'url': '/samples/4F/x.jpg'}]}（自然順序交給前端）。"""
+    """回傳 {'root': 資料夾名, 'dirs': ['4F', ...], 'files': [{'path': ..., 'url': ...}]}（自然順序交給前端）。
+
+    dirs 連空資料夾也列出來，否則唯讀複本會看不到沒有照片的樓層。
+    """
     files = []
+    dirs = []
     for p in sorted(samples_dir.rglob("*")):
+        rel = p.relative_to(samples_dir).as_posix()
+        if p.is_dir():
+            if not p.name.startswith("."):
+                dirs.append(rel)
+            continue
         if not p.is_file():
             continue
         if p.name.startswith("~$") or p.name.startswith(".") or p.name.lower() in IGNORE_NAMES:
             continue
-        rel = p.relative_to(samples_dir).as_posix()
         files.append({"path": rel, "url": "/samples/" + urllib.parse.quote(rel)})
-    return {"root": samples_dir.name, "files": files}
+    return {"root": samples_dir.name, "dirs": dirs, "files": files}
 
 
 def resolve_sample_path(samples_dir: Path, url_path: str):

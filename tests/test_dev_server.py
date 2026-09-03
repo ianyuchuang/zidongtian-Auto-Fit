@@ -15,6 +15,7 @@ def _samples(tmp_path):
     (root / "4F" / "~$tmp.docx").write_bytes(b"x")
     (root / "5F" / "203662_0.jpg").write_bytes(b"x")
     (root / "5F" / "Thumbs.db").write_bytes(b"x")
+    (root / "6F").mkdir()  # 空資料夾：唯讀複本也要看得到
     return root
 
 
@@ -24,6 +25,7 @@ def test_list_samples_skips_junk_and_uses_posix_paths(tmp_path):
     assert idx["root"] == "帷幕骨架"
     assert [f["path"] for f in idx["files"]] == ["4F/a-1-2.jpg", "5F/203662_0.jpg"]
     assert idx["files"][0]["url"].startswith("/samples/4F/")
+    assert idx["dirs"] == ["4F", "5F", "6F"], "空資料夾也要列出來，否則唯讀複本看不到沒照片的樓層"
 
 
 def test_resolve_sample_path_blocks_traversal(tmp_path):

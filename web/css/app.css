@@ -59,6 +59,8 @@ input[type="text"]:focus, input[type="password"]:focus, textarea:focus { outline
 .dropzone .picked { color: var(--accent); font-weight: 600; }
 .dropzone.has-pick .hint { display: none; }
 .dropzone .summary { margin-top: 6px; }
+.dropzone .last-root { margin-top: 10px; color: var(--muted); }
+.dropzone.has-pick .last-root { display: none; }
 .entry textarea { width: 100%; min-height: 64px; border: 1px solid var(--line); border-radius: var(--radius); padding: 8px; resize: vertical; }
 .entry .row { display: flex; gap: 24px; }
 .entry .row .field { flex: 1; }

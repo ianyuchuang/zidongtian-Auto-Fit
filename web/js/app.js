@@ -331,18 +331,24 @@ export function createApp() {
       app.gotoNextPending(id);
     },
     skip(id) {
-      app.gotoNextPending(id);
+      return app.gotoNextPending(id);
     },
+    /** 跳到下一張待校對；沒有就回 false（呼叫端才能給回饋，而不是靜靜不動）。 */
     gotoNextPending(fromId) {
       const next = nextPendingReview(app.visiblePhotos(), fromId) || nextPendingReview(app.orderedPhotos(), fromId);
-      if (next) app.select(next.id);
+      if (!next) return false;
+      app.select(next.id);
+      return true;
     },
+    /** 上一張／下一張；已經到頭或到尾回 false。 */
     stepSelection(delta) {
       const list = app.visiblePhotos();
-      if (!list.length) return;
+      if (!list.length) return false;
       const i = list.findIndex((p) => p.id === state.selectedId);
-      const j = Math.min(list.length - 1, Math.max(0, (i < 0 ? 0 : i) + delta));
+      const j = (i < 0 ? 0 : i) + delta;
+      if (j < 0 || j >= list.length) return false;
       app.select(list[j].id);
+      return true;
     },
     batchDesign(value, scope) {
       let targets;
@@ -359,12 +365,15 @@ export function createApp() {
       state.date = date;
       emit('date');
     },
-    /** 回入口頁（校對結果已在 localStorage，重開同一個資料夾會接回來）。 */
+    /**
+     * 回入口頁。資料夾、日期、板型、提示詞、辨識設定都留著（入口頁會帶回來），
+     * 不必為了換個篩選重選一次資料夾；校對結果本來就在 localStorage。
+     */
     goHome() {
       for (const p of state.photos) {
         for (const k of ['thumbUrl', 'fullUrl', 'cropUrl']) if (p[k]) URL.revokeObjectURL(p[k]);
       }
-      Object.assign(state, { page: 'entry', root: null, tree: null, dirs: [], photos: [], selectedId: null, dirFilter: null, chip: 'all', query: '', recognizing: false });
+      Object.assign(state, { page: 'entry', tree: null, dirs: [], photos: [], selectedId: null, dirFilter: null, chip: 'all', query: '', recognizing: false, progress: null });
       state.collapsed = new Set();
       state.checked = new Set();
       emit('page');

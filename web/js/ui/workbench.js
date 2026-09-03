@@ -25,9 +25,20 @@ export function mountWorkbench(container, app) {
     }
   };
   document.addEventListener('keydown', onKey);
+
+  // 進工作台推一筆歷史，讓瀏覽器「上一頁」＝回首頁，而不是整個離開網站（bug清單 B4）
+  history.pushState({ autofit: 'work' }, '');
+  const onPop = () => {
+    if (app.state.page === 'work') app.goHome();
+  };
+  window.addEventListener('popstate', onPop);
+
   return () => {
     document.removeEventListener('keydown', onKey);
+    window.removeEventListener('popstate', onPop);
     for (const u of unsubs) u();
     container.innerHTML = '';
+    // 從工作台按「回首頁」離開時，把剛才推的那一筆收回去（被 popstate 觸發的話已經退掉了）
+    if (history.state?.autofit === 'work') history.back();
   };
 }
