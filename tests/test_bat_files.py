@@ -13,7 +13,7 @@ BAT_FILES = sorted(BAT_DIR.glob("*.bat")) + sorted(BAT_DIR.glob("*.cmd"))
 
 
 def test_bat_dir_is_not_empty():
-    assert len(BAT_FILES) == 5
+    assert len(BAT_FILES) == 6
 
 
 @pytest.mark.parametrize("path", BAT_FILES, ids=lambda p: p.name)

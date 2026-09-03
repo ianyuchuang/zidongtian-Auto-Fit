@@ -1,4 +1,4 @@
-# 四個 .bat（放在 repo 上一層 `D:\自懂填-Auto-Fit\`）
+# 五個 .bat（放在 repo 上一層 `D:\自懂填-Auto-Fit\`）
 
 原始檔在 repo 內 `tools/bat/`（才會進 git、進備份）；上一層那幾個是複本，
 改完要一起複製過去。
@@ -27,6 +27,7 @@ cmd.exe 執行批次檔時是「跑一行 → 記住位元組位置 → 再開�
 
 | 檔案 | 做的事 |
 | --- | --- |
+| `0_開通防火牆(只做一次).bat` | `tools/open_firewall.py`：自己跳 UAC 提權，加一條只開**私人網路** TCP 8765 的防火牆規則（`AutoFit-LAN-8765`），並印出內網 IP。開內網測試前做一次就好；`--remove` 可收回。 |
 | `1_備份至Google雲端.bat` | `tools/backup_to_drive.py`：把 repo（含 `.git`）和上一層 `需求及資訊來源\` 打包成 zip，放 `%USERPROFILE%\.autofit\backups\`（只留最近 7 份），上傳雲端資料夾「自懂填-Auto-Fit 備份」。雲端舊備份不自動刪。第一次要先把 OAuth 的 `credentials.json` 放到 `%USERPROFILE%\.autofit\`，執行時會開瀏覽器授權一次。 |
 | `2_推至GitHub.bat` | `tools/push_to_github.py`：pytest → `git add -A` → commit（會問說明）→ `git push origin main`。測試沒過就停，不推。 |
 | `3_開啟網頁(localhost).bat` | `tools/dev_server.py`：把 `web/` 掛在 http://localhost:8765/ 並開瀏覽器（要 Chrome / Edge 才能讀寫資料夾），範例資料夾掛成「載入範例」。照片只在瀏覽器本地處理。只有這台電腦連得到。 |
