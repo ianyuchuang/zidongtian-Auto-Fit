@@ -31,6 +31,16 @@ export function clampPan(view, { w, h }) {
   };
 }
 
+/**
+ * 點 (x,y) 是否落在 rect 內。
+ * 判斷「有沒有點在圖片上」只能用實際外框，不能用 e.target：圖片放大後 pointerdown 會
+ * setPointerCapture 到舞台上，之後 click 的 target 會變成舞台而不是 <img>，
+ * 用 target 判斷會把「點在圖上」誤判成「點空白處」而把燈箱關掉。
+ */
+export function hitsRect(rect, x, y) {
+  return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+}
+
 /** 焦點是否在可打字的欄位上（燈箱是非強制視窗，快捷鍵不能搶走輸入）。 */
 export function isTypingTarget(el) {
   if (!el) return false;
@@ -199,8 +209,10 @@ export function openLightbox(src, { title = '', root = null, onClose = null } = 
       delete stage.dataset.suppressClick;
       return;
     }
-    // 點空白處（不是圖片本身）關閉
-    if (e.target !== img) close();
+    if (e.detail > 1) return; // 雙擊的第二下交給 dblclick（還原縮放），不要關窗
+    if (!stage.contains(e.target) && e.target !== overlay) return; // 工具列 / 提示列不關
+    if (hitsRect(img.getBoundingClientRect(), e.clientX, e.clientY)) return; // 點在圖上不關
+    close();
   });
 
   document.addEventListener('keydown', onKey);

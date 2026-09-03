@@ -1,7 +1,7 @@
 // 燈箱的縮放/平移數學（純函式，不碰 DOM）。
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { clamp, wheelFactor, zoomAt, clampPan, isTypingTarget, MIN_SCALE, MAX_SCALE, IDENTITY } from '../../web/js/ui/lightbox.js';
+import { clamp, wheelFactor, zoomAt, clampPan, isTypingTarget, hitsRect, MIN_SCALE, MAX_SCALE, IDENTITY } from '../../web/js/ui/lightbox.js';
 
 const near = (a, b, eps = 1e-9) => assert.ok(Math.abs(a - b) < eps, `${a} ≉ ${b}`);
 
@@ -74,4 +74,22 @@ test('isTypingTarget：一般元素與 null 不算', () => {
   assert.equal(isTypingTarget({ tagName: 'BUTTON' }), false);
   assert.equal(isTypingTarget(null), false);
   assert.equal(isTypingTarget(undefined), false);
+});
+
+// 回歸測試：放大後 pointer capture 會把 click 的 target 換成舞台，
+// 用 e.target 判斷會誤關燈箱（bug清單 A2）。改用實際外框判斷。
+test('hitsRect：點在圖片外框內就算點在圖上（含邊界）', () => {
+  const rect = { left: 100, top: 50, right: 300, bottom: 250 };
+  assert.equal(hitsRect(rect, 200, 150), true);
+  assert.equal(hitsRect(rect, 100, 50), true); // 左上角
+  assert.equal(hitsRect(rect, 300, 250), true); // 右下角
+  assert.equal(hitsRect(rect, 99, 150), false);
+  assert.equal(hitsRect(rect, 200, 251), false);
+});
+
+test('hitsRect：圖片放大平移後，外框跟著變，圖上的點仍算命中', () => {
+  // scale 2、往左上平移 100 之後的外框
+  const zoomed = { left: -100, top: -100, right: 700, bottom: 500 };
+  assert.equal(hitsRect(zoomed, 300, 200), true);
+  assert.equal(hitsRect(zoomed, 750, 200), false);
 });

@@ -14,7 +14,7 @@ export function mountWorkbench(container, app) {
     if (app.state.page !== 'work') return;
     const tag = document.activeElement?.tagName;
     const typing = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
-    if (document.querySelector('.overlay')) return;
+    if (document.querySelector('.overlay:not(.lightbox)')) return; // 燈箱是非強制視窗，快捷鍵照舊
     if (e.key === 'Enter' && !typing && app.state.selectedId) {
       e.preventDefault();
       app.confirm(app.state.selectedId);
