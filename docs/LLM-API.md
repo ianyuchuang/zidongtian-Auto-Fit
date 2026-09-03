@@ -5,14 +5,16 @@
 
 ## 四家申請方式（2026-09 官方文件）
 
-| 家 | 申請金鑰 | 步驟 | 預設型號 | 價格（每百萬 token 輸入／輸出） | 月費方案可否共用 |
+| 家 | 申請金鑰 | 步驟 | 預設挑（`prefer`） | 價格（每百萬 token 輸入／輸出） | 月費方案可否共用 |
 |---|---|---|---|---|---|
-| Claude | https://platform.claude.com/ | 登入 → API Keys → Create Key → 複製 `sk-ant-api03-…`（只顯示一次）→ Billing 儲值 | `claude-haiku-4-5-20251001` | $1／$5 | 否，Pro/Max 不含 API，要另外儲值 |
-| Gemini | https://aistudio.google.com/apikey | Google 帳號登入 → 同意條款 → 自動建專案與金鑰 `AIza…` | `gemini-3.7-flash` | $0.75／$3.75（2026 年內優惠價） | 有免費額度（限速），可先免費試 |
-| GPT | https://platform.openai.com/api-keys | 登入 → Create new secret key `sk-…` → Billing 儲值 | `gpt-5.6-terra` | $1／$6 | 否，ChatGPT Plus 不含 API |
+| Claude | https://platform.claude.com/ | 登入 → API Keys → Create Key → 複製 `sk-ant-api03-…`（只顯示一次）→ Billing 儲值 | `sonnet`（Sonnet 5，$2／$10） | Haiku 4.5 $1／$5；Sonnet 5 $2／$10 | 否，Pro/Max 不含 API，要另外儲值 |
+| Gemini | https://aistudio.google.com/apikey | Google 帳號登入 → 同意條款 → 自動建專案與金鑰 `AIza…` | `pro` → `flash` | Flash $0.75／$3.75（2026 年內優惠價） | 有免費額度（限速），可先免費試 |
+| GPT | https://platform.openai.com/api-keys | 登入 → Create new secret key `sk-…` → Billing 儲值 | `gpt-5` | $1／$6 | 否，ChatGPT Plus 不含 API |
 | Grok | https://console.x.ai/ | （辨識尚未接上；xAI 是 OpenAI 相容格式，接法同 GPT） | — | — | — |
 
-一張照片約 1,600–2,000 token → 三家都約 **NT$0.05–0.1／張**。
+一張照片約 1,600–2,000 token。Haiku 約 NT$0.05–0.1／張，Sonnet 約 **NT$0.1–0.2／張**。
+
+> **不要用最小的型號讀手寫白板。** 2026-09-03 對「尺寸11F」12 張實測：Haiku 4.5 設計＋實際兩欄**全錯（0/12）**，Sonnet 5 對 9/12。細節與因應見 `辨識實測-尺寸11F.md`。
 
 ## 瀏覽器直打的要點
 - 網頁沒有後端，用 `fetch` 直接呼叫各家端點。Claude 必須多帶 header `anthropic-dangerous-direct-browser-access: true`，否則被 CORS 擋；Gemini（`x-goog-api-key`）與 OpenAI（`Authorization: Bearer`）原生允許。
@@ -31,7 +33,9 @@
 | Gemini | `GET /v1beta/models?pageSize=1000` | 只有 `supportedGenerationMethods` 含 `generateContent` 的算可用 |
 | GPT | `GET /v1/models` | 這個端點連向量／語音／繪圖型號都列，用型號名稱篩掉 |
 
-不能看圖的型號預設收起來，勾「連不能看圖的型號也列出來」才顯示（篩錯了還挑得到，不會被卡死）。選好的型號記在 localStorage，下次開對話框直接帶回來，不必每次重測。`providers.js` 的 `model` 只是「清單抓回來時預設選哪個」與抓不到時的後備，不是寫死的唯一選擇。
+不能看圖的型號預設收起來，勾「連不能看圖的型號也列出來」才顯示（篩錯了還挑得到，不會被卡死）。選好的型號記在 localStorage，下次開對話框直接帶回來，不必每次重測。
+
+游標預設停在哪一個：**上次選過的 → `providers.js` 的 `prefer` 關鍵字（依序比對型號 id，不分大小寫）→ `model` 後備 → 清單第一個**。`prefer` 寫關鍵字（`'sonnet'`）不寫版本號，廠商出新版會自動跟上；`model` 只在抓不到清單時當後備。
 
 ## Claude 公司／團隊帳號：Workspace ID
 公司帳號發的「識別碼型金鑰」（personal / service account key）每次請求都要帶 header `anthropic-workspace-id`，否則：
