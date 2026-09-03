@@ -14,7 +14,7 @@ export function mountTable(container, app) {
       ${CHIPS.map((c) => `<button class="chip" data-chip="${c}">${CHIP_LABEL[c]}<span class="n"></span></button>`).join('')}
       <input type="text" class="search" placeholder="搜尋內容說明…">
     </div>
-    <div class="bulkbar" hidden>
+    <div class="bulkbar off">
       <span>已勾選 <b class="n">0</b> 張</span>
       <select class="move-to" title="把勾選的照片搬到資料夾"><option value="">搬到資料夾…</option></select>
       <button class="btn btn-danger" data-bulk="trash" title="搬到根資料夾下的 ${TRASH_DIR}，可再拖回來">🗑 刪除（移到 ${TRASH_DIR}）</button>
@@ -22,7 +22,7 @@ export function mountTable(container, app) {
     </div>
     <div class="table-wrap">
       <table class="photos">
-        <thead><tr><th></th><th>縮圖</th><th>內容說明</th><th>設計</th><th>實際</th><th style="text-align:right">信心</th><th>狀態</th><th class="chk"><input type="checkbox" data-chk-all title="全選 / 取消目前顯示的照片"></th></tr></thead>
+        <thead><tr><th class="c-handle"></th><th class="c-thumb">縮圖</th><th class="c-desc">內容說明</th><th class="c-design">設計</th><th class="c-actual">實際</th><th class="c-conf">信心</th><th class="c-status">狀態</th><th class="chk"><input type="checkbox" data-chk-all title="全選 / 取消目前顯示的照片"></th></tr></thead>
         <tbody></tbody>
       </table>
       <div class="empty" hidden>沒有符合的照片</div>
@@ -115,7 +115,8 @@ export function mountTable(container, app) {
     setTri(chkAll, visible.filter((p) => app.isChecked(p.id)).length, visible.length);
 
     const n = app.state.checked.size;
-    bulkbar.hidden = n === 0;
+    // 用 visibility 而不是 hidden：工具列出現／消失若改變表格高度，整張表會上下跳（bug清單 A3）
+    bulkbar.classList.toggle('off', n === 0);
     bulkbar.querySelector('.n').textContent = n;
     const opts = app.state.dirs
       .map((d) => `<option value="d:${esc(d.path)}">${isTrashDir(d.path) ? '🗑' : '🗀'} ${esc(d.path || `${d.name}（根資料夾）`)}</option>`)
