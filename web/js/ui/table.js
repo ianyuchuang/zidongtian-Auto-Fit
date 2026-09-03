@@ -144,6 +144,11 @@ export function mountTable(container, app) {
       .map((d) => `<option value="d:${esc(d.path)}">🗀 ${esc(d.path || `${d.name}（根資料夾）`)}</option>`)
       .join('');
     moveSel.innerHTML = `<option value="">搬到資料夾…</option>${opts}`;
+    // setTri 只看有沒有照片，辨識中要再壓一次，否則每跑完一張就被重新打開
+    if (app.state.recognizing) {
+      chkAll.disabled = true;
+      for (const b of tbody.querySelectorAll('[data-chk-group]')) b.disabled = true;
+    }
   }
   function setTri(box, on, total) {
     box.checked = total > 0 && on === total;

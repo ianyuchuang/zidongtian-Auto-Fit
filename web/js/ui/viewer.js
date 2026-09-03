@@ -57,6 +57,7 @@ export function mountViewer(container, app) {
       </div>`;
     const off = container.querySelector('.off-filter');
     if (off) off.hidden = app.visiblePhotos().some((x) => x.id === p.id);
+    for (const b of container.querySelectorAll('.actions .btn')) b.disabled = app.state.recognizing;
     loadBig(p, viewSeq);
     loadCrop(p, viewSeq);
   }

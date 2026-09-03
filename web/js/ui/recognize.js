@@ -5,6 +5,7 @@ import { RECOGNIZERS, DEFAULT_PROMPT } from '../recognizer/index.js';
 import { PROVIDERS, getProvider } from '../recognizer/api/providers.js';
 import { loadApiKeys, saveApiKeys } from '../recognizer/api/keys.js';
 import { testConnection } from '../recognizer/api/call.js';
+import { isTrashed } from '../state.js';
 import { esc, showDialog, alertDialog, toast } from './dialog.js';
 
 /** 目前引擎的顯示文字（頂列 pill 用）。沒設定過回 null。 */
@@ -53,7 +54,7 @@ async function showApiGuide(p) {
 async function askSettings(app) {
   const apiState = loadApiKeys(); // { provider, remember, keys }
   const pending = app.pendingPhotos();
-  const checked = app.checkedPhotos().filter((p) => !p.trashed);
+  const checked = app.checkedPhotos().filter((p) => !isTrashed(p));
   const redoAll = app.redoablePhotos();
   let picked = null;
 
@@ -223,7 +224,7 @@ async function askSettings(app) {
       const includeConfirmed = d.querySelector('#rec-confirmed').checked;
       const photos =
         scope === 'checked'
-          ? app.checkedPhotos()
+          ? app.checkedPhotos().filter((p) => !isTrashed(p))
           : scope === 'all'
             ? app.redoablePhotos({ includeConfirmed })
             : app.pendingPhotos();
