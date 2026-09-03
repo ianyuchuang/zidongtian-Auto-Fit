@@ -10,7 +10,7 @@ export const STATUS = {
 };
 
 export const STATUS_LABEL = {
-  [STATUS.PENDING]: '辨識中…',
+  [STATUS.PENDING]: '待辨識',
   [STATUS.PARSED]: '檔名解析',
   [STATUS.AI]: 'AI 辨識・待校對',
   [STATUS.LOW]: 'AI 低信心・請確認',

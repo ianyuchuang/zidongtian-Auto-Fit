@@ -37,9 +37,12 @@ export function mountTable(container, app) {
   const rows = new Map(); // id → tr
   let lastKey = '';
 
+  /** 已刪除、或正在辨識中 → 欄位鎖住（辨識中打的字會被 AI 蓋掉，乾脆不讓打）。 */
+  const locked = (p) => isTrashed(p) || app.state.recognizing;
+
   function rowHtml(p) {
     const gone = isTrashed(p); // 已刪除：留在原位反灰、欄位鎖住，只留「還原」
-    const dis = gone ? ' disabled' : '';
+    const dis = locked(p) ? ' disabled' : '';
     return `
       <td class="handle" draggable="true" title="拖曳改順序 / 搬移">⋮⋮</td>
       <td><img class="thumb" alt="" ${p.thumbUrl ? `src="${p.thumbUrl}"` : ''}></td>
@@ -54,16 +57,20 @@ export function mountTable(container, app) {
   function patchRow(tr, p) {
     const gone = isTrashed(p);
     tr.className = `photo ${p.status} ${gone ? 'trashed' : ''} ${p.id === app.state.selectedId ? 'selected' : ''} ${app.isChecked(p.id) ? 'checked' : ''}`;
+    const lock = locked(p);
     for (const f of FIELDS) {
       const inp = tr.querySelector(`input[data-f="${f}"]`);
       if (inp !== document.activeElement && inp.value !== p[f]) inp.value = p[f];
+      inp.disabled = lock;
     }
     tr.querySelector('.conf').textContent = p.confidence == null ? '—' : `${Math.round(p.confidence)}%`;
     const badge = tr.querySelector('.badge');
     badge.className = `badge ${gone ? 'trashed' : p.status}`;
     badge.textContent = gone ? '已刪除' : (STATUS_LABEL[p.status] ?? p.status);
     badge.title = gone ? '已搬到這個資料夾的回收桶，按「↩ 還原」搬回來' : (p.error ?? '');
-    tr.querySelector('[data-chk]').checked = app.isChecked(p.id);
+    const chk = tr.querySelector('[data-chk]');
+    chk.checked = app.isChecked(p.id);
+    chk.disabled = lock;
     const img = tr.querySelector('.thumb');
     if (p.thumbUrl && img.getAttribute('src') !== p.thumbUrl) img.src = p.thumbUrl;
   }
@@ -335,8 +342,22 @@ export function mountTable(container, app) {
     app.reorder(ids[0], tr.dataset.id, placeOf(e, tr));
   });
 
+  /** 辨識中：篩選區與勾選一起反灰，避免中途換範圍造成混亂。 */
+  function renderLock() {
+    const busy = !!app.state.recognizing;
+    container.querySelector('.filters').classList.toggle('locked', busy);
+    container.querySelector('.search').disabled = busy;
+    for (const b of container.querySelectorAll('.chip')) b.disabled = busy;
+    chkAll.disabled = busy || app.visiblePhotos().filter((p) => !isTrashed(p)).length === 0;
+    bulkbar.classList.toggle('locked', busy);
+  }
+
   const unsubscribe = app.subscribe((what) => {
-    if (what === 'photos' || what === 'filter' || what === 'tree' || what === 'page') {
+    if (what === 'recognize-progress') {
+      renderLock();
+      render();
+      renderChips();
+    } else if (what === 'photos' || what === 'filter' || what === 'tree' || what === 'page') {
       render();
       renderChips();
     } else if (what === 'selection') {
@@ -353,5 +374,6 @@ export function mountTable(container, app) {
   });
   render();
   renderChips();
+  renderLock();
   return unsubscribe;
 }

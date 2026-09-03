@@ -152,3 +152,51 @@ test('recognizeAll：結果記引擎；失敗時狀態 error、留下原因並�
   assert.equal(app2.state.lastFailed.length, 4);
   assert.ok(ev2.includes('recognize-failed'));
 });
+
+test('recognizeAll：辨識期間使用者自己填過／確認過的，AI 回來不覆蓋（回歸：bug清單 A1）', async () => {
+  const { app } = await setup();
+  app.state.recognizerId = 'mock';
+  app.state.engine = 'mock';
+  const target = app.state.photos[0];
+  const untouched = app.state.photos[3];
+  const run = app.recognizeAll(); // 送出後、結果回來前……
+  app.setField(target.id, 'desc', '我先打好的內容');
+  app.setField(target.id, 'design', '我的設計值');
+  app.confirm(target.id);
+  const r = await run;
+  assert.equal(target.desc, '我先打好的內容', '打的字不能被 AI 蓋掉');
+  assert.equal(target.design, '我的設計值');
+  assert.equal(target.status, 'confirmed', '已確認不能被打回待校對');
+  assert.ok(r.kept.includes(target));
+  assert.ok(target.bbox, '仍然要補上白板裁切用的 bbox');
+  assert.equal(untouched.source, 'ai', '沒動過的照片照樣填 AI 結果');
+  assert.equal(r.total, 4);
+});
+
+test('recognizeAll：可以只跑指定的照片；重複呼叫不會疊在一起', async () => {
+  const { app } = await setup();
+  app.state.recognizerId = 'mock';
+  app.state.engine = 'mock';
+  const one = app.state.photos[1];
+  const r = await app.recognizeAll({ photos: [one] });
+  assert.equal(r.total, 1);
+  assert.equal(one.source, 'ai');
+  assert.equal(app.state.photos[0].status, 'pending', '沒指定的不動');
+  assert.equal(app.pendingPhotos().length, 3);
+  // 已確認的預設不重跑
+  app.confirm(app.state.photos[0].id);
+  assert.ok(!app.redoablePhotos().includes(app.state.photos[0]));
+  assert.ok(app.redoablePhotos({ includeConfirmed: true }).includes(app.state.photos[0]));
+});
+
+test('recognizeAll：回收桶裡的照片不辨識', async () => {
+  const { app } = await setup();
+  app.state.recognizerId = 'mock';
+  app.state.engine = 'mock';
+  await app.trash(['4F/a.jpg']);
+  const gone = app.photo('4F/_回收桶/a.jpg');
+  assert.equal(gone.status, 'pending');
+  await app.recognizeAll();
+  assert.equal(gone.status, 'pending', '已刪除的不該被排進辨識');
+  assert.ok(!app.pendingPhotos().includes(gone));
+});

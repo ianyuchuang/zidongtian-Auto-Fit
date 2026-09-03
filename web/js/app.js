@@ -53,6 +53,7 @@ export function createApp() {
     collapsed: new Set(),
     checked: new Set(), // 勾選的照片 id（多選：批次搬移 / 刪除）
     recognizing: false,
+    progress: null, // 辨識進度 { done, total, stop, name }
   };
 
   const emit = (what) => {
@@ -92,7 +93,7 @@ export function createApp() {
     },
 
     // ---------- 開啟資料夾 ----------
-    async open({ rootHandle, readOnly = false, date, template = null, prompt = '', recognizerId = 'mock', api = null }) {
+    async open({ rootHandle, readOnly = false, date, template = null, prompt = '', recognizerId = null, api = null }) {
       state.root = rootHandle;
       state.readOnly = readOnly;
       state.date = date;
@@ -100,7 +101,7 @@ export function createApp() {
       state.prompt = prompt;
       state.recognizerId = recognizerId;
       state.api = api;
-      state.engine = engineId(recognizerId, api);
+      state.engine = recognizerId ? engineId(recognizerId, api) : null;
       await app.rescan();
       const saved = loadSaved(rootHandle.name);
       const { redo } = applySaved(state.photos, saved, { engine: state.engine });
@@ -110,7 +111,29 @@ export function createApp() {
       state.selectedId = app.visiblePhotos()[0]?.id ?? state.photos[0]?.id ?? null;
       emit('page');
       loadThumbs();
-      app.recognizeAll();
+      // 辨識不再自動開跑：使用者進工作台後自己按頂列的「🤖 AI 辨識」，
+      // 在那裡才選辨識方式與提示詞（沒有 AI 也能純手打三欄）。
+    },
+
+    /** 設定這次要用的辨識方式（頂列「AI 辨識」對話框按下確定時呼叫）。 */
+    setRecognizer({ recognizerId, api = null, prompt = '' }) {
+      state.recognizerId = recognizerId;
+      state.api = api;
+      state.prompt = prompt;
+      state.engine = engineId(recognizerId, api);
+      emit('page');
+    },
+
+    /** 還沒辨識過的照片（不含回收桶）。 */
+    pendingPhotos() {
+      return state.photos.filter((p) => p.status === STATUS.PENDING && !isTrashed(p));
+    },
+    /** 可以重跑的照片（不含回收桶；預設不含已確認的，避免把校對成果洗掉）。 */
+    redoablePhotos({ includeConfirmed = false } = {}) {
+      return state.photos.filter((p) => !isTrashed(p) && (includeConfirmed || p.status !== STATUS.CONFIRMED));
+    },
+    stopRecognize() {
+      if (state.progress) state.progress.stop = true;
     },
 
     /** 重新掃描資料夾樹（保留已有照片的欄位內容）。 */
@@ -173,16 +196,29 @@ export function createApp() {
     },
 
     // ---------- 辨識 ----------
-    async recognizeAll() {
+    /**
+     * 跑辨識。photos 不給就跑所有「待辨識」的。
+     * 進行中會發 'recognize-progress'（給進度條用）；stopRecognize() 可中止。
+     * 送出前先記下三欄與狀態，回來時若跟當初不一樣代表使用者自己動過了，
+     * 就只補 bbox / 信心，不覆蓋他打的字與「已確認」（回歸：bug清單 A1）。
+     */
+    async recognizeAll({ photos = null } = {}) {
+      if (state.recognizing) return { done: 0, failed: [], stopped: false };
       const rec = getRecognizer(state.recognizerId);
-      const queue = state.photos.filter((p) => p.status === STATUS.PENDING && !isTrashed(p));
-      if (!queue.length) return;
+      const targets = (photos ?? app.pendingPhotos()).filter((p) => !isTrashed(p));
+      if (!targets.length) return { done: 0, failed: [], stopped: false };
+      const queue = targets.map((p) => ({ p, before: { status: p.status, desc: p.desc, design: p.design, actual: p.actual } }));
+      const progress = { done: 0, total: queue.length, stop: false, name: '' };
+      state.progress = progress;
       state.recognizing = true;
       const failed = [];
+      const kept = [];
+      emit('recognize-progress');
       emit('photos');
       const worker = async () => {
-        while (queue.length) {
-          const p = queue.shift();
+        while (queue.length && !progress.stop) {
+          const { p, before } = queue.shift();
+          progress.name = p.name;
           try {
             const dir = app.dirOf(p.dir);
             const r = await rec.recognize(await app.fileOf(p), {
@@ -191,15 +227,20 @@ export function createApp() {
               rootName: state.root.name,
               api: state.api,
             });
-            p.desc = r.desc ?? '';
-            p.design = r.design ?? '';
-            p.actual = r.actual ?? '';
+            const touched = p.status !== before.status || p.desc !== before.desc || p.design !== before.design || p.actual !== before.actual;
             p.confidence = r.confidence ?? null;
             p.bbox = r.bbox ?? null;
-            p.source = 'ai';
             p.engine = state.engine;
             p.error = undefined;
-            p.status = statusFromConfidence(p.confidence);
+            if (touched) {
+              kept.push(p); // 使用者已經自己填過／確認過，三欄與狀態原封不動
+            } else {
+              p.desc = r.desc ?? '';
+              p.design = r.design ?? '';
+              p.actual = r.actual ?? '';
+              p.source = 'ai';
+              p.status = statusFromConfidence(p.confidence);
+            }
           } catch (e) {
             console.error('辨識失敗', p.name, e);
             p.status = STATUS.ERROR;
@@ -207,15 +248,21 @@ export function createApp() {
             p.error = e.message;
             failed.push(p);
           }
+          progress.done += 1;
           save();
+          emit('recognize-progress');
           emit('photos');
         }
       };
       await Promise.all([worker(), worker()]);
       state.recognizing = false;
+      state.progress = null;
+      emit('recognize-progress');
       emit('photos');
       state.lastFailed = failed;
+      state.lastKept = kept;
       if (failed.length) emit('recognize-failed');
+      return { done: progress.done, failed, kept, stopped: progress.stop, total: progress.total };
     },
 
     // ---------- 選取 / 篩選 ----------

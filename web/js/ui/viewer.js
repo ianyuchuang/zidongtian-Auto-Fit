@@ -30,6 +30,9 @@ export function mountViewer(container, app) {
     updateLightbox(url, zoomTitle(p, kind));
   }
 
+  /** 已刪除、或正在辨識中 → 三欄鎖住。 */
+  const locked = (q) => isTrashed(q) || app.state.recognizing;
+
   function renderFull(p) {
     container.innerHTML = `
       <div class="head">
@@ -41,7 +44,7 @@ export function mountViewer(container, app) {
       <div class="err small" ${p.status === 'error' ? '' : 'hidden'}>❌ ${esc(p.error ?? '')}</div>
       <div class="crop-title">白板裁切（AI 定位後從原圖裁出，供對照）</div>
       <div class="crop"><span>尚無裁切</span></div>
-      ${FIELDS.map(([f, label]) => `<div class="f"><label>${label}</label><input type="text" data-f="${f}" value="${esc(p[f])}"></div>`).join('')}
+      ${FIELDS.map(([f, label]) => `<div class="f"><label>${label}</label><input type="text" data-f="${f}" value="${esc(p[f])}"${locked(p) ? ' disabled' : ''}></div>`).join('')}
       <div class="actions">
         ${
           isTrashed(p)
@@ -115,10 +118,14 @@ export function mountViewer(container, app) {
       err.hidden = p.status !== 'error';
       err.textContent = p.status === 'error' ? `❌ ${p.error ?? ''}` : '';
     }
+    const lock = locked(p);
     for (const [f] of FIELDS) {
       const inp = container.querySelector(`input[data-f="${f}"]`);
+      if (!inp) continue;
       if (inp !== document.activeElement && inp.value !== p[f]) inp.value = p[f];
+      inp.disabled = lock;
     }
+    for (const b of container.querySelectorAll('.actions .btn')) b.disabled = app.state.recognizing;
     // 辨識完成後才有裁切
     if (p.bbox && !container.querySelector('.crop img')) {
       app.cropUrl(p).then((u) => {
@@ -218,7 +225,7 @@ export function mountViewer(container, app) {
     if (what === 'date') {
       const s = container.querySelector('.stamp');
       if (s) s.textContent = app.dateInfo().stamp;
-    } else if (what === 'selection' || what === 'page' || what === 'photos') {
+    } else if (what === 'selection' || what === 'page' || what === 'photos' || what === 'recognize-progress') {
       render();
     }
   });

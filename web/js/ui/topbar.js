@@ -2,25 +2,26 @@
 
 import { parseRocInput } from '../rocdate.js';
 import { esc, showDialog, alertDialog, confirmDialog, promptDialog, toast } from './dialog.js';
-import { getRecognizer } from '../recognizer/index.js';
-import { PROVIDERS } from '../recognizer/api/providers.js';
+import { runRecognize, engineLabel } from './recognize.js';
 
 export function mountTopbar(container, app) {
   container.className = 'topbar';
 
   function render() {
-    const { root, readOnly, template } = app.state;
+    const { root, readOnly, template, recognizing } = app.state;
     const d = app.dateInfo();
     const eng = engineLabel(app.state);
+    const busy = recognizing ? 'disabled' : '';
     container.innerHTML = `
       <div class="brand" data-act="home" title="回首頁"><span>自懂填</span> Auto-Fit</div>
       <span class="pill" title="${esc(root?.name ?? '')}">🗀 資料夾 ${esc(root?.name ?? '')}${readOnly ? '（唯讀複本）' : ''}</span>
       <span class="pill" title="${esc(template?.name ?? '')}">📄 板型 ${template ? esc(template.name) + '（尚未套用，輸出用預設）' : '預設（每頁 3 列 × 2 張）'}</span>
       <span class="pill clickable" data-act="date" title="點選修改">📅 檢查日期 ${d.compact}</span>
-      <span class="pill engine" title="${esc(eng.title)}">🤖 ${esc(eng.text)}</span>
+      ${eng ? `<span class="pill engine" title="${esc(eng.title)}">🤖 ${esc(eng.text)}</span>` : ''}
       <span class="spacer"></span>
-      <button class="btn" data-act="batch">批次修改設計值</button>
-      <button class="btn btn-primary" data-act="export">產生 Word 檔</button>`;
+      <button class="btn" data-act="recognize" title="選辨識方式與提示詞，讓 AI 填三欄" ${busy}>🤖 AI 辨識</button>
+      <button class="btn" data-act="batch" ${busy}>批次修改設計值</button>
+      <button class="btn btn-primary" data-act="export" ${busy}>產生 Word 檔</button>`;
   }
 
   container.addEventListener('click', async (e) => {
@@ -37,6 +38,8 @@ export function mountTopbar(container, app) {
       } catch (err) {
         toast(err.message, { error: true });
       }
+    } else if (act === 'recognize') {
+      await runRecognize(app);
     } else if (act === 'batch') {
       await batchDesign(app);
     } else if (act === 'export') {
@@ -45,7 +48,7 @@ export function mountTopbar(container, app) {
   });
 
   const unsubscribe = app.subscribe((what) => {
-    if (what === 'page' || what === 'date') render();
+    if (what === 'page' || what === 'date' || what === 'recognize-progress') render();
     if (what === 'recognize-failed') {
       const f = app.state.lastFailed || [];
       const first = f[0]?.error ?? '';
@@ -58,21 +61,6 @@ export function mountTopbar(container, app) {
     app.state.lastOpen = null;
   }
   return unsubscribe;
-}
-
-/** 頂列顯示這次用哪個引擎（模擬／LLM API 哪一家＋型號）。 */
-function engineLabel({ recognizerId, api }) {
-  const short = (s) => String(s).split('（')[0];
-  if (recognizerId === 'api' && api) {
-    const p = PROVIDERS.find((x) => x.id === api.provider);
-    const model = api.model ?? p?.model ?? '';
-    return { text: `${short(p?.label ?? api.provider)} ${model}`.trim(), title: `LLM API：${p?.label ?? api.provider}，型號 ${model}（照片會送到這家的伺服器辨識）` };
-  }
-  let label = recognizerId;
-  try {
-    label = getRecognizer(recognizerId).label;
-  } catch {}
-  return { text: short(label), title: label };
 }
 
 async function batchDesign(app) {
@@ -136,6 +124,7 @@ async function exportWord(app) {
     buttons: [],
     onOpen: (d) => (progressEl = d),
   });
+  const closeProgress = () => done.close();
   try {
     const { results, skipped } = await app.exportWord({
       onProgress: ({ group, groups, i, n, folder }) => {
@@ -144,7 +133,7 @@ async function exportWord(app) {
         progressEl.querySelector('.progress-bar > div').style.width = `${Math.round((i / n) * 100)}%`;
       },
     });
-    progressEl.remove();
+    closeProgress();
     const lines = results.map(
       (r) =>
         `<li>${esc(r.file)}（${r.count} 張）${r.failures.length ? `<br><span style="color:var(--red-text)">${r.failures.map(esc).join('<br>')}</span>` : ''}</li>`,
@@ -152,9 +141,8 @@ async function exportWord(app) {
     const skip = skipped.length ? `<p class="muted">略過（內容說明為空）：${skipped.map((p) => esc(p.name)).join('、')}</p>` : '';
     await alertDialog('完成', `<ul>${lines.join('')}</ul>${skip}`);
   } catch (err) {
-    progressEl?.remove();
+    closeProgress();
     console.error(err);
     await alertDialog('產生失敗', `<pre style="white-space:pre-wrap">${esc(err.message)}</pre>`);
   }
-  done.catch(() => {});
 }

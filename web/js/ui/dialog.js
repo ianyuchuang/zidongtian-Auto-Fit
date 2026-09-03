@@ -16,7 +16,8 @@ export function esc(s) {
  */
 export function showDialog({ title, body = '', buttons = [{ label: '確定', value: true, primary: true }], onOpen, beforeClose }) {
   const root = document.getElementById('dialog-root');
-  return new Promise((resolve) => {
+  let closeFn = () => {};
+  const promise = new Promise((resolve) => {
     const overlay = el(`
       <div class="overlay">
         <div class="dialog" role="dialog" aria-modal="true">
@@ -26,12 +27,13 @@ export function showDialog({ title, body = '', buttons = [{ label: '確定', val
         </div>
       </div>`);
     const btns = overlay.querySelector('.btns');
-    const close = (v) => {
-      if (beforeClose && beforeClose(v, overlay) === false) return;
+    const close = (v, force = false) => {
+      if (!force && beforeClose && beforeClose(v, overlay) === false) return;
       overlay.remove();
       document.removeEventListener('keydown', onKey);
       resolve(v);
     };
+    closeFn = close;
     for (const b of buttons) {
       const btn = el(`<button class="btn ${b.primary ? 'btn-primary' : ''}">${esc(b.label)}</button>`);
       btn.addEventListener('click', () => close(b.value));
@@ -52,6 +54,10 @@ export function showDialog({ title, body = '', buttons = [{ label: '確定', val
     onOpen?.(overlay);
     overlay.querySelector('input, select, textarea, button')?.focus();
   });
+  // 進度視窗這種沒有按鈕的對話框要由呼叫端關掉，否則 Promise 永遠不 resolve、
+  // keydown 監聽也一直掛著（每匯出一次多一個）。
+  promise.close = (v = null) => closeFn(v, true);
+  return promise;
 }
 
 export async function alertDialog(title, body) {

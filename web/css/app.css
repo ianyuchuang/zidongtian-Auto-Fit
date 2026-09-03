@@ -131,6 +131,12 @@ input[type="text"]:focus, input[type="password"]:focus, textarea:focus { outline
 .bulkbar select { border: 1px solid var(--line); border-radius: var(--radius); padding: 4px 6px; background: #fff; }
 .bulkbar .btn { padding: 4px 10px; }
 .bulkbar.off { visibility: hidden; }
+/* 辨識中：篩選區與工具列反灰（欄位另外用 disabled 鎖） */
+.filters.locked, .bulkbar.locked { opacity: .5; pointer-events: none; }
+.dialog .radios label { display: block; padding: 3px 0; }
+.dialog .radios label.disabled { color: var(--muted); }
+.dialog textarea { width: 100%; border: 1px solid var(--line); border-radius: var(--radius); padding: 8px; margin-top: 6px; resize: vertical; font: inherit; }
+.dialog .api-panel { margin: 10px 0; }
 /* scrollbar-gutter：捲軸出現／消失不會讓整張表左右位移 */
 .table-wrap { flex: 1; overflow: auto; scrollbar-gutter: stable; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
 /* table-layout: fixed —— 欄寬只看表頭，不會因為換篩選、收合、換序而重算跳動 */
