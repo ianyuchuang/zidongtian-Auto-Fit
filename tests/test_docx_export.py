@@ -12,10 +12,11 @@ ROOT = Path(__file__).resolve().parent.parent
 SAMPLES = ROOT.parent / "需求及資訊來源" / "來源資料夾範例" / "帷幕骨架" / "4F"
 
 
-def _tiny_jpeg(path: Path, w=40, h=30):
-    """沒有範例照片時用 Pillow 做一張小圖。"""
+def _tiny_jpeg(path: Path, color, w=40, h=30):
+    """沒有範例照片時用 Pillow 做一張小圖。每張顏色不同——三張一模一樣的話
+    docx 會把它們去重成一張 media，媒體張數就會誤判失敗。"""
     PIL = pytest.importorskip("PIL.Image")
-    PIL.new("RGB", (w, h), (120, 160, 200)).save(path, "JPEG")
+    PIL.new("RGB", (w, h), color).save(path, "JPEG")
 
 
 def test_docx_layout_matches_v1(tmp_path):
@@ -23,9 +24,9 @@ def test_docx_layout_matches_v1(tmp_path):
     assert node, "需要 Node.js"
     photos = sorted(SAMPLES.glob("*.jpg"))[:3] if SAMPLES.is_dir() else []
     if not photos:
-        for i in range(3):
+        for i, color in enumerate([(200, 60, 60), (60, 200, 60), (60, 60, 200)]):
             p = tmp_path / f"p{i}.jpg"
-            _tiny_jpeg(p)
+            _tiny_jpeg(p, color)
             photos.append(p)
     out = tmp_path / "out.docx"
     r = subprocess.run(
