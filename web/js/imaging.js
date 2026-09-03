@@ -26,8 +26,29 @@ export async function makeThumbUrl(file, width = 120) {
   return URL.createObjectURL(await toBlob(c, 'image/jpeg', 0.8));
 }
 
-/** 依相對 bbox {x,y,w,h}（0–1）從原圖裁出白板區域（object URL）。 */
-export async function makeCropUrl(file, bbox) {
+/**
+ * bbox 外擴。模型回的框常常切到白板邊（實測 2026-09-03），對照圖看不到整塊板子，
+ * 所以四邊各外擴自身尺寸的 pad 倍，再夾回 0–1。
+ */
+export function padBbox(bbox, pad = CROP_PAD) {
+  const px = bbox.w * pad;
+  const py = bbox.h * pad;
+  const x = Math.max(0, bbox.x - px);
+  const y = Math.max(0, bbox.y - py);
+  return { x, y, w: Math.min(1 - x, bbox.w + px * 2), h: Math.min(1 - y, bbox.h + py * 2) };
+}
+
+export const CROP_PAD = 0.15;
+/** 框到整張（>90%）或小得不像一塊白板（<2%）就當作沒框到，不要拿去裁。 */
+export function usableBbox(bbox) {
+  if (!bbox) return false;
+  const area = bbox.w * bbox.h;
+  return area >= 0.02 && area <= 0.9;
+}
+
+/** 依相對 bbox {x,y,w,h}（0–1）從原圖裁出白板區域（object URL），四邊會先外擴。 */
+export async function makeCropUrl(file, rawBbox) {
+  const bbox = padBbox(rawBbox);
   const bmp = await bitmapOf(file);
   const sx = Math.max(0, Math.floor(bbox.x * bmp.width));
   const sy = Math.max(0, Math.floor(bbox.y * bmp.height));
