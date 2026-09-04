@@ -11,10 +11,20 @@ export function esc(s) {
 }
 
 /**
+ * Esc 能不能關掉這個對話框：沒有按鈕的（進度視窗）由呼叫端關，Esc 關掉會讓工作還在跑、
+ * 畫面卻已經解鎖（bug W6）；呼叫端也可用 dismissable:false 明講（例如辨識進度只能按「停止辨識」）。
+ */
+export function escapeCloses({ buttons = [], dismissable = null } = {}) {
+  if (dismissable != null) return !!dismissable;
+  return buttons.length > 0;
+}
+
+/**
  * 顯示對話框。buttons: [{label, value, primary}]；resolve 按下按鈕的 value（Esc → null）。
  * onOpen(dialogEl) 可用來綁事件；beforeClose(value, dialogEl) 回傳 false 可阻止關閉。
+ * dismissable：Esc 能不能關（預設：有按鈕才能）。
  */
-export function showDialog({ title, body = '', buttons = [{ label: '確定', value: true, primary: true }], onOpen, beforeClose }) {
+export function showDialog({ title, body = '', buttons = [{ label: '確定', value: true, primary: true }], onOpen, beforeClose, dismissable = null }) {
   const root = document.getElementById('dialog-root');
   let closeFn = () => {};
   const promise = new Promise((resolve) => {
@@ -40,7 +50,10 @@ export function showDialog({ title, body = '', buttons = [{ label: '確定', val
       btns.appendChild(btn);
     }
     const onKey = (e) => {
-      if (e.key === 'Escape') close(null);
+      if (e.key === 'Escape') {
+        if (escapeCloses({ buttons, dismissable })) close(null);
+        return;
+      }
       if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
         const p = buttons.find((b) => b.primary);
         if (p) {

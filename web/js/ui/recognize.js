@@ -338,6 +338,7 @@ export async function runRecognize(app) {
     title: '辨識中…',
     body: '<div id="pg">準備中</div><div class="progress-bar"><div style="width:0"></div></div><p class="small muted">辨識期間欄位會鎖住，避免打好的字被 AI 蓋掉。</p>',
     buttons: [{ label: '停止辨識', value: 'stop' }],
+    dismissable: false, // Esc 不能關：關了辨識還在跑、欄位卻解鎖、停止鈕也沒了（bug W6）
     onOpen: (d) => (box = d),
   });
   dlg.then((v) => v === 'stop' && app.stopRecognize());
