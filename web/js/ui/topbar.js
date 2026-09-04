@@ -1,7 +1,7 @@
-// 頂列：資料夾 / 板型 / 日期 pill、批次修改設計值、產生 Word 檔。
+// 頂列：資料夾 / 版型 pill、AI 辨識、批次修改設計值、產生 Word 檔。
+// 檢查日期不在這裡：每個資料夾各自一個，在表格的資料夾列上填。
 
-import { parseRocInput } from '../rocdate.js';
-import { esc, showDialog, alertDialog, confirmDialog, promptDialog, toast } from './dialog.js';
+import { esc, showDialog, alertDialog, confirmDialog, toast } from './dialog.js';
 import { runRecognize, engineLabel } from './recognize.js';
 
 export function mountTopbar(container, app) {
@@ -9,14 +9,12 @@ export function mountTopbar(container, app) {
 
   function render() {
     const { root, readOnly, template, recognizing } = app.state;
-    const d = app.dateInfo();
     const eng = engineLabel(app.state);
     const busy = recognizing ? 'disabled' : '';
     container.innerHTML = `
       <div class="brand" data-act="home" title="回首頁"><span>自懂填</span> Auto-Fit</div>
       <span class="pill" title="${esc(root?.name ?? '')}">🗀 資料夾 ${esc(root?.name ?? '')}${readOnly ? '（唯讀複本）' : ''}</span>
       <span class="pill" title="${esc(template?.name ?? '')}">📄 版型 ${template ? esc(template.name) : '預設（每頁 3 列 × 2 張）'}</span>
-      <span class="pill clickable" data-act="date" title="點選修改">📅 檢查日期 ${d.compact}</span>
       ${eng ? `<span class="pill engine" title="${esc(eng.title)}">🤖 ${esc(eng.text)}</span>` : ''}
       <span class="spacer"></span>
       <button class="btn" data-act="recognize" title="選辨識方式與提示詞，讓 AI 填三欄" ${busy}>🤖 AI 辨識</button>
@@ -29,22 +27,6 @@ export function mountTopbar(container, app) {
     if (act === 'home') {
       const ok = await confirmDialog('回首頁', '校對結果已暫存在瀏覽器裡，下次開同一個資料夾會接回來。要回首頁嗎？');
       if (ok) app.goHome();
-    } else if (act === 'date') {
-      const v = await promptDialog('修改檢查日期', {
-        label: '民國格式，例如 1150725',
-        value: app.dateInfo().compact,
-        validate: (x) => {
-          try {
-            parseRocInput(x);
-            return null;
-          } catch (err) {
-            return err.message;
-          }
-        },
-      });
-      if (v == null) return;
-      app.setDate(parseRocInput(v));
-      render();
     } else if (act === 'recognize') {
       await runRecognize(app);
     } else if (act === 'batch') {
@@ -116,7 +98,7 @@ async function exportWord(app) {
   const warn = plan.warnings.length ? `<p style="color:var(--yellow-text)">${plan.warnings.map(esc).join('<br>')}</p>` : '';
   const go = await showDialog({
     title: '產生 Word 檔',
-    body: `<p>每個資料夾各產生一份，存在該資料夾${app.state.readOnly ? '（唯讀模式改為下載）' : ''}，檔名「${esc(app.dateInfo().compact)} 資料夾名.docx」。</p><ul>${list}</ul>${trashed}${warn}`,
+    body: `<p>每個資料夾各產生一份，存在該資料夾${app.state.readOnly ? '（唯讀模式改為下載）' : ''}，檔名「該資料夾的檢查日期 + 資料夾名.docx」。</p><ul>${list}</ul>${trashed}${warn}`,
     buttons: [
       { label: '取消', value: false },
       { label: '產生', value: true, primary: true },

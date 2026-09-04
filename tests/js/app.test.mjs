@@ -211,3 +211,16 @@ test('setRecognizer：只發 engine，不發 page（回歸：按「開始辨識�
   assert.equal(app.state.engine, engineId('api', { provider: 'claude' }));
   assert.equal(app.state.prompt, '白板');
 });
+
+test('檢查日期：每個資料夾各一個，沒設過用今天，不合法要丟錯', async () => {
+  const { app } = await setup();
+  const today = app.dateInfo().compact;
+  assert.equal(app.dateInfo('4F').compact, today); // 沒設過 → 預設今天
+  app.setDirDate('4F', '1150725');
+  assert.equal(app.dateInfo('4F').compact, '1150725');
+  assert.equal(app.dateInfo('4F').display, '115年07月25日');
+  assert.equal(app.dateInfo('4F').stamp, '2026-07-25');
+  assert.equal(app.dateInfo('5F').compact, today); // 別的資料夾不受影響
+  assert.throws(() => app.setDirDate('5F', '115072'), /看不懂的日期|日期不存在/);
+  assert.equal(app.dateInfo('5F').compact, today);
+});

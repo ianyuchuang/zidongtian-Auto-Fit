@@ -1,6 +1,6 @@
 // 右欄：檢視器（大圖 + 日期戳、白板裁切、三欄同步編輯、跳過 / 確認）。
 
-import { STATUS_LABEL, TRASH_DIR, isTrashDir, isTrashed, ownerOfTrash } from '../state.js';
+import { STATUS_LABEL, TRASH_DIR, isTrashDir, isTrashed, ownerOfTrash, groupDirOf } from '../state.js';
 import { usableBbox } from '../imaging.js';
 import { esc, toast, confirmDialog } from './dialog.js';
 import { reportMove } from './dnd.js';
@@ -49,7 +49,7 @@ export function mountViewer(container, app) {
         <span class="badge ${isTrashed(p) ? 'trashed' : p.status}">${isTrashed(p) ? '已刪除' : STATUS_LABEL[p.status]}</span>
         <span class="nav"><button data-nav="-1" title="上一張">‹</button><button data-nav="1" title="下一張">›</button></span>
       </div>
-      <div class="big"><img alt=""><span class="stamp">${esc(app.dateInfo().stamp)}</span></div>
+      <div class="big"><img alt=""><span class="stamp">${esc(app.dateInfo(groupDirOf(p)).stamp)}</span></div>
       <div class="off-filter small muted" hidden>這張目前不在篩選結果中</div>
       <div class="err small" ${p.status === 'error' ? '' : 'hidden'}>❌ ${esc(p.error ?? '')}</div>
       <div class="warn-note small" ${p.warn ? '' : 'hidden'}>⚠ ${esc(p.warn ?? '')}</div>
@@ -250,8 +250,9 @@ export function mountViewer(container, app) {
 
   const unsubscribe = app.subscribe((what) => {
     if (what === 'date') {
+      const p = app.photo(app.state.selectedId);
       const s = container.querySelector('.stamp');
-      if (s) s.textContent = app.dateInfo().stamp;
+      if (s && p) s.textContent = app.dateInfo(groupDirOf(p)).stamp; // 日期跟著該照片的資料夾
     } else if (what === 'selection' || what === 'page' || what === 'photos' || what === 'recognize-progress' || what === 'filter') {
       render();
     }

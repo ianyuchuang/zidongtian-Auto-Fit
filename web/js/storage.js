@@ -63,3 +63,31 @@ export function applySaved(photos, saved, { engine = null } = {}) {
 export function clearSaved(rootName, store = globalThis.localStorage) {
   store?.removeItem(storageKey(rootName));
 }
+
+// ---------- 各資料夾的檢查日期 ----------
+// 日期跟著資料夾走（每個資料夾各出一份 docx，日期可以不同），與校對暫存分開存。
+
+export const datesKey = (rootName) => `${PREFIX}dates:${rootName}`;
+
+/** { '4F': '1150725', … }；壞掉或沒有就回空物件。 */
+export function loadDates(rootName, store = globalThis.localStorage) {
+  try {
+    const raw = store?.getItem(datesKey(rootName));
+    const v = raw ? JSON.parse(raw) : null;
+    if (!v || typeof v !== 'object') return {};
+    const out = {};
+    for (const [k, s] of Object.entries(v)) if (typeof s === 'string' && /^\d{7}$/.test(s)) out[k] = s;
+    return out;
+  } catch (e) {
+    console.warn('讀取日期暫存失敗', e);
+    return {};
+  }
+}
+
+export function saveDates(rootName, dates, store = globalThis.localStorage) {
+  try {
+    store?.setItem(datesKey(rootName), JSON.stringify(dates));
+  } catch (e) {
+    console.warn('寫入日期暫存失敗', e);
+  }
+}

@@ -73,3 +73,21 @@ test('loadSaved：壞掉的 JSON 回空物件', () => {
   st.setItem(storageKey('r'), '{bad');
   assert.deepEqual(loadSaved('r', st), {});
 });
+
+test('各資料夾的檢查日期：存、讀、擋掉壞資料', async () => {
+  const { loadDates, saveDates, datesKey } = await import('../../web/js/storage.js');
+  const m = new Map();
+  const store = {
+    getItem: (k) => (m.has(k) ? m.get(k) : null),
+    setItem: (k, v) => m.set(k, String(v)),
+    removeItem: (k) => m.delete(k),
+  };
+  saveDates('帷幕骨架', { '4F': '1150725', '5F': '1150801' }, store);
+  assert.equal(m.has(datesKey('帷幕骨架')), true);
+  assert.deepEqual(loadDates('帷幕骨架', store), { '4F': '1150725', '5F': '1150801' });
+  assert.deepEqual(loadDates('別的資料夾', store), {});
+  store.setItem(datesKey('壞的'), '{不是 JSON');
+  assert.deepEqual(loadDates('壞的', store), {});
+  store.setItem(datesKey('怪值'), JSON.stringify({ '4F': '115', '5F': 1150801, '6F': '1150801' }));
+  assert.deepEqual(loadDates('怪值', store), { '6F': '1150801' }); // 只留 7 碼字串
+});

@@ -97,7 +97,10 @@ export function mountTable(container, app) {
       const gtr = document.createElement('tr');
       gtr.className = `group ${collapsed.has(d.path) ? 'collapsed' : ''}`;
       gtr.dataset.dir = d.path;
-      gtr.innerHTML = `<td colspan="7"><span class="toggle">▾</span> 🗀 ${esc(d.path || d.name)}<span class="n">${live} 張${gone ? `・已刪除 ${gone}` : ''}</span></td>
+      gtr.innerHTML = `<td colspan="7"><span class="toggle">▾</span> 🗀 ${esc(d.path || d.name)}<span class="n">${live} 張${gone ? `・已刪除 ${gone}` : ''}</span>
+          <label class="dir-date" title="這個資料夾的檢查日期：docx 檔名、頁首日期、照片日期戳都用它">📅 檢查日期
+            <input type="text" data-dir-date value="${esc(app.dateInfo(d.path).compact)}" maxlength="9" size="8">
+          </label></td>
         <td class="chk"><input type="checkbox" data-chk-group tabindex="-1" title="全選 / 取消這個資料夾顯示中的照片"></td>`;
       tbody.appendChild(gtr);
       if (collapsed.has(d.path)) continue;
@@ -248,6 +251,7 @@ export function mountTable(container, app) {
   });
   tbody.addEventListener('click', (e) => {
     if (e.target.matches('input[type="checkbox"]')) return; // 勾選不觸發選列 / 收合
+    if (e.target.closest('.dir-date')) return; // 在日期格裡點不要收合資料夾
     const restoreBtn = e.target.closest('[data-act="restore"]');
     if (restoreBtn) {
       bulkRestore([restoreBtn.closest('tr.photo').dataset.id]);
@@ -264,6 +268,19 @@ export function mountTable(container, app) {
   tbody.addEventListener('focusin', (e) => {
     const tr = e.target.closest('tr.photo');
     if (tr && e.target.tagName === 'INPUT' && e.target.type === 'text') app.select(tr.dataset.id);
+  });
+  tbody.addEventListener('change', (e) => {
+    const el = e.target;
+    if (!el.matches('[data-dir-date]')) return;
+    const dir = el.closest('tr.group').dataset.dir;
+    try {
+      app.setDirDate(dir, el.value.replace(/\D/g, ''));
+      el.value = app.dateInfo(dir).compact;
+    } catch (err) {
+      toast(err.message, { error: true });
+      el.value = app.dateInfo(dir).compact; // 大聲失敗：退回原本的日期，不要靜靜存個壞的
+      el.focus();
+    }
   });
   tbody.addEventListener('input', (e) => {
     const tr = e.target.closest('tr.photo');
