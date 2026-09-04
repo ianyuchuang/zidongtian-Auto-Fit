@@ -316,16 +316,15 @@ td.conf { color: var(--muted); text-align: right; }
 }
 .tp-text { display: flex; flex-direction: column; justify-content: center; gap: 1px; }
 .tp-line { display: flex; align-items: baseline; gap: 2px; min-width: 0; position: relative; }
-/* 把手與刪除鈕用絕對定位疊上去，不佔欄寬（不然下拉會被擠到看不見字）。
-   ×排在下拉箭頭的左邊——欄位名是靠左的，右半通常是空的，才不會蓋到字或箭頭 */
+/* 把手疊在左邊不佔寬（不然下拉會被擠到看不見字）；× 排在下拉箭頭的右邊外側，
+   固定佔一小格寬度，兩顆都只有滑過去才顯示 */
 .tp-grip, .tp-del {
-  position: absolute; top: 50%; transform: translateY(-50%); z-index: 1;
   opacity: 0; font-family: var(--font); color: var(--muted); border: 0;
   background: rgba(255,255,255,.92); border-radius: 3px;
   padding: 0 2px; font-size: 11px; line-height: 1.4; cursor: grab;
 }
-.tp-grip { left: -3px; }
-.tp-del { right: 20px; cursor: pointer; font-size: 13px; }
+.tp-grip { position: absolute; top: 50%; left: -3px; transform: translateY(-50%); z-index: 1; }
+.tp-del { flex: none; width: 14px; text-align: center; padding: 0; cursor: pointer; font-size: 13px; }
 .tp-line:hover .tp-grip, .tp-line:hover .tp-del { opacity: 1; }
 .tp-del:hover { color: var(--red-text); }
 .tp-label:empty { min-width: 10px; }
