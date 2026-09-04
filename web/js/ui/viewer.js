@@ -24,6 +24,7 @@ export function mountViewer(container, app) {
   container.className = 'viewer';
   let currentId = null;
   let zoomKind = null; // 燈箱正在看哪張圖：'big' | 'crop' | null
+  let zoomToken = null; // 目前這次開燈箱的識別，onClose 用來確認關的是不是自己
   // 每次換照片就 +1。非同步載圖回來時用它判斷有沒有過期——不能用 p.id，
   // 因為搬移資料夾時 app 會就地改掉 p.id，導致回呼永遠對不上、圖片停在沒有 src 的狀態。
   let viewSeq = 0;
@@ -195,13 +196,17 @@ export function mountViewer(container, app) {
     if (zoomable && zoomable.getAttribute('src')) {
       const p = app.photo(currentId);
       const kind = zoomable.closest('.crop') ? 'crop' : 'big';
-      zoomKind = kind;
+      // openLightbox 會先關掉上一個燈箱 → 觸發它的 onClose 把 zoomKind 清成 null，
+      // 所以 zoomKind 要在開完之後才設，否則 ‹ › 換照片時燈箱不會跟著換圖（bug W8）。
+      const token = {};
+      zoomToken = token;
       openLightbox(zoomable.src, {
         title: zoomTitle(p, kind),
         onClose: () => {
-          zoomKind = null;
+          if (zoomToken === token) zoomKind = null; // 只清自己那一次的，別把後開的燈箱的種類清掉
         },
       });
+      zoomKind = kind;
       return;
     }
     const nav = e.target.closest('[data-nav]');
