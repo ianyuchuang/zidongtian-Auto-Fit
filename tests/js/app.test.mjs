@@ -437,3 +437,15 @@ test('restore：搬回原本的位置，不是排到最後（回歸 W17）', asy
   assert.deepEqual(ids(), ['4F/a.jpg', '4F/b.jpg'], 'a 要回到 b 前面');
   assert.equal(app.photo('4F/a.jpg').homeOrder, undefined);
 });
+
+test('stepSelection：目前選的不在篩選結果裡 → 下一張是第一張、上一張是最後一張（回歸 W18）', async () => {
+  const { app } = await setup();
+  app.select('5F/c.jpg');
+  app.setDirFilter('4F'); // 5F/c 被篩掉
+  assert.equal(app.stepSelection(1), true);
+  assert.equal(app.state.selectedId, '4F/a.jpg', '不能跳過第一張');
+  app.select('5F/c.jpg');
+  assert.equal(app.stepSelection(-1), true);
+  assert.equal(app.state.selectedId, '4F/b.jpg');
+  assert.equal(app.stepSelection(1), false, '到尾了');
+});

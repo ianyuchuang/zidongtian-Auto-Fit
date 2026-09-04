@@ -405,7 +405,9 @@ export function createApp() {
       const list = app.visiblePhotos();
       if (!list.length) return false;
       const i = list.findIndex((p) => p.id === state.selectedId);
-      const j = (i < 0 ? 0 : i) + delta;
+      // 目前選的不在篩選結果裡（例如被篩掉）：下一張＝結果的第一張、上一張＝最後一張，
+      // 不能當成第 0 張再 +1 而跳過第一張（bug W18）
+      const j = i < 0 ? (delta > 0 ? 0 : list.length - 1) : i + delta;
       if (j < 0 || j >= list.length) return false;
       app.select(list[j].id);
       return true;
