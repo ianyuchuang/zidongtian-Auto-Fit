@@ -157,6 +157,8 @@ input[type="text"]:focus, input[type="password"]:focus, textarea:focus { outline
 .dialog .radios label { display: block; padding: 3px 0; }
 .dialog .radios label.disabled { color: var(--muted); }
 .dialog textarea { width: 100%; border: 1px solid var(--line); border-radius: var(--radius); padding: 8px; margin-top: 6px; resize: vertical; font: inherit; }
+/* 提示詞：預設就有五行說明，欄位太矮要一直捲；給一個下限，仍可自己拉高拉低 */
+.dialog #rec-prompt { min-height: 200px; line-height: 1.5; }
 .dialog .api-panel { margin: 10px 0; }
 /* scrollbar-gutter：捲軸出現／消失不會讓整張表左右位移 */
 .table-wrap { flex: 1; overflow: auto; scrollbar-gutter: stable; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }

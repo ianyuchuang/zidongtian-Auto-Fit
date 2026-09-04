@@ -213,7 +213,7 @@ async function askSettings(app) {
       </div>
 
       <div class="opt"><label for="rec-prompt">提示詞（白板欄位位置；預設已填好，可直接修改；清空則用預設）</label>
-        <textarea id="rec-prompt" rows="3">${esc(DEFAULT_PROMPT)}</textarea></div>
+        <textarea id="rec-prompt" rows="10">${esc(DEFAULT_PROMPT)}</textarea></div>
 
       <div class="opt"><label for="rec-scope">辨識範圍
         <select id="rec-scope">
