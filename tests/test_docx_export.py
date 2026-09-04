@@ -45,12 +45,13 @@ def _build(tmp_path, photos, spec=None, template=None, name="out.docx"):
     ]
 
 
-def _photos(tmp_path):
-    photos = sorted(SAMPLES.glob("*.jpg"))[:3] if SAMPLES.is_dir() else []
-    if not photos:
-        for i, color in enumerate([(200, 60, 60), (60, 200, 60), (60, 60, 200)]):
+def _photos(tmp_path, n=3):
+    photos = sorted(SAMPLES.glob("*.jpg"))[:n] if SAMPLES.is_dir() else []
+    if len(photos) < n:
+        photos = []
+        for i in range(n):
             p = tmp_path / f"p{i}.jpg"
-            _tiny_jpeg(p, color)
+            _tiny_jpeg(p, ((37 * i + 60) % 256, (91 * i + 60) % 256, (151 * i + 60) % 256))
             photos.append(p)
     return photos
 
@@ -221,11 +222,26 @@ def test_body_heading_repeats_on_every_page(tmp_path):
     assert len(media) == 3
 
 
-def test_header_heading_stays_one_table(tmp_path):
-    """抬頭在頁首時維持整份一張表（Word 自己每頁重印），不要被上面的改動拆開。"""
+def test_header_heading_one_page_one_table(tmp_path):
+    """抬頭在頁首：一頁塞得下就只有一張表、沒有分頁。"""
     z, doc, media = _build(tmp_path, _photos(tmp_path))
     assert doc.count("<w:tbl>") == 1
     assert "<w:pageBreakBefore" not in doc
+
+
+def test_header_heading_2x2_breaks_every_page(tmp_path):
+    """回歸（2026-09-04）：2 列 × 2 張的版型（抬頭在頁首）輸出後仍是 3 × 2。
+    原本抬頭在頁首時整份一張表，列高 6.7cm 的話 A4 塞得下 3 列，Word 就自己排成 3 列。
+    現在每頁幾張由 spec.grid 決定：一頁一張表、表格之間強制分頁。"""
+    z, doc, media = _build(tmp_path, _photos(tmp_path, 5), template="d-portrait-2x2", name="d2x2.docx")
+    hdr = z.read(next(n for n in z.namelist() if re.match(r"word/header\d*\.xml", n))).decode("utf-8")
+
+    assert "施工自主檢查照片(檢查日期：115年07月25日)" in hdr    # 抬頭仍在頁首
+    assert doc.count("<w:tbl>") == 2                              # 5 張、每頁 4 張 → 2 頁 2 張表（原本整份 1 張）
+    assert doc.count("<w:pageBreakBefore") == 1                   # 第 2 頁強制分頁
+    assert doc.count("<w:tr>") + doc.count("<w:tr ") == 2 * 2 + 1 * 2  # 2＋1 個區塊列 × 每區塊 2 列
+    assert "內容說明：說明5" in doc
+    assert len(media) == 5
 def test_multi_field_line_joins_with_typed_text(tmp_path):
     """同一行放多個欄位、中間用打的字隔開（有些自檢表是逗號分隔）：
     要串成同一個段落，值是空的也照原樣印，分隔的逗號不會自己消失。"""

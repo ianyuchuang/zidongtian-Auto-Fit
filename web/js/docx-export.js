@@ -134,18 +134,19 @@ export async function buildDocxBlob(group, { spec = defaultSpec(), rocDisplay, r
     );
   const inHeader = spec.heading?.place !== 'body';
 
-  // 抬頭在頁首：Word 自己每頁重印，整份一張表就好。
-  // 抬頭在內文：一頁一張表，每張表前面各放一組抬頭。
+  // 一律一頁一張表、第 2 頁起強制分頁：每頁幾張由 spec.grid 決定，不交給 Word 依高度自己排。
+  // （2026-09-04 修：抬頭在頁首時原本整份一張表，2 列 × 2 張的版型列高只有 6.7cm，
+  //   A4 塞得下 3 列，Word 就自己排成 3 × 2。）
+  // 抬頭在內文：每張表前面各放一組抬頭，分頁掛在抬頭第一段。
+  // 抬頭在頁首：表格之間放一個 1pt 的空段落掛分頁（Word 的分頁只能掛在段落上，
+  //   而且兩張表中間沒有段落的話 Word 會把它們併成同一張表）。
   const children = [];
-  if (inHeader) {
-    children.push(makeTable(pages.flat()));
-  } else {
-    const list = pages.length ? pages : [[]];
-    list.forEach((page, i) => {
-      children.push(...headingParas({ pageBreakBefore: i > 0 }));
-      children.push(makeTable(page));
-    });
-  }
+  const list = pages.length ? pages : [[]];
+  list.forEach((page, i) => {
+    if (!inHeader) children.push(...headingParas({ pageBreakBefore: i > 0 }));
+    else if (i > 0) children.push(textPara(spec, '', 2, { pageBreakBefore: true }));
+    children.push(makeTable(page));
+  });
 
   // docx 函式庫在 landscape 時會自己把長寬對調，所以這裡要餵「轉正前」的尺寸。
   const landscape = spec.page.orient === 'landscape';

@@ -47,6 +47,7 @@ NAMES = {
     "1150614 輕隔間尺寸11F.docx": "a-portrait-3x2",
     "D棟3樓.docx": "b-landscape-5rows",
     "電氣設備 材料進場自檢(照片).docx": "c-portrait-label-cell",
+    "1150614 輕隔間尺寸11F(2x2).docx": "d-portrait-2x2",
 }
 
 # 段落文字的匿名規則（照順序，第一條命中就停）；只換值，不動欄位名。

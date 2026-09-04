@@ -1,4 +1,4 @@
-// 版型解析：三份樣本（tests/fixtures/版型/，由 tools/make_template_fixtures.py 產生）。
+// 版型解析：四份樣本（tests/fixtures/版型/，由 tools/make_template_fixtures.py 產生）。
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
@@ -163,4 +163,19 @@ test('解析出來的說明格一律靠左、垂直置中（不照樣本的靠�
     assert.equal(cell.vAlign, 'center', cell.kind);
     assert.equal(cell.align, cell.kind === 'photo' ? 'center' : 'left');
   }
+});
+
+test('d：同 a 的版面但每頁 2 列 × 2 張（2026-09-04 回歸：輸出曾被 Word 排成 3 × 2）', () => {
+  const s = load('d-portrait-2x2');
+  assert.deepEqual(s.unknown, []);
+  assert.deepEqual(validateSpec(s), []);
+  assert.equal(s.grid.perRow, 2);
+  assert.equal(s.grid.blockRows, 2);
+  assert.equal(s.heading.place, 'header');
+  assert.equal(s.block.rows[0].h, 3798);
+  assert.deepEqual(labels(s), [['照片'], ['內容說明：|desc,設    計：|design,實    際：|actual']]);
+  // 5 張 → 2 頁（4＋1），第 2 頁只剩一列
+  const pages = layoutPages(s, [1, 2, 3, 4, 5]);
+  assert.equal(pages.length, 2);
+  assert.equal(pages[1].length, 1);
 });
