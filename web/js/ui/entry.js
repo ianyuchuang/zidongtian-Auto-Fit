@@ -167,6 +167,10 @@ export function mountEntry(container, app) {
         clearLastRoot();
         el.hidden = true;
       });
+    }).catch((e) => {
+      // IndexedDB 撈不到、或 ensurePermission 被拒（handle 已失效）都不該炸成 unhandled rejection；
+      // 「上次的資料夾」只是方便功能，拿不到就當沒有，入口頁照常能用。
+      console.warn('帶回上次的資料夾失敗：', e);
     });
   }
 
