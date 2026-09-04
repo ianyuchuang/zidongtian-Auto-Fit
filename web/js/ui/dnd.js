@@ -61,3 +61,15 @@ export function classifyDrop({ isDirectory = false, fileName = null } = {}) {
   if (fileName) return 'other-file';
   return 'unsupported';
 }
+
+/**
+ * 把拖進來的 item 整理成 classifyDrop 要的形狀（純邏輯，好測）。
+ * handle：getAsFileSystemHandle 的結果（只有安全內容環境才有）；entry：webkitGetAsEntry 的結果；
+ * fileName：dt.files[0].name。http 內網位址沒有 handle，Chrome 會把資料夾當成同名的 File
+ * 放進 dt.files，只看 fileName 會誤判成「其他檔案」而拒收（2026-09-04 同事內網回報），
+ * 所以有 handle 看 handle.kind，沒有就看 entry.isDirectory。
+ */
+export function dropKind({ handle = null, entry = null, fileName = null } = {}) {
+  const isDirectory = handle ? handle.kind === 'directory' : entry?.isDirectory === true;
+  return { isDirectory, fileName: handle?.name ?? entry?.name ?? fileName };
+}

@@ -108,6 +108,41 @@ function mkError(name, message) {
 }
 
 /**
+ * 從拖放的 FileSystemDirectoryEntry（item.webkitGetAsEntry()）遞迴建立記憶體目錄樹。
+ * 用途：http 內網位址不是安全內容環境，沒有 getAsFileSystemHandle，拖資料夾只能走這條唯讀路。
+ * webkitGetAsEntry 必須在任何 await 之前同步呼叫（DataTransfer 在事件結束後就失效），
+ * 這裡只負責讀。readEntries 一次最多回 100 筆，要反覆呼叫直到回空陣列才算讀完；空資料夾也保留。
+ */
+export async function memoryTreeFromEntry(entry) {
+  if (!entry?.isDirectory) throw new Error(`不是資料夾：${entry?.name ?? '(空)'}`);
+  const root = new MemoryDirectoryHandle(entry.name);
+  await fillFromEntry(root, entry);
+  return root;
+}
+
+async function readAllEntries(dirEntry) {
+  const reader = dirEntry.createReader();
+  const all = [];
+  for (;;) {
+    const batch = await new Promise((resolve, reject) => reader.readEntries(resolve, reject));
+    if (!batch.length) return all;
+    all.push(...batch);
+  }
+}
+
+async function fillFromEntry(dir, dirEntry) {
+  for (const e of await readAllEntries(dirEntry)) {
+    if (e.isDirectory) {
+      const sub = new MemoryDirectoryHandle(e.name, dir);
+      dir._entries.set(e.name, sub);
+      await fillFromEntry(sub, e);
+    } else if (e.isFile) {
+      dir.putFile(e.name, await new Promise((resolve, reject) => e.file(resolve, reject)));
+    }
+  }
+}
+
+/**
  * 從 <input webkitdirectory> 的 FileList 建立記憶體目錄樹。
  * 每個 file.webkitRelativePath 形如 '根/子/檔.jpg'。
  */

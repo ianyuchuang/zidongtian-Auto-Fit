@@ -2,21 +2,27 @@
 // 檢查日期改在工作台的資料夾列各自填；AI 辨識在工作台頂列（ui/recognize.js）。
 // 版型的讀取與調整在版型調整頁（ui/template-page.js），這裡只顯示目前選了哪一份。
 
-import { memoryTreeFromFileList, MemoryDirectoryHandle } from '../fs/memory.js';
+import { memoryTreeFromFileList, memoryTreeFromEntry, MemoryDirectoryHandle } from '../fs/memory.js';
 import { scanTree, describeTree, treeSummaryText } from '../fs/adapter.js';
 import { saveLastRoot, loadLastRoot, clearLastRoot, ensurePermission } from '../fs/handle-store.js';
 import { esc, toast } from './dialog.js';
-import { bindFileDrop, classifyDrop } from './dnd.js';
+import { bindFileDrop, classifyDrop, dropKind } from './dnd.js';
 import { listTemplates, getTemplate, rememberFor, lastFor } from '../template/library.js';
 
 const FS_OK = typeof globalThis.showDirectoryPicker === 'function';
+// http://<內網IP>:8765 不是安全內容環境，Chrome 會把 File System Access API 整個藏起來；
+// 這時候不是瀏覽器不對，是要設一次旗標（docs/內網測試.md）。
+const INSECURE = globalThis.isSecureContext === false;
+const NO_FS_WHY = INSECURE
+  ? '這個網址不是安全來源（http 內網位址），Chrome 不開放直接讀寫資料夾；請照 docs/內網測試.md 設一次 Chrome 旗標。'
+  : '這個瀏覽器不支援直接讀寫資料夾（請用 Chrome 或 Edge）。';
 
 export function mountEntry(container, app) {
   container.innerHTML = `
   <div class="entry"><div class="entry-card">
     <h1><span>自懂填</span> Auto-Fit</h1>
     <p class="lead muted">選照片資料夾 → 選版型 → 開始讀取。檢查日期與 AI 辨識都在下一頁（工作台）處理。照片只在這台電腦的瀏覽器裡處理，不會上傳。</p>
-    ${FS_OK ? '' : '<div class="warn">這個瀏覽器不支援直接讀寫資料夾（請用 Chrome 或 Edge）。目前只能以唯讀複本開啟：可以校對與下載 Word，但拖曳搬移不會真的動到檔案。</div>'}
+    ${FS_OK ? '' : `<div class="warn">${NO_FS_WHY}目前只能以唯讀複本開啟：可以校對與下載 Word，但拖曳搬移不會真的動到檔案。</div>`}
 
     <div class="field">
       <span class="label">照片資料夾</span>
@@ -193,13 +199,22 @@ export function mountEntry(container, app) {
   // ---- 拖放 ----
   // 拖進來的東西自己判斷是「照片資料夾」還是「版型 docx」，整張入口頁都接得住，
   // 拖歪了也不會白忙一場（頁面沒接住的話瀏覽器會去開檔案，畫面就變空白）。
+  // 非安全來源（http 內網位址）沒有 getAsFileSystemHandle，退回 webkitGetAsEntry 讀成唯讀複本，
+  // 不能再像以前那樣把它當成「其他檔案」拒收（2026-09-04 同事內網回報拖資料夾沒反應／跳空白頁）。
   async function handleDrop(dt) {
     const file = dt.files?.[0]; // DataTransfer 在 await 之後會失效，先取起來
     const item = dt.items?.[0];
+    const entry = typeof item?.webkitGetAsEntry === 'function' ? item.webkitGetAsEntry() : null; // 也要在 await 之前
     let handle = null;
     if (item && typeof item.getAsFileSystemHandle === 'function') handle = await item.getAsFileSystemHandle();
-    switch (classifyDrop({ isDirectory: handle?.kind === 'directory', fileName: file?.name ?? null })) {
+    switch (classifyDrop(dropKind({ handle, entry, fileName: file?.name ?? null }))) {
       case 'folder':
+        if (!handle) {
+          const h = await memoryTreeFromEntry(entry);
+          setFolder(h, true, h.name);
+          toast('這個網址不是安全來源，資料夾以唯讀複本開啟（可校對、下載 Word，不會搬動檔案）。要直接讀寫請照 docs/內網測試.md 設 Chrome 旗標。', { ms: 8000 });
+          return;
+        }
         if ((await handle.requestPermission?.({ mode: 'readwrite' })) === 'denied') {
           toast('沒有取得資料夾的寫入權限', { error: true });
           return;
