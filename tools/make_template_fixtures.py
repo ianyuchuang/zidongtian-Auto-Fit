@@ -61,18 +61,26 @@ SUBS = [
     (r"^EMT.*$", "範例說明"),
 ]
 
+# 表格「值」的收尾規則：不是欄位名、不是日期的一律換掉，免得實際案子的內容漏進 fixture。
+# 只套用在表格裡的段落——抬頭（工程名、標題）由上面的 SUBS 處理，才不會把標題也吃掉。
+CATCH_ALL = (
+    r"^(?!範例)(?!.*[：:]$)(?![\d\s.\-/年月日]+$)"
+    r"(?!照片編號$)(?!拍照日期$)(?!圖片說明$)(?!內容說明$)(?!說明$).+$",
+    "範例說明",
+)
+
 DROP_ATTRS = re.compile(
     r'\s(?:w:rsid[A-Za-z]*|w14:paraId|w14:textId|wp14:anchorId|wp14:editId)="[^"]*"'
 )
 
 
-def anonymize(p):
+def anonymize(p, catch_all=False):
     """段落套匿名規則；有換過就把文字集中到第一個 run，其餘清空（保留 run 結構）。"""
     ts = list(p.iter(W + "t"))
     if not ts:
         return
     text = "".join(t.text or "" for t in ts)
-    for pat, rep in SUBS:
+    for pat, rep in [*SUBS, *([CATCH_ALL] if catch_all else [])]:
         new = re.sub(pat, rep, text)
         if new != text:
             ts[0].text = new
@@ -92,8 +100,9 @@ def extract(src: Path, dst: Path):
     dst.mkdir(parents=True, exist_ok=True)
 
     doc = ET.fromstring(z.read("word/document.xml"))
+    in_table = {id(p) for t in doc.iter(W + "tbl") for p in t.iter(W + "p")}
     for p in doc.iter(W + "p"):
-        anonymize(p)
+        anonymize(p, catch_all=id(p) in in_table)
     write_xml(doc, dst / "document.xml")
 
     rels = ET.fromstring(z.read("word/_rels/document.xml.rels"))
