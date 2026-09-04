@@ -241,11 +241,13 @@ export function createApp() {
      * 進行中會發 'recognize-progress'（給進度條用）；stopRecognize() 可中止。
      * 送出前先記下三欄與狀態，回來時若跟當初不一樣代表使用者自己動過了，
      * 就只補 bbox / 信心，不覆蓋他打的字與「已確認」（回歸：bug清單 A1）。
+     * 排隊時就已經「已確認」的一律不重跑，除非呼叫端明講 includeConfirmed（介面規格的勾選項）；
+     * 呼叫端算範圍時漏掉這條也不會把校對成果洗掉（bug W5）。
      */
-    async recognizeAll({ photos = null } = {}) {
+    async recognizeAll({ photos = null, includeConfirmed = false } = {}) {
       if (state.recognizing) return { done: 0, failed: [], stopped: false };
       const rec = getRecognizer(state.recognizerId);
-      const targets = (photos ?? app.pendingPhotos()).filter((p) => !isTrashed(p));
+      const targets = (photos ?? app.pendingPhotos()).filter((p) => !isTrashed(p) && (includeConfirmed || p.status !== STATUS.CONFIRMED));
       if (!targets.length) return { done: 0, failed: [], stopped: false };
       const queue = targets.map((p) => ({ p, before: { status: p.status, desc: p.desc, design: p.design, actual: p.actual } }));
       const progress = { done: 0, total: queue.length, stop: false, name: '' };

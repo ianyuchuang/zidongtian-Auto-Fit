@@ -5,7 +5,7 @@ import { RECOGNIZERS, DEFAULT_PROMPT } from '../recognizer/index.js';
 import { PROVIDERS, getProvider } from '../recognizer/api/providers.js';
 import { loadApiKeys, saveApiKeys } from '../recognizer/api/keys.js';
 import { testConnection, listModels } from '../recognizer/api/call.js';
-import { isTrashed } from '../state.js';
+import { STATUS, isTrashed } from '../state.js';
 import { esc, showDialog, alertDialog, toast } from './dialog.js';
 
 /** 目前引擎的顯示文字（頂列 pill 用）。沒設定過回 null。 */
@@ -48,7 +48,19 @@ async function showApiGuide(p) {
 }
 
 /**
- * 開設定對話框。回傳 { recognizerId, api, prompt, photos } 或 null（取消）。
+ * 辨識範圍 → 這次要辨識的照片。三種範圍都遵守同一條規則：
+ * 「已確認」的只有勾了「連已確認的也一起重跑」才會排進去（介面規格：另有勾選項才會連已確認的一起重跑）；
+ * 之前「目前勾選的」沒套這條，勾到已確認的照片會被 AI 直接洗掉（bug W5）。
+ */
+export function scopePhotos(app, scope, { includeConfirmed = false } = {}) {
+  if (scope === 'pending') return app.pendingPhotos();
+  if (scope === 'all') return app.redoablePhotos({ includeConfirmed });
+  if (scope === 'checked') return app.checkedPhotos().filter((p) => !isTrashed(p) && (includeConfirmed || p.status !== STATUS.CONFIRMED));
+  throw new Error(`沒有這種辨識範圍：${scope}`);
+}
+
+/**
+ * 開設定對話框。回傳 { recognizerId, api, prompt, photos, includeConfirmed } 或 null（取消）。
  * photos＝這次要辨識的照片陣列。
  */
 async function askSettings(app) {
@@ -298,17 +310,12 @@ async function askSettings(app) {
       }
       const scope = d.querySelector('#rec-scope').value;
       const includeConfirmed = d.querySelector('#rec-confirmed').checked;
-      const photos =
-        scope === 'checked'
-          ? app.checkedPhotos().filter((p) => !isTrashed(p))
-          : scope === 'all'
-            ? app.redoablePhotos({ includeConfirmed })
-            : app.pendingPhotos();
+      const photos = scopePhotos(app, scope, { includeConfirmed });
       if (!photos.length) {
-        toast('這個範圍沒有照片可以辨識', { error: true });
+        toast(scope === 'checked' && !includeConfirmed ? '勾選的都已確認；要重跑請勾「連已確認的也一起重跑」' : '這個範圍沒有照片可以辨識', { error: true });
         return false;
       }
-      picked = { recognizerId, api, prompt: d.querySelector('#rec-prompt').value.trim(), photos };
+      picked = { recognizerId, api, prompt: d.querySelector('#rec-prompt').value.trim(), photos, includeConfirmed };
       return true;
     },
   });
@@ -343,7 +350,7 @@ export async function runRecognize(app) {
   });
 
   try {
-    const r = await app.recognizeAll({ photos: picked.photos });
+    const r = await app.recognizeAll({ photos: picked.photos, includeConfirmed: picked.includeConfirmed });
     const parts = [`辨識完成 ${r.done} / ${r.total} 張`];
     if (r.stopped) parts.push('（已停止）');
     if (r.kept?.length) parts.push(`；${r.kept.length} 張你已經填過或確認過，保留原本的內容`);

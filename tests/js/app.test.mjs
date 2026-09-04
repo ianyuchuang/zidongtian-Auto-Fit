@@ -351,3 +351,27 @@ test('open：入口頁沒帶辨識設定 → 沿用上次選的方式／金鑰�
   assert.equal(app.state.prompt, '');
   assert.equal(app.state.engine, 'mock');
 });
+
+test('recognizeAll：排隊時已經「已確認」的不重跑，除非明講 includeConfirmed（回歸 W5）', async () => {
+  const { scopePhotos } = await import('../../web/js/ui/recognize.js');
+  const { app } = await setup();
+  app.state.recognizerId = 'mock';
+  app.state.engine = 'mock';
+  const done = app.state.photos[0];
+  app.setField(done.id, 'desc', '校對過的');
+  app.confirm(done.id);
+  app.setChecked([done.id, app.state.photos[1].id], true);
+  assert.deepEqual(scopePhotos(app, 'checked').map((p) => p.id), [app.state.photos[1].id], '「目前勾選的」也要排除已確認');
+  assert.equal(scopePhotos(app, 'checked', { includeConfirmed: true }).length, 2);
+  assert.throws(() => scopePhotos(app, 'nope'), /沒有這種辨識範圍/);
+  // 就算呼叫端硬塞已確認的照片進來，沒有 includeConfirmed 也不能洗掉
+  const r = await app.recognizeAll({ photos: [done, app.state.photos[1]] });
+  assert.equal(r.total, 1);
+  assert.equal(done.desc, '校對過的');
+  assert.equal(done.status, 'confirmed');
+  // 明講才重跑
+  const r2 = await app.recognizeAll({ photos: [done], includeConfirmed: true });
+  assert.equal(r2.total, 1);
+  assert.equal(done.source, 'ai');
+  assert.notEqual(done.status, 'confirmed', '重跑後回到待校對');
+});
