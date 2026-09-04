@@ -3,6 +3,7 @@
 import { createApp } from './app.js';
 import { mountEntry } from './ui/entry.js';
 import { mountWorkbench } from './ui/workbench.js';
+import { mountTemplatePage } from './ui/template-page.js';
 
 const app = createApp();
 globalThis.app = app; // 除錯用
@@ -19,6 +20,7 @@ app.subscribe((what) => {
   unmount?.();
   unmount = null;
   if (app.state.page === 'work') unmount = mountWorkbench(root, app);
+  else if (app.state.page === 'template') mountTemplatePage(root, app);
   else mountEntry(root, app);
 });
 

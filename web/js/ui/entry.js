@@ -1,17 +1,13 @@
-// 入口頁：選資料夾、版型、檢查日期 → 開始讀取。
-// 拖進來的 docx 會就地解析成 LayoutSpec 並顯示預覽（見 ui/template-preview.js），
-// 解析不完整就不讓「開始讀取」，不要等到產 Word 才發現版面是錯的。
-// 辨識方式與提示詞不在這裡，改成進工作台後按頂列的「🤖 AI 辨識」（見 ui/recognize.js）。
+// 入口頁：只做兩件事——選照片資料夾、選版型。
+// 檢查日期改在工作台的資料夾列各自填；AI 辨識在工作台頂列（ui/recognize.js）。
+// 版型的讀取與調整在版型調整頁（ui/template-page.js），這裡只顯示目前選了哪一份。
 
-import { todayRoc, parseRocInput } from '../rocdate.js';
 import { memoryTreeFromFileList, MemoryDirectoryHandle } from '../fs/memory.js';
 import { scanTree, describeTree, treeSummaryText } from '../fs/adapter.js';
 import { saveLastRoot, loadLastRoot, clearLastRoot, ensurePermission } from '../fs/handle-store.js';
 import { esc, toast } from './dialog.js';
-import { parseTemplateDocx } from '../template/parse.js';
-import { validateSpec } from '../template/spec.js';
-import { listTemplates, getTemplate, saveTemplate, removeTemplate, rememberFor, lastFor } from '../template/library.js';
-import { renderTemplatePreview } from './template-preview.js';
+import { bindFileDrop } from './dnd.js';
+import { listTemplates, getTemplate, rememberFor, lastFor } from '../template/library.js';
 
 const FS_OK = typeof globalThis.showDirectoryPicker === 'function';
 
@@ -19,7 +15,7 @@ export function mountEntry(container, app) {
   container.innerHTML = `
   <div class="entry"><div class="entry-card">
     <h1><span>自懂填</span> Auto-Fit</h1>
-    <p class="lead muted">選照片資料夾 → 自動填「內容說明／設計／實際」→ 校對 → 產生 Word。照片只在這台電腦的瀏覽器裡處理，不會上傳。</p>
+    <p class="lead muted">選照片資料夾 → 選版型 → 開始讀取。檢查日期與 AI 辨識都在下一頁（工作台）處理。照片只在這台電腦的瀏覽器裡處理，不會上傳。</p>
     ${FS_OK ? '' : '<div class="warn">這個瀏覽器不支援直接讀寫資料夾（請用 Chrome 或 Edge）。目前只能以唯讀複本開啟：可以校對與下載 Word，但拖曳搬移不會真的動到檔案。</div>'}
 
     <div class="field">
@@ -35,27 +31,9 @@ export function mountEntry(container, app) {
 
     <div class="field">
       <span class="label">版型</span>
-      <div class="dropzone" id="dz-template">
-        <div id="template-text">預設＝V1.0 版面（A4，每頁 3 列 × 2 張，標楷體）。點選或拖入 docx 可換版型</div>
-      </div>
-      <input type="file" id="template-input" accept=".docx" hidden>
-      <div class="tpl-lib" id="tpl-lib" hidden></div>
-      <div id="tpl-preview" class="tpl-wrap" hidden></div>
-      <div class="tpl-save" id="tpl-save" hidden>
-        <input type="text" id="tpl-save-name" placeholder="版型名稱">
-        <button type="button" class="btn" id="tpl-save-btn">存成版型</button>
-        <span class="small muted">存起來下次直接選，不用再翻檔案</span>
-      </div>
-    </div>
-
-    <div class="row">
-      <div class="field">
-        <label for="date">檢查日期（民國）</label>
-        <input type="text" id="date" value="${todayRoc()}" placeholder="例如 1150725">
-      </div>
-      <div class="field">
-        <span class="label">AI 辨識</span>
-        <div class="small muted">讀取後在工作台按頂列的「🤖 AI 辨識」，在那裡選辨識方式與提示詞。<br>不用 AI 也可以，三欄直接手打就好。</div>
+      <div class="dropzone tpl-pickbox" id="dz-template">
+        <div id="template-text"></div>
+        <div class="small muted hint">拖一份 docx 進來也可以，會直接開調整頁</div>
       </div>
     </div>
 
@@ -69,13 +47,59 @@ export function mountEntry(container, app) {
   const $ = (s) => container.querySelector(s);
   let rootHandle = null;
   let readOnly = false;
-  let template = null;
+  let template = app.state.template; // 從調整頁回來、或回首頁時帶回上次選的
   const updateStart = () => {
-    $('#start').disabled = !rootHandle || (!!template && validateSpec(template.spec).length > 0);
+    $('#start').disabled = !rootHandle;
   };
-  $('#date').value = app.dateInfo().compact; // 回首頁時把上次設的日期帶回來
 
-  // 選到資料夾後，像板型一樣把名稱顯示出來，並掃一次樹列出子資料夾與張數
+  // ---- 版型：只顯示目前選了哪一份 ＋ 已存的版型下拉 ＋ 讀取版型 ----
+  function renderTemplateBox() {
+    const saved = listTemplates();
+    const cur = template?.spec?.id ?? '';
+    const known = cur && saved.some((t) => t.id === cur);
+    const name = template ? esc(template.name) : '預設版面（V1.0：A4，每頁 3 列 × 2 張，標楷體）';
+    $('#dz-template').classList.toggle('has-pick', !!template);
+    $('#template-text').innerHTML = `
+      <div class="tpl-now">${template ? `<span class="picked">📄 ${name}</span>` : `<span class="muted">${name}</span>`}</div>
+      <div class="tpl-actions">
+        ${
+          saved.length
+            ? `<select id="tpl-pick" title="已存的版型">
+                 <option value="">預設版面（V1.0）</option>
+                 ${saved.map((t) => `<option value="${esc(t.id)}" ${t.id === cur ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}
+                 ${template && !known ? `<option value="__cur" selected>${name}（未存）</option>` : ''}
+               </select>`
+            : ''
+        }
+        <button type="button" class="btn" id="tpl-open">讀取版型</button>
+      </div>`;
+    $('#tpl-pick')?.addEventListener('change', (e) => {
+      if (e.target.value === '__cur') return;
+      const t = e.target.value ? getTemplate(e.target.value) : null;
+      setTemplate(t ? { name: t.name, file: null, spec: t.spec } : null);
+    });
+    $('#tpl-open').addEventListener('click', (e) => {
+      e.stopPropagation();
+      app.openTemplatePage();
+    });
+  }
+
+  function setTemplate(tpl) {
+    template = tpl;
+    app.state.template = tpl; // 回首頁 / 進調整頁再回來時還在
+    renderTemplateBox();
+  }
+
+  bindFileDrop($('#dz-template'), (dt) => {
+    const f = dt.files?.[0];
+    if (f && /\.docx$/i.test(f.name)) app.openTemplatePage(f); // 直接進調整頁解析
+    else if (f && /\.doc$/i.test(f.name)) toast('舊的 .doc 讀不了，請先用 Word 另存成 .docx', { error: true });
+    else toast('請拖入 docx 檔', { error: true });
+  });
+  renderTemplateBox();
+
+  // ---- 資料夾 ----
+  // 選到之後把名稱顯示出來，並掃一次樹列出子資料夾與張數
   //（瀏覽器基於安全限制拿不到完整磁碟路徑，只能顯示資料夾名稱與底下結構）。
   let pickSeq = 0;
   const setFolder = async (handle, ro, label) => {
@@ -84,7 +108,7 @@ export function mountEntry(container, app) {
     if (!template) {
       const last = lastFor(handle.name);
       if (last) {
-        showTemplate({ name: last.name, file: null, spec: last.spec });
+        setTemplate({ name: last.name, file: null, spec: last.spec });
         toast(`帶回上次用的版型「${last.name}」`);
       }
     }
@@ -105,14 +129,11 @@ export function mountEntry(container, app) {
     }
   };
 
-  renderLib();
-
   // ---- 帶回上次的資料夾 ----
   // 回首頁時 app.state.root 還在，直接接回去；重新整理後 handle 從 IndexedDB 撈，
   // Chrome 需要使用者點一下才會給權限，所以放一顆按鈕。
   if (app.state.root) {
     setFolder(app.state.root, app.state.readOnly, app.state.root.name);
-    if (app.state.template) showTemplate(app.state.template);
   } else {
     loadLastRoot().then(async (h) => {
       if (!h || rootHandle) return;
@@ -164,7 +185,7 @@ export function mountEntry(container, app) {
   });
 
   // ---- 資料夾：拖放 ----
-  bindDrop($('#dz-folder'), async (dt) => {
+  bindFileDrop($('#dz-folder'), async (dt) => {
     const item = dt.items?.[0];
     if (item && typeof item.getAsFileSystemHandle === 'function') {
       const h = await item.getAsFileSystemHandle();
@@ -180,97 +201,6 @@ export function mountEntry(container, app) {
       return;
     }
     toast('這個瀏覽器不支援拖放資料夾，請改用點選', { error: true });
-  });
-
-  // ---- 版型 ----
-  const TPL_HINT = '預設＝V1.0 版面（A4，每頁 3 列 × 2 張，標楷體）。點選或拖入 docx 可換版型';
-  const tplBox = $('#tpl-preview');
-
-  function showTemplate(tpl, err = '') {
-    template = tpl;
-    const dz = $('#dz-template');
-    const saveBar = $('#tpl-save');
-    if (!tpl) {
-      dz.classList.remove('has-pick');
-      $('#template-text').innerHTML = TPL_HINT + (err ? `<div class="small tpl-bad">${err}</div>` : '');
-      tplBox.hidden = true;
-      tplBox.innerHTML = '';
-      saveBar.hidden = true;
-    } else {
-      dz.classList.add('has-pick');
-      $('#template-text').innerHTML =
-        `<span class="picked">${esc(tpl.name)}</span> <button type="button" class="btn tiny" id="tpl-clear">改用預設版面</button>`;
-      $('#tpl-clear').addEventListener('click', (e) => {
-        e.stopPropagation();
-        showTemplate(null);
-      });
-      tplBox.hidden = false;
-      renderTemplatePreview(tplBox, tpl.spec, updateStart);
-      saveBar.hidden = false;
-      $('#tpl-save-name').value = tpl.name.replace(/\.docx$/i, '');
-    }
-    renderLib();
-    updateStart();
-  }
-
-  // ---- 版型庫 ----
-  function renderLib() {
-    const box = $('#tpl-lib');
-    const saved = listTemplates();
-    if (!saved.length) {
-      box.hidden = true;
-      box.innerHTML = '';
-      return;
-    }
-    const cur = template?.spec?.id ?? '';
-    box.hidden = false;
-    box.innerHTML = `
-      <span class="small">已存的版型</span>
-      <select id="tpl-pick">
-        <option value="">預設版面（V1.0）</option>
-        ${saved.map((t) => `<option value="${esc(t.id)}" ${t.id === cur ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}
-      </select>
-      ${cur ? '<button type="button" class="btn tiny" id="tpl-del">刪掉這份</button>' : ''}`;
-    $('#tpl-pick').addEventListener('change', (e) => {
-      const t = e.target.value ? getTemplate(e.target.value) : null;
-      showTemplate(t ? { name: t.name, file: null, spec: t.spec } : null);
-    });
-    $('#tpl-del')?.addEventListener('click', () => {
-      removeTemplate(cur);
-      showTemplate(null);
-      toast('已刪掉這份版型');
-    });
-  }
-
-  $('#tpl-save-btn').addEventListener('click', () => {
-    if (!template) return;
-    const entry = saveTemplate(template.spec, $('#tpl-save-name').value || template.name);
-    template.name = entry.name;
-    template.spec = entry.spec;
-    showTemplate(template);
-    toast(`已存成版型「${entry.name}」`);
-  });
-
-  async function setTemplate(file) {
-    $('#dz-template').classList.add('has-pick');
-    $('#template-text').innerHTML = `<span class="picked">${esc(file.name)}</span> <span class="small muted">解析中…</span>`;
-    try {
-      const spec = await parseTemplateDocx(await file.arrayBuffer(), file.name.replace(/\.docx$/i, ''));
-      showTemplate({ name: file.name, file, spec });
-    } catch (e) {
-      console.error(e);
-      showTemplate(null, `讀不懂這份版型：${esc(e.message)}`);
-      toast(`讀不懂這份版型：${e.message}`, { error: true });
-    }
-  }
-
-  $('#dz-template').addEventListener('click', () => $('#template-input').click());
-  $('#template-input').addEventListener('change', (e) => e.target.files[0] && setTemplate(e.target.files[0]));
-  bindDrop($('#dz-template'), (dt) => {
-    const f = dt.files?.[0];
-    if (f && /\.docx$/i.test(f.name)) setTemplate(f);
-    else if (f && /\.doc$/i.test(f.name)) toast('舊的 .doc 讀不了，請先用 Word 另存成 .docx', { error: true });
-    else toast('請拖入 docx 檔', { error: true });
   });
 
   // ---- 範例（開發用，由 dev_server 的 /samples/ 提供）----
@@ -311,44 +241,19 @@ export function mountEntry(container, app) {
     })
     .catch(() => {});
 
-  // ---- 開始 ----
+  // ---- 開始讀取 ----
   $('#start').addEventListener('click', async () => {
-    let date;
-    try {
-      date = parseRocInput($('#date').value);
-    } catch (e) {
-      toast(e.message, { error: true });
-      $('#date').focus();
-      return;
-    }
     $('#start').disabled = true;
     $('#status').textContent = '讀取資料夾中…';
     try {
       rememberFor(rootHandle.name, template?.spec?.id ?? null);
-      await app.open({ rootHandle, readOnly, date, template });
+      await app.open({ rootHandle, readOnly, template });
       if (!readOnly) saveLastRoot(rootHandle); // 下次重新整理可以一鍵接回
     } catch (e) {
       console.error(e);
       toast(`讀取失敗：${e.message}`, { error: true });
       $('#start').disabled = false;
       $('#status').textContent = '';
-    }
-  });
-}
-
-function bindDrop(zone, onDrop) {
-  zone.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    zone.classList.add('over');
-  });
-  zone.addEventListener('dragleave', () => zone.classList.remove('over'));
-  zone.addEventListener('drop', async (e) => {
-    e.preventDefault();
-    zone.classList.remove('over');
-    try {
-      await onDrop(e.dataTransfer);
-    } catch (err) {
-      toast(err.message, { error: true });
     }
   });
 }

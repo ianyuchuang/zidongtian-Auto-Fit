@@ -20,12 +20,12 @@ import {
   groupDirOf,
   pruneChecked,
 } from './state.js';
-import { loadSaved, savePhotos, applySaved } from './storage.js';
+import { loadSaved, savePhotos, applySaved, loadDates, saveDates } from './storage.js';
 import { makeThumbUrl, makeCropUrl, usableBbox } from './imaging.js';
 import { getRecognizer } from './recognizer/index.js';
 import { planExport, exportWarnings, outputFileName } from './docx-model.js';
 import { buildDocxBlob } from './docx-export.js';
-import { rocCompact, rocDisplay, stampText } from './rocdate.js';
+import { rocCompact, rocDisplay, stampText, parseRocInput } from './rocdate.js';
 
 /** 辨識引擎識別字串：存進校對暫存，換引擎重開時用來判斷舊的 AI 結果要不要重跑。 */
 export function engineId(recognizerId, api) {
@@ -41,8 +41,10 @@ export function createApp() {
     tree: null,
     dirs: [], // flattenDirs(tree)
     photos: [],
-    date: new Date(),
+    date: new Date(), // 預設日期（新資料夾沿用）
+    dates: {}, // 各資料夾自己的檢查日期：{ 資料夾路徑: '1150725' }
     template: null, // {name, file, spec} | null；spec 是解析出來的 LayoutSpec（template/spec.js）
+    templateFile: null, // 拖進入口頁、要帶去版型調整頁解析的 docx
     prompt: '',
     recognizerId: 'mock',
     api: null, // LLM API 設定 {provider, apiKey, model}（只在記憶體，不存進校對暫存）
@@ -89,15 +91,24 @@ export function createApp() {
     counts() {
       return counts(state.photos);
     },
-    dateInfo() {
-      return { compact: rocCompact(state.date), display: rocDisplay(state.date), stamp: stampText(state.date) };
+    /** 某個資料夾的檢查日期（沒設過就用預設的今天）。dir 省略＝預設日期。 */
+    dateInfo(dir = null) {
+      const compact = (dir != null && state.dates[dir]) || rocCompact(state.date);
+      let date;
+      try {
+        date = parseRocInput(compact);
+      } catch {
+        date = state.date;
+      }
+      return { compact: rocCompact(date), display: rocDisplay(date), stamp: stampText(date) };
     },
 
     // ---------- 開啟資料夾 ----------
-    async open({ rootHandle, readOnly = false, date, template = null, prompt = '', recognizerId = null, api = null }) {
+    async open({ rootHandle, readOnly = false, template = null, prompt = '', recognizerId = null, api = null }) {
       state.root = rootHandle;
       state.readOnly = readOnly;
-      state.date = date;
+      state.date = new Date(); // 預設今天；各資料夾可在工作台的群組列各自改
+      state.dates = loadDates(rootHandle.name);
       state.template = template;
       state.prompt = prompt;
       state.recognizerId = recognizerId;
@@ -368,12 +379,36 @@ export function createApp() {
       emit('photos');
       return targets.length;
     },
-    setDate(date) {
-      state.date = date;
+    // ---------- 版型調整頁 ----------
+    /** 開版型調整頁（入口頁的「讀取版型」）。file 可先帶一份拖進來的 docx。 */
+    openTemplatePage(file = null) {
+      state.templateFile = file;
+      state.page = 'template';
+      emit('page');
+    },
+    /** 調整頁完成：套用版型後回入口頁。tpl 給 null＝改用預設版面。 */
+    applyTemplate(tpl) {
+      state.template = tpl;
+      state.templateFile = null;
+      state.page = 'entry';
+      emit('page');
+    },
+    /** 調整頁取消：不動目前的版型，回入口頁。 */
+    closeTemplatePage() {
+      state.templateFile = null;
+      state.page = 'entry';
+      emit('page');
+    },
+
+    /** 改某個資料夾的檢查日期（民國 7 碼）。dir 是資料夾路徑（根資料夾是 ''）。 */
+    setDirDate(dir, compact) {
+      parseRocInput(compact); // 不合法就丟錯，不要靜靜存下去
+      state.dates[dir] = compact;
+      saveDates(state.root?.name ?? '', state.dates);
       emit('date');
     },
     /**
-     * 回入口頁。資料夾、日期、板型、提示詞、辨識設定都留著（入口頁會帶回來），
+     * 回入口頁。資料夾、版型、提示詞、辨識設定都留著（入口頁會帶回來），
      * 不必為了換個篩選重選一次資料夾；校對結果本來就在 localStorage。
      */
     goHome() {
@@ -514,10 +549,10 @@ export function createApp() {
     async exportWord({ onProgress } = {}) {
       const { groups, skipped } = app.exportPlan();
       if (!groups.length) throw new Error('沒有可輸出的照片（內容說明都是空的）。');
-      const { compact, display, stamp } = app.dateInfo();
       const results = [];
       for (let gi = 0; gi < groups.length; gi++) {
         const g = groups[gi];
+        const { compact, display, stamp } = app.dateInfo(g.dir); // 日期跟著資料夾走
         for (const p of g.photos) await app.fileOf(p);
         const { blob, failures } = await buildDocxBlob(g, {
           spec: state.template?.spec,

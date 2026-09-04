@@ -26,3 +26,21 @@ export function reportMove(app, r, dirName) {
   const msg = moveSummary(r, dirName, { readOnly: app.state.readOnly });
   toast(msg, { error: r.failed.length > 0, ms: r.failed.length ? 6000 : 3500 });
 }
+
+/** 把一塊區域變成可拖放檔案的區域（入口頁選資料夾、版型調整頁拖 docx 共用）。 */
+export function bindFileDrop(zone, onDrop) {
+  zone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    zone.classList.add('over');
+  });
+  zone.addEventListener('dragleave', () => zone.classList.remove('over'));
+  zone.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    zone.classList.remove('over');
+    try {
+      await onDrop(e.dataTransfer);
+    } catch (err) {
+      toast(err.message, { error: true });
+    }
+  });
+}
