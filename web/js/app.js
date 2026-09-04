@@ -432,8 +432,9 @@ export function createApp() {
 
     /** 改某個資料夾的檢查日期（民國 7 碼）。dir 是資料夾路徑（根資料夾是 ''）。 */
     setDirDate(dir, compact) {
-      parseRocInput(compact); // 不合法就丟錯，不要靜靜存下去
-      state.dates[dir] = compact;
+      // 不合法就丟錯，不要靜靜存下去；合法的一律正規化成民國 7 碼再存——
+      // 使用者打西元（20260725）或帶斜線也解得開，但 loadDates 只認 7 碼，原樣存會在重開時被丟掉（bug W4）
+      state.dates[dir] = rocCompact(parseRocInput(compact));
       saveDates(state.root?.name ?? '', state.dates);
       emit('date');
     },

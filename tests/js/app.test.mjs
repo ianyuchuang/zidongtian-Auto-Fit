@@ -225,6 +225,22 @@ test('檢查日期：每個資料夾各一個，沒設過用今天，不合法�
   assert.equal(app.dateInfo('5F').compact, today);
 });
 
+test('檢查日期：打西元或帶斜線也要正規化成民國 7 碼存，重開才讀得回來（回歸 W4）', async () => {
+  const { loadDates } = await import('../../web/js/storage.js');
+  const store = new FakeStorage();
+  const prev = globalThis.localStorage;
+  globalThis.localStorage = store;
+  try {
+    const { app } = await setup();
+    app.setDirDate('4F', '20260725');
+    app.setDirDate('5F', '115/08/01');
+    assert.deepEqual(app.state.dates, { '4F': '1150725', '5F': '1150801' });
+    assert.deepEqual(loadDates(app.state.root.name, store), { '4F': '1150725', '5F': '1150801' });
+  } finally {
+    globalThis.localStorage = prev;
+  }
+});
+
 test('pickRoot：入口頁選好的資料夾要留在 state（回歸：選完資料夾再拖 docx 進來就忘掉）', () => {
   const app = createApp();
   const root = new MemoryDirectoryHandle('帷幕骨架');
