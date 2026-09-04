@@ -39,7 +39,7 @@ app.subscribe((what) => {
   unmount?.();
   unmount = null;
   if (app.state.page === 'work') unmount = mountWorkbench(root, app);
-  else if (app.state.page === 'template') mountTemplatePage(root, app);
+  else if (app.state.page === 'template') unmount = mountTemplatePage(root, app);
   else mountEntry(root, app);
 });
 

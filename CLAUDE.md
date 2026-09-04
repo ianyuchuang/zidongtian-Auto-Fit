@@ -36,7 +36,7 @@
   - **小型／快速型號讀不動這種手寫白板**（Haiku 12 張 0 對、Sonnet 9/12），低信心也不能只信模型自報的 confidence，實測與因應見 `docs/辨識實測-尺寸11F.md`。
   - 拖放檔案：`main.js` 在 window 上把 `dragover`／`drop` 的預設行為擋掉——沒接住的拖放會讓瀏覽器去開那個檔案，從 http://localhost 跳 file:// 被擋掉就變成一片空白（2026-09-04 的 bug）。入口頁整頁都接得住拖放，用 `ui/dnd.js` 的 `classifyDrop` 判斷是資料夾還是版型 docx。
   - 入口頁選到的資料夾與版型都存進 `app.state`（`pickRoot` / `state.template`）：拖版型 docx 會換到版型調整頁，入口頁被拆掉重掛，只放區域變數就會忘掉（2026-09-04 的 bug）；`state.rootSummary` 是掃過的子資料夾摘要，回入口頁不重掃，`goHome()` 會清掉（工作台可能搬過檔案）。
-  - `emit('page')` 只給真的換頁用：`main.js` 會拆掉重掛整個頁面，工作台拆掉時 `history.back()` 會被新掛的 popstate 接到而彈回首頁（2026-09-03 的 bug）。同頁內的變化發自己的事件（例：`setRecognizer` 發 `engine`）。
+  - `emit('page')` 只給真的換頁用：`main.js` 會拆掉重掛整個頁面，工作台拆掉時 `history.back()` 會被新掛的 popstate 接到而彈回首頁（2026-09-03 的 bug）。同頁內的變化發自己的事件（例：`setRecognizer` 發 `engine`）。掛在共用 `#app` 容器或 `window` 上的監聽要用 `{ signal }` 綁、mount 回傳 unmount，否則每進一次頁就疊一套舊閉包（2026-09-04 版型頁「存成版型跳好幾個成功、用的是上一次的版型」）。
   - 校對結果暫存在瀏覽器 localStorage（依根資料夾名），不寫進照片資料夾；每筆 AI 結果記 `engine`（`mock` / `api:claude`…）。
   - 「刪除」＝搬進**該照片所在資料夾**自己的 `_回收桶`（網頁無法用 Windows 資源回收桶）；表格把它留在原位反灰、按「↩ 還原」搬回同一層，統計不含它、產生 Word 時略過。瀏覽器拿不到完整磁碟路徑，入口頁只顯示資料夾名與子資料夾摘要。
 - 測試：`python -m pytest`（tests/；會一併跑 `node --test tests/js/*.test.mjs`，需 Node.js）。

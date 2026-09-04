@@ -34,11 +34,18 @@ const FIELD_OPTIONS = (sel) =>
 
 const at = (k) => k.split('.').map(Number);
 
+/**
+ * 掛版型頁。回傳 unmount：拆頁時要呼叫，把掛在共用容器與 window 上的事件收掉。
+ * 不收的話每進一次版型頁就多一套舊閉包（spec 是舊的）：按「存成版型」會跳好幾個
+ * 「儲存成功」、實際套用的卻是上一次的版型（2026-09-04 的 bug）。
+ */
 export function mountTemplatePage(container, app) {
   let spec = null;
   let name = '';
   let fileName = '';
   let drag = null; // 正在拖的說明欄位：{ line } 新增 | { from:{r,c,i} } 搬移
+  const ac = new AbortController();
+  const { signal } = ac; // 掛在容器／window 上（不隨 render 重畫）的監聽都帶這個 signal
 
   container.innerHTML = `
     <div class="tplpage">
@@ -272,7 +279,7 @@ export function mountTemplatePage(container, app) {
     page.style.transform = `scale(${scale})`;
     stage.style.height = `${page.offsetHeight * scale + 40}px`;
   }
-  window.addEventListener('resize', fit);
+  window.addEventListener('resize', fit, { signal });
 
   // ---------- 拖曳：新增 / 搬移說明欄位 ----------
   const clearDropMarks = () => stage.querySelectorAll('.drop-into').forEach((el) => el.classList.remove('drop-into'));
@@ -360,7 +367,7 @@ export function mountTemplatePage(container, app) {
       if (!best || d < best.d) best = { el, d };
     }
     caretToEnd(best.el);
-  });
+  }, { signal });
 
   function bindFieldDrag() {
     stage.addEventListener('dragover', (e) => {
@@ -371,7 +378,7 @@ export function mountTemplatePage(container, app) {
       e.preventDefault();
       e.dataTransfer.dropEffect = drag.from ? 'move' : 'copy';
       cell.classList.add('drop-into');
-    });
+    }, { signal });
     stage.addEventListener('drop', (e) => {
       if (!drag) return;
       const cell = e.target.closest('.tp-text');
@@ -388,10 +395,10 @@ export function mountTemplatePage(container, app) {
       else addLine(spec, r, c, newLine(drag.add), dropIndex(cell, e));
       drag = null;
       render();
-    });
+    }, { signal });
     stage.addEventListener('dragleave', (e) => {
       if (drag && !stage.contains(e.relatedTarget)) clearDropMarks();
-    });
+    }, { signal });
   }
   bindFieldDrag();
 
@@ -402,11 +409,11 @@ export function mountTemplatePage(container, app) {
     drag = { add: chip.dataset.add };
     e.dataTransfer.effectAllowed = 'copy';
     e.dataTransfer.setData('text/plain', chip.dataset.add);
-  });
+  }, { signal });
   container.addEventListener('dragend', () => {
     drag = null;
     clearDropMarks();
-  });
+  }, { signal });
 
   function bindPage() {
     const $$ = (s) => [...container.querySelectorAll(s)];
@@ -511,7 +518,7 @@ export function mountTemplatePage(container, app) {
     } else if (t.id === 'tpl-name') {
       name = t.value;
     }
-  });
+  }, { signal });
 
   container.addEventListener('click', async (e) => {
     const btn = e.target.closest('[data-act]');
@@ -538,9 +545,11 @@ export function mountTemplatePage(container, app) {
       removeTemplate(t.id);
       render();
     } else if (act === 'reset-order') {
+      if (!spec) return;
       spec.grid.seq = null;
       render();
     } else if (act === 'save') {
+      if (!spec) return;
       const entry = saveTemplate(spec, $('#tpl-name').value || name);
       spec = entry.spec;
       name = entry.name;
@@ -555,8 +564,9 @@ export function mountTemplatePage(container, app) {
       spec.name = $('#tpl-name').value || name;
       app.applyTemplate({ name: spec.name, file: null, spec });
     }
-  });
+  }, { signal });
 
   render();
   if (app.state.templateFile) load(app.state.templateFile);
+  return () => ac.abort();
 }
