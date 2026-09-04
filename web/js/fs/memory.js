@@ -145,6 +145,8 @@ async function fillFromEntry(dir, dirEntry) {
 /**
  * 從 <input webkitdirectory> 的 FileList 建立記憶體目錄樹。
  * 每個 file.webkitRelativePath 形如 '根/子/檔.jpg'。
+ * 瀏覽器限制：FileList 只有檔案，沒放照片的空資料夾（空樓層）不會出現在這條路的唯讀複本裡；
+ * 拖放（memoryTreeFromEntry）與載入範例（index.json 的 dirs）才留得住空資料夾。
  */
 export function memoryTreeFromFileList(files) {
   let root = null;
