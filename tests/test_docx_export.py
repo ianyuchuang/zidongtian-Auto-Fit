@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
-"""web/js/docx-export.js 產出的 Word 檔版面要與 V1.0 一致（用 Node 產檔、Python zipfile 檢查 XML）。"""
+"""web/js/docx-export.js 產出的 Word 檔版面（用 Node 產檔、Python zipfile 檢查 XML）：
+預設版型要與 V1.0 一致，換成別的 LayoutSpec 要真的換掉版面。"""
+import json
 import re
 import shutil
 import subprocess
@@ -19,28 +21,43 @@ def _tiny_jpeg(path: Path, color, w=40, h=30):
     PIL.new("RGB", (w, h), color).save(path, "JPEG")
 
 
-def test_docx_layout_matches_v1(tmp_path):
+def _build(tmp_path, photos, spec=None, name="out.docx"):
+    """跑 build_docx.mjs 產一份 docx，回傳 (zipfile, document.xml, media 清單)。"""
     node = shutil.which("node")
     assert node, "需要 Node.js"
+    out = tmp_path / name
+    args = [node, "tests/js/helpers/build_docx.mjs"]
+    if spec is not None:
+        sp = tmp_path / "spec.json"
+        sp.write_text(json.dumps(spec, ensure_ascii=False), encoding="utf-8")
+        args += ["--spec", str(sp)]
+    r = subprocess.run(
+        [*args, *map(str, photos), str(out)],
+        cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
+    )
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert out.stat().st_size > 1000
+    z = zipfile.ZipFile(out)
+    return z, z.read("word/document.xml").decode("utf-8"), [
+        n for n in z.namelist() if n.startswith("word/media/") and not n.endswith("/")
+    ]
+
+
+def _photos(tmp_path):
     photos = sorted(SAMPLES.glob("*.jpg"))[:3] if SAMPLES.is_dir() else []
     if not photos:
         for i, color in enumerate([(200, 60, 60), (60, 200, 60), (60, 60, 200)]):
             p = tmp_path / f"p{i}.jpg"
             _tiny_jpeg(p, color)
             photos.append(p)
-    out = tmp_path / "out.docx"
-    r = subprocess.run(
-        [node, "tests/js/helpers/build_docx.mjs", *map(str, photos), str(out)],
-        cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
-    )
-    assert r.returncode == 0, r.stdout + r.stderr
-    assert out.stat().st_size > 1000
+    return photos
 
-    z = zipfile.ZipFile(out)
-    doc = z.read("word/document.xml").decode("utf-8")
+
+def test_docx_layout_matches_v1(tmp_path):
+    photos = _photos(tmp_path)
+    z, doc, media = _build(tmp_path, photos)
     header = next(n for n in z.namelist() if re.match(r"word/header\d*\.xml", n))
     hdr = z.read(header).decode("utf-8")
-    media = [n for n in z.namelist() if n.startswith("word/media/") and not n.endswith("/")]
 
     # A4 與邊界（twips）
     assert 'w:w="11906"' in doc and 'w:h="16838"' in doc
@@ -57,4 +74,63 @@ def test_docx_layout_matches_v1(tmp_path):
     assert 'w:eastAsia="標楷體"' in doc
     assert 'w:val="16"' in doc  # 8pt
     # 三張照片都嵌進去
+    assert len(media) == 3
+
+
+# D棟3樓 那類版型：橫式、抬頭在內文、照片格跨 5 列、說明分成多列、日期戳關掉。
+LANDSCAPE_SPEC = {
+    "id": "t2",
+    "name": "橫式測試",
+    "font": "標楷體",
+    "page": {"w": 16840, "h": 11907, "orient": "landscape",
+             "margin": {"t": 567, "r": 737, "b": 567, "l": 851}},
+    "heading": {"place": "body", "lines": [
+        {"text": "範例工程", "sizePt": 18, "align": "center"},
+        {"text": "施工查驗照片({date})", "sizePt": 16, "align": "center"},
+    ]},
+    "grid": {"perRow": 2, "blockRows": 2, "order": "col", "seq": None, "tableIndent": 0},
+    "photo": {"h": 296, "maxW": 395},
+    "caption": {"sizePt": 10},
+    "stamp": {"on": False, "corner": "bl"},
+    "block": {"cols": [5984, 1105, 576], "rows": [
+        {"h": 428, "cells": [
+            {"kind": "photo", "rowSpan": 5, "vAlign": "center"},
+            {"kind": "text", "lines": [{"label": "照片編號", "field": "none"}]},
+            {"kind": "text", "lines": [{"label": "", "field": "seq"}]},
+        ]},
+        {"h": 434, "cells": [{"kind": "text", "col": 1, "colSpan": 2,
+                              "lines": [{"label": "拍照日期", "field": "none"}]}]},
+        {"h": 525, "cells": [{"kind": "text", "col": 1, "colSpan": 2,
+                              "lines": [{"label": "", "field": "photoDate"}]}]},
+        {"h": 434, "cells": [{"kind": "text", "col": 1, "colSpan": 2,
+                              "lines": [{"label": "圖片說明", "field": "none"}]}]},
+        {"h": 2629, "cells": [{"kind": "text", "col": 1, "colSpan": 2,
+                               "lines": [{"label": "", "field": "desc"}]}]},
+    ]},
+    "unknown": [],
+}
+
+
+def test_docx_follows_custom_spec(tmp_path):
+    z, doc, media = _build(tmp_path, _photos(tmp_path), spec=LANDSCAPE_SPEC, name="t2.docx")
+
+    # 頁面換成橫式 A4
+    assert 'w:w="16840"' in doc and 'w:h="11907"' in doc
+    assert 'w:orient="landscape"' in doc
+    # 抬頭在內文，不在頁首
+    assert "範例工程" in doc
+    assert "施工查驗照片(115年07月25日)" in doc
+    assert not [n for n in z.namelist() if re.match(r"word/header\d*\.xml", n)]
+    # 3 張、每列 2 張、每張 5 列 → 2 個區塊列 × 5 = 10 個 w:tr
+    assert doc.count("<w:tr>") + doc.count("<w:tr ") == 10
+    # 照片格跨列合併
+    assert "<w:vMerge" in doc
+    # 欄寬照 block.cols × perRow
+    for w in ("5984", "1105", "576"):
+        assert f'w:w="{w}"' in doc
+    # 說明欄位換成「照片編號／拍照日期／圖片說明」，V1.0 的三欄不該出現
+    assert "照片編號" in doc and "圖片說明" in doc
+    assert "內容說明：" not in doc
+    # 由上而下填：1、2 在左欄的上下兩格，3 在右欄第一格 → 文件順序是 1、3、2
+    assert doc.index("說明1") < doc.index("說明3") < doc.index("說明2")
     assert len(media) == 3

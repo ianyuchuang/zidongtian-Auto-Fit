@@ -1,5 +1,5 @@
 // 在 Node 裡用 docx-export.js 產一份 docx（給 tests/test_docx_export.py 用 zipfile 驗證版面）。
-// 用法：node tests/js/helpers/build_docx.mjs <照片1.jpg> <照片2.jpg> ... <輸出.docx>
+// 用法：node tests/js/helpers/build_docx.mjs [--spec <spec.json>] <照片1.jpg> ... <輸出.docx>
 import { readFileSync, writeFileSync } from 'node:fs';
 import { basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -12,6 +12,11 @@ globalThis.docx = new Function(`${iife}; return docx;`)();
 const { buildDocxBlob } = await import('../../../web/js/docx-export.js');
 
 const args = process.argv.slice(2);
+let spec;
+if (args[0] === '--spec') {
+  args.shift();
+  spec = JSON.parse(readFileSync(args.shift(), 'utf8'));
+}
 const out = args.pop();
 const photos = args.map((p, i) => ({
   name: basename(p),
@@ -42,7 +47,7 @@ const render = async (path) => {
   return { data: new Uint8Array(buf), width, height, type: 'jpg' };
 };
 
-const { blob, failures } = await buildDocxBlob({ photos }, { rocDisplay: '115年07月25日', stamp: '2026-07-25', render });
+const { blob, failures } = await buildDocxBlob({ photos }, { spec, rocDisplay: '115年07月25日', stamp: '2026-07-25', render });
 if (failures.length) throw new Error(failures.join('\n'));
 writeFileSync(out, Buffer.from(await blob.arrayBuffer()));
 console.log(`OK ${out} ${blob.size}`);

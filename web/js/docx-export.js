@@ -1,121 +1,146 @@
-// 用 docx 函式庫（vendor/docx-*.iife.js，全域 window.docx）產生與 V1.0 相同版面的 Word 檔。
-// 版面規則與常數在 docx-model.js；這裡只負責把它轉成 docx 物件。
+// 用 docx 函式庫（vendor/docx-*.iife.js，全域 window.docx）依 LayoutSpec 產生 Word 檔。
+// 版面規則與預設值在 template/spec.js；這裡只負責把 spec 轉成 docx 物件。
 
-import { COMPANY, TITLE, FONT, LAYOUT, fitPhoto, captionLines, pairRows } from './docx-model.js';
 import { renderForDocx } from './imaging.js';
+import { defaultSpec, fitPhoto, tableCols, blockWidth, layoutPages, cellText, cellColumns, validateSpec } from './template/spec.js';
 
 function lib() {
   if (!globalThis.docx) throw new Error('docx 函式庫沒有載入（vendor/docx-9.7.1.iife.js）');
   return globalThis.docx;
 }
 
-const FONTS = { ascii: FONT, hAnsi: FONT, eastAsia: FONT, cs: FONT };
+const fontsOf = (spec) => ({ ascii: spec.font, hAnsi: spec.font, eastAsia: spec.font, cs: spec.font });
 
-function textPara(text, halfPt, { align } = {}) {
+function textPara(spec, text, halfPt, { align, bold } = {}) {
   const { Paragraph, TextRun, AlignmentType } = lib();
   return new Paragraph({
     alignment: align === 'center' ? AlignmentType.CENTER : AlignmentType.LEFT,
     spacing: { before: 0, after: 0 },
-    children: [new TextRun({ text, size: halfPt, font: FONTS })],
+    children: [new TextRun({ text, size: halfPt, bold: !!bold, font: fontsOf(spec) })],
   });
 }
 
-function photoCell(rendered, photo) {
+/** 一個格子橫跨的欄寬總和（dxa）。col＝這個格子從區塊的第幾欄開始。 */
+function cellWidth(spec, col, span) {
+  let w = 0;
+  for (let i = col; i < col + span && i < spec.block.cols.length; i++) w += spec.block.cols[i];
+  return w;
+}
+
+function buildCell(spec, cell, col, { photo, rendered, ctx }) {
   const { Paragraph, TableCell, ImageRun, AlignmentType, VerticalAlign, WidthType } = lib();
+  const span = cell.colSpan ?? 1;
+  const halfPt = (cell.sizePt ?? spec.caption.sizePt) * 2;
   let children;
-  if (rendered) {
-    const size = fitPhoto(rendered.width, rendered.height);
-    children = [
-      new Paragraph({
-        alignment: AlignmentType.CENTER,
-        spacing: { before: 0, after: 0 },
-        children: [new ImageRun({ type: rendered.type, data: rendered.data, transformation: size })],
-      }),
-    ];
+  if (cell.kind === 'photo') {
+    if (rendered) {
+      const size = fitPhoto(spec, rendered.width, rendered.height);
+      children = [
+        new Paragraph({
+          alignment: AlignmentType.CENTER,
+          spacing: { before: 0, after: 0 },
+          children: [new ImageRun({ type: rendered.type, data: rendered.data, transformation: size })],
+        }),
+      ];
+    } else if (photo) {
+      children = [textPara(spec, `[無法插入照片: ${photo.name}]`, halfPt)];
+    } else {
+      children = [new Paragraph('')];
+    }
+  } else if (photo) {
+    children = cellText(cell, photo, ctx).map((l) => textPara(spec, l, halfPt, { align: cell.align, bold: cell.bold }));
   } else {
-    children = [textPara(`[無法插入照片: ${photo.name}]`, LAYOUT.captionHalfPt)];
+    children = [new Paragraph('')]; // 這一格沒排到照片：留白，不印空的欄位名
   }
-  return new TableCell({
-    width: { size: LAYOUT.cellW, type: WidthType.DXA },
-    verticalAlign: VerticalAlign.CENTER,
-    children,
-  });
+  const opts = { width: { size: cellWidth(spec, col, span), type: WidthType.DXA }, children };
+  if (span > 1) opts.columnSpan = span;
+  if ((cell.rowSpan ?? 1) > 1) opts.rowSpan = cell.rowSpan;
+  if (cell.vAlign === 'center') opts.verticalAlign = VerticalAlign.CENTER;
+  return new TableCell(opts);
 }
 
-function captionCell(photo) {
-  const { TableCell, WidthType } = lib();
-  return new TableCell({
-    width: { size: LAYOUT.cellW, type: WidthType.DXA },
-    children: (photo ? captionLines(photo) : ['']).map((l) => textPara(l, LAYOUT.captionHalfPt)),
+/** 一個區塊列（perRow 張照片）展開成 spec.block.rows.length 個 TableRow。 */
+function buildBlockRows(spec, slotPhotos, byPhoto) {
+  const { TableRow, HeightRule } = lib();
+  return spec.block.rows.map((br) => {
+    const cols = cellColumns(br);
+    const children = [];
+    for (const photo of slotPhotos) {
+      (br.cells ?? []).forEach((cell, i) => {
+        children.push(buildCell(spec, cell, cols[i], photo ? byPhoto.get(photo) : { photo: null }));
+      });
+    }
+    const opts = { children };
+    if (br.h) opts.height = { value: br.h, rule: HeightRule.ATLEAST };
+    return new TableRow(opts);
   });
-}
-
-function emptyCell() {
-  const { TableCell, Paragraph, WidthType } = lib();
-  return new TableCell({ width: { size: LAYOUT.cellW, type: WidthType.DXA }, children: [new Paragraph('')] });
 }
 
 /**
  * 產生一份 docx Blob。
  * group: { photos: [{name, file, desc, design, actual}] }（表格順序）
- * opts: { rocDisplay: '115年07月25日', stamp: '2026-07-25', onProgress(i, n), render }
+ * opts: { spec, rocDisplay: '115年07月25日', stamp: '2026-07-25', onProgress(i, n), render }
  * render(file, {stamp}) 預設用 canvas（imaging.js），測試時可換成不需瀏覽器的版本。
  */
-export async function buildDocxBlob(group, { rocDisplay, stamp, onProgress, render = renderForDocx } = {}) {
-  const { Document, Packer, Table, TableRow, Header, WidthType, HeightRule } = lib();
+export async function buildDocxBlob(group, { spec = defaultSpec(), rocDisplay, stamp, onProgress, render = renderForDocx } = {}) {
+  const { Document, Packer, Table, TableRow, Header, WidthType } = lib();
+  const errs = validateSpec(spec);
+  if (errs.length) throw new Error(`版型不完整，無法輸出：${errs.join('；')}`);
+
   const photos = group.photos;
-  const rendered = [];
+  const stampText = spec.stamp?.on ? stamp : '';
+  const byPhoto = new Map();
   const failures = [];
   for (let i = 0; i < photos.length; i++) {
+    const p = photos[i];
+    let rendered = null;
     try {
-      rendered.push(await render(photos[i].file, { stamp }));
+      rendered = await render(p.file, { stamp: stampText });
     } catch (e) {
-      rendered.push(null);
-      failures.push(`${photos[i].name}：${e.message}`);
+      failures.push(`${p.name}：${e.message}`);
     }
+    byPhoto.set(p, { photo: p, rendered, ctx: { seq: i + 1, photoDate: p.photoDate ?? '' } });
     onProgress?.(i + 1, photos.length);
   }
 
   const rows = [];
-  for (const pair of pairRows(photos)) {
-    const idx = pair.map((p) => photos.indexOf(p));
-    rows.push(
-      new TableRow({
-        height: { value: LAYOUT.photoRowH, rule: HeightRule.ATLEAST },
-        children: [0, 1].map((c) => (pair[c] ? photoCell(rendered[idx[c]], pair[c]) : emptyCell())),
-      }),
-    );
-    rows.push(new TableRow({ children: [0, 1].map((c) => (pair[c] ? captionCell(pair[c]) : emptyCell())) }));
+  for (const page of layoutPages(spec, photos)) {
+    for (const slotPhotos of page) rows.push(...buildBlockRows(spec, slotPhotos, byPhoto));
   }
 
+  const cols = tableCols(spec);
   const table = new Table({
     rows,
-    width: { size: LAYOUT.cellW * 2, type: WidthType.DXA },
-    columnWidths: [LAYOUT.cellW, LAYOUT.cellW],
-    indent: { size: LAYOUT.tableIndent, type: WidthType.DXA },
+    width: { size: blockWidth(spec) * spec.grid.perRow, type: WidthType.DXA },
+    columnWidths: cols,
+    indent: { size: spec.grid.tableIndent ?? 0, type: WidthType.DXA },
   });
 
-  const doc = new Document({
-    styles: { default: { document: { run: { font: FONTS, size: LAYOUT.captionHalfPt } } } },
-    sections: [
-      {
-        properties: {
-          page: {
-            size: { width: LAYOUT.pageW, height: LAYOUT.pageH },
-            margin: { top: LAYOUT.marginT, right: LAYOUT.marginR, bottom: LAYOUT.marginB, left: LAYOUT.marginL },
-          },
-        },
-        headers: {
-          default: new Header({
-            children: [
-              textPara(COMPANY, LAYOUT.headerHalfPt, { align: 'center' }),
-              textPara(`${TITLE}(檢查日期：${rocDisplay})`, LAYOUT.headerHalfPt, { align: 'center' }),
-            ],
-          }),
-        },
-        children: [table],
+  const headingParas = (spec.heading?.lines ?? []).map((l) =>
+    textPara(spec, (l.text ?? '').replace('{date}', rocDisplay ?? ''), (l.sizePt ?? 14) * 2, { align: l.align ?? 'center', bold: l.bold }),
+  );
+  const inHeader = spec.heading?.place !== 'body';
+
+  // docx 函式庫在 landscape 時會自己把長寬對調，所以這裡要餵「轉正前」的尺寸。
+  const landscape = spec.page.orient === 'landscape';
+  const size = landscape
+    ? { width: spec.page.h, height: spec.page.w, orientation: 'landscape' }
+    : { width: spec.page.w, height: spec.page.h, orientation: 'portrait' };
+
+  const section = {
+    properties: {
+      page: {
+        size,
+        margin: { top: spec.page.margin.t, right: spec.page.margin.r, bottom: spec.page.margin.b, left: spec.page.margin.l },
       },
-    ],
+    },
+    children: inHeader ? [table] : [...headingParas, table],
+  };
+  if (inHeader) section.headers = { default: new Header({ children: headingParas }) };
+
+  const doc = new Document({
+    styles: { default: { document: { run: { font: fontsOf(spec), size: spec.caption.sizePt * 2 } } } },
+    sections: [section],
   });
 
   const blob = await Packer.toBlob(doc);
