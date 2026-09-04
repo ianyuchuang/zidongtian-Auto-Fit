@@ -44,6 +44,7 @@ export function mountViewer(container, app) {
 
   function renderFull(p) {
     container.innerHTML = `
+      <div class="viewer-body">
       <div class="head">
         <span class="name" title="${esc(p.name)}">${esc(p.name)}</span>
         <span class="badge ${isTrashed(p) ? 'trashed' : p.status}">${isTrashed(p) ? '已刪除' : STATUS_LABEL[p.status]}</span>
@@ -56,6 +57,7 @@ export function mountViewer(container, app) {
       <div class="crop-title">白板裁切（AI 定位後從原圖裁出，供對照）</div>
       <div class="crop"><span>尚無裁切</span></div>
       ${FIELDS.map(([f, label]) => `<div class="f"><label>${label}</label><input type="text" data-f="${f}" value="${esc(p[f])}"${locked(p) ? ' disabled' : ''}></div>`).join('')}
+      </div>
       <div class="actions">
         ${
           isTrashed(p)
