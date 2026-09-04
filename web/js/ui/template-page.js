@@ -4,12 +4,29 @@
 //      要填值的位置是一顆「欄位膠囊」（下拉可換欄位、選「（留空）」就移除），
 //      從上面的工具列把欄位拖進句子裡就多一個，拖到行與行之間就多一行，也可以拖到別格或刪掉。
 //      Enter＝分段（切成上下兩行）、Shift+Enter＝段落內換行，和 Word 一樣。
+//      格子上按右鍵可選這一格的水平／垂直對齊（照片格也可以）。
 // 版型的資料結構與純邏輯在 template/spec.js。
 
 import { esc, toast, confirmDialog } from './dialog.js';
 import { bindFileDrop } from './dnd.js';
 import { parseTemplateDocx } from '../template/parse.js';
-import { FIELDS, slotOrder, swapSlots, validateSpec, blockWidth, addLine, removeLine, moveLine, perPage, lineParts, makeLine } from '../template/spec.js';
+import {
+  FIELDS,
+  ALIGNS,
+  VALIGNS,
+  slotOrder,
+  swapSlots,
+  validateSpec,
+  blockWidth,
+  addLine,
+  removeLine,
+  moveLine,
+  perPage,
+  lineParts,
+  makeLine,
+  cellAlign,
+  setCellAlign,
+} from '../template/spec.js';
 import { listTemplates, getTemplate, saveTemplate, removeTemplate } from '../template/library.js';
 
 const PX = (twips) => twips / 15; // 1440 twips = 1 吋 = 96px
@@ -70,6 +87,20 @@ export function readParts(el) {
     else if (node.nodeType === 1) out.push({ text: node.textContent }); // 瀏覽器自己塞的 <div> 之類
   }
   return out;
+}
+
+/** 格子右鍵選單的內容：水平／垂直各三項，目前的選擇打勾。r、c 由呼叫端放在選單的 dataset 上。 */
+export function alignMenuHtml(cell) {
+  const cur = cellAlign(cell);
+  const items = (title, key, opts) =>
+    `<div class="tp-menu-title">${title}</div>` +
+    Object.entries(opts)
+      .map(
+        ([v, label]) =>
+          `<button type="button" class="tp-menu-item ${cur[key] === v ? 'on' : ''}" data-${key === 'align' ? 'align' : 'valign'}="${v}">${cur[key] === v ? '<span class="tp-menu-tick">✓</span>' : ''}${esc(label)}</button>`,
+      )
+      .join('');
+  return items('水平', 'align', ALIGNS) + items('垂直', 'vAlign', VALIGNS);
 }
 
 /** 數字框讀回來：不是數字就用 fallback，四捨五入成整數再夾進 [min, max]（打 2.5、空白、0 都不會漏成 0×0）。 */
@@ -195,8 +226,9 @@ export function mountTemplatePage(container, app) {
 
   function cellHtml(spec, r, cell, c) {
     const area = `grid-area:${r + 1}/${(cell.col ?? 0) + 1}/span ${cell.rowSpan ?? 1}/span ${cell.colSpan ?? 1}`;
+    const { align, vAlign } = cellAlign(cell);
     if (cell.kind === 'photo') {
-      return `<div class="tp-cell tp-photo" style="${area}">
+      return `<div class="tp-cell tp-photo" data-cell="${r}.${c}" data-align="${align}" data-valign="${vAlign}" style="${area}">
         <div class="tp-photobox" style="width:${Math.round(spec.photo.maxW)}px;height:${Math.round(spec.photo.h)}px">
           <span>照片</span><span class="small">${Math.round(spec.photo.maxW)}×${Math.round(spec.photo.h)}</span>
         </div>
@@ -204,7 +236,7 @@ export function mountTemplatePage(container, app) {
     }
     const size = PT(cell.sizePt ?? spec.caption.sizePt);
     const lines = (cell.lines ?? []).map((l, i) => lineHtml(spec, r, c, l, i)).join('');
-    return `<div class="tp-cell tp-text" data-cell="${r}.${c}" style="${area};font-size:${size}px">${lines}</div>`;
+    return `<div class="tp-cell tp-text" data-cell="${r}.${c}" data-align="${align}" data-valign="${vAlign}" style="${area};font-size:${size}px">${lines}</div>`;
   }
 
   function blockHtml(spec) {
@@ -374,6 +406,7 @@ export function mountTemplatePage(container, app) {
    * 或字被欄位膠囊佔滿時，點不到那一行就打不了字。這裡把游標接到最近的一行後面。
    */
   stage.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return; // 右鍵是開對齊選單，不動游標
     const cell = e.target.closest('.tp-text');
     if (!cell || e.target.closest('.tp-parts, select, button, .tp-grip')) return; // 本來就點在能操作的東西上
     const lines = [...cell.querySelectorAll('.tp-parts')];
@@ -520,6 +553,51 @@ export function mountTemplatePage(container, app) {
       });
     });
   }
+
+  // ---------- 格子右鍵：選這一格的水平／垂直對齊 ----------
+  let menu = null; // 一次只開一個
+  const closeMenu = () => {
+    menu?.remove();
+    menu = null;
+  };
+  function openMenu(cellEl, x, y) {
+    closeMenu();
+    const [r, c] = at(cellEl.dataset.cell);
+    menu = document.createElement('div');
+    menu.className = 'tp-menu';
+    menu.dataset.cell = cellEl.dataset.cell;
+    menu.innerHTML = alignMenuHtml(spec.block.rows[r].cells[c]);
+    menu.style.left = `${x}px`;
+    menu.style.top = `${y}px`;
+    document.body.appendChild(menu);
+    // 貼著視窗右／下緣時往回挪，別跑出畫面
+    const box = menu.getBoundingClientRect();
+    if (box.right > innerWidth) menu.style.left = `${Math.max(0, x - box.width)}px`;
+    if (box.bottom > innerHeight) menu.style.top = `${Math.max(0, y - box.height)}px`;
+    menu.addEventListener('click', (e) => {
+      const item = e.target.closest('.tp-menu-item');
+      if (!item) return;
+      const change = item.dataset.align ? { align: item.dataset.align } : { vAlign: item.dataset.valign };
+      setCellAlign(spec, r, c, change);
+      closeMenu();
+      render(); // 使用者這時沒在打字，整頁重畫沒關係
+    });
+  }
+  container.addEventListener('contextmenu', (e) => {
+    const cellEl = e.target.closest('.tp-cell');
+    if (!spec || !cellEl?.dataset.cell) return; // 只擋格子上的右鍵，其他地方照瀏覽器預設
+    e.preventDefault();
+    openMenu(cellEl, e.clientX, e.clientY);
+  }, { signal });
+  // 點別處、按 Esc、捲動都關掉；拆頁時也要收掉（選單掛在 body 上，不會跟著容器消失）
+  window.addEventListener('mousedown', (e) => {
+    if (menu && !menu.contains(e.target)) closeMenu();
+  }, { signal });
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeMenu();
+  }, { signal });
+  window.addEventListener('scroll', closeMenu, { signal, capture: true });
+  signal.addEventListener('abort', closeMenu);
 
   // ---------- 工具列與頂列（掛在容器上，重畫也不會掉） ----------
   container.addEventListener('change', (e) => {

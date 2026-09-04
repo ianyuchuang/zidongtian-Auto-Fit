@@ -320,6 +320,31 @@ td.conf { color: var(--muted); text-align: right; }
   font-family: var(--font); max-width: 100%; max-height: 100%;
 }
 .tp-text { display: flex; flex-direction: column; justify-content: center; gap: 1px; cursor: text; }
+/* 格子的對齊（右鍵選單；沒寫＝靠左、垂直置中，和輸出的 Word 一樣） */
+.tp-text[data-valign="top"] { justify-content: flex-start; }
+.tp-text[data-valign="center"] { justify-content: center; }
+.tp-text[data-valign="bottom"] { justify-content: flex-end; }
+.tp-photo[data-valign="top"] { align-items: start; }
+.tp-photo[data-valign="center"] { align-items: center; }
+.tp-photo[data-valign="bottom"] { align-items: end; }
+.tp-text[data-align="left"] .tp-parts { text-align: left; }
+.tp-text[data-align="center"] .tp-parts { text-align: center; }
+.tp-text[data-align="right"] .tp-parts { text-align: right; }
+.tp-photo[data-align="left"] { justify-items: start; }
+.tp-photo[data-align="center"] { justify-items: center; }
+.tp-photo[data-align="right"] { justify-items: end; }
+.tp-menu {
+  position: fixed; z-index: 50; min-width: 120px; background: var(--panel); border: 1px solid var(--line);
+  border-radius: 6px; box-shadow: 0 4px 14px rgba(0,0,0,.15); padding: 4px; font-family: var(--font); font-size: 13px;
+}
+.tp-menu-title { color: var(--muted); font-size: 11px; padding: 4px 8px 2px; }
+.tp-menu-item {
+  display: flex; align-items: center; gap: 6px; width: 100%; border: 0; background: none; text-align: left;
+  padding: 4px 8px 4px 22px; border-radius: 4px; cursor: pointer; font: inherit; color: inherit; position: relative;
+}
+.tp-menu-item .tp-menu-tick { position: absolute; left: 7px; }
+.tp-menu-item:hover { background: var(--accent-soft); }
+.tp-menu-item.on { color: var(--accent); font-weight: 600; }
 .tp-line { display: flex; align-items: baseline; gap: 2px; min-width: 0; position: relative; }
 /* 把手疊在左邊不佔寬（不然下拉會被擠到看不見字）；× 排在下拉箭頭的右邊外側，
    固定佔一小格寬度，兩顆都只有滑過去才顯示 */

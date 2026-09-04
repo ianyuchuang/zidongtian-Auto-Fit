@@ -44,7 +44,8 @@ function buildCell(spec, cell, col, { photo, rendered, ctx }) {
       const size = fitPhoto(spec, rendered.width, rendered.height);
       children = [
         new Paragraph({
-          alignment: AlignmentType.CENTER,
+          // 照片格的水平對齊照版型頁右鍵選的；沒寫就置中（解析與預設版型都寫 center）
+          alignment: { left: AlignmentType.LEFT, right: AlignmentType.RIGHT }[cell.align] ?? AlignmentType.CENTER,
           spacing: { before: 0, after: 0 },
           children: [new ImageRun({ type: rendered.type, data: rendered.data, transformation: size })],
         }),

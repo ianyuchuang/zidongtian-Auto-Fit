@@ -237,6 +237,33 @@ export function cellText(cell, photo, ctx = {}) {
   );
 }
 
+// ---------- 格子的對齊（版型頁右鍵選單） ----------
+
+/** 水平對齊的選項；每一格沒寫就是靠左（照手改的正確版）。 */
+export const ALIGNS = { left: '靠左', center: '置中', right: '靠右' };
+/** 垂直對齊的選項；沒寫就是置中。 */
+export const VALIGNS = { top: '靠上', center: '置中', bottom: '靠下' };
+
+/** 一格目前的對齊（補上預設值）。 */
+export function cellAlign(cell) {
+  return { align: cell?.align ?? 'left', vAlign: cell?.vAlign ?? 'center' };
+}
+
+/** 設定某一格的水平／垂直對齊。只給其中一個就只改那一個；值不合法直接丟錯（寧可大聲失敗）。 */
+export function setCellAlign(spec, r, c, { align, vAlign } = {}) {
+  const cell = spec?.block?.rows?.[r]?.cells?.[c];
+  if (!cell) throw new Error(`沒有這一格：${r}.${c}`);
+  if (align !== undefined) {
+    if (!(align in ALIGNS)) throw new Error(`不合法的水平對齊：${align}`);
+    cell.align = align;
+  }
+  if (vAlign !== undefined) {
+    if (!(vAlign in VALIGNS)) throw new Error(`不合法的垂直對齊：${vAlign}`);
+    cell.vAlign = vAlign;
+  }
+  return cell;
+}
+
 /** 版型檢查：回傳錯誤訊息陣列（空陣列＝可用）。寧可在這裡擋下來，不要產出錯的 Word。 */
 export function validateSpec(spec) {
   const errs = [];
@@ -251,6 +278,10 @@ export function validateSpec(spec) {
   const cells = (spec.block?.rows ?? []).flatMap((r) => r.cells ?? []);
   const photos = cells.filter((c) => c.kind === 'photo');
   if (photos.length !== 1) errs.push(`一個區塊要正好一個照片格（目前 ${photos.length} 個）`);
+  for (const c of cells) {
+    if (c.align != null && !(c.align in ALIGNS)) errs.push(`格子的水平對齊不合法：${c.align}`);
+    if (c.vAlign != null && !(c.vAlign in VALIGNS)) errs.push(`格子的垂直對齊不合法：${c.vAlign}`);
+  }
   for (const r of spec.block?.rows ?? []) {
     let cursor = 0;
     for (const c of r.cells ?? []) {

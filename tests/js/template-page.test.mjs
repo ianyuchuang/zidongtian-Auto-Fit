@@ -2,7 +2,7 @@
 // 用最小的假 DOM：只記 addEventListener／removeEventListener，並照 { signal } 的規矩在 abort 時拆掉。
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mountTemplatePage, clampInt, readParts, partsHtml } from '../../web/js/ui/template-page.js';
+import { mountTemplatePage, clampInt, readParts, partsHtml, alignMenuHtml } from '../../web/js/ui/template-page.js';
 
 class FakeEl {
   constructor() {
@@ -71,7 +71,7 @@ test('mountTemplatePage 回傳 unmount，拆掉後容器與 window 上的監聽�
     const c = new FakeContainer();
     const unmount = mountTemplatePage(c, fakeApp());
     assert.equal(typeof unmount, 'function');
-    for (const t of ['click', 'change', 'dragstart', 'dragend']) assert.equal(c.count(t), 1, t);
+    for (const t of ['click', 'change', 'dragstart', 'dragend', 'contextmenu']) assert.equal(c.count(t), 1, t);
     assert.equal(win.count('resize'), 1);
     unmount();
     assert.equal(c.listeners.length, 0);
@@ -87,9 +87,46 @@ test('拆掉再掛同一個容器，每種事件只剩一套（不會疊上舊�
       unmount();
     }
     mountTemplatePage(c, fakeApp());
-    for (const t of ['click', 'change', 'dragstart', 'dragend']) assert.equal(c.count(t), 1, t);
+    for (const t of ['click', 'change', 'dragstart', 'dragend', 'contextmenu']) assert.equal(c.count(t), 1, t);
     assert.equal(win.count('resize'), 1);
+    assert.equal(c.count('contextmenu'), 1);
   });
+});
+
+test('拆掉後格子右鍵選單的監聽（容器的 contextmenu、window 的關閉事件）都收掉', () => {
+  withWindow((win) => {
+    const c = new FakeContainer();
+    const unmount = mountTemplatePage(c, fakeApp());
+    assert.equal(c.count('contextmenu'), 1);
+    for (const t of ['mousedown', 'keydown', 'scroll']) assert.equal(win.count(t), 1, t);
+    unmount();
+    assert.equal(c.count('contextmenu'), 0);
+    for (const t of ['mousedown', 'keydown', 'scroll']) assert.equal(win.count(t), 0, t);
+  });
+});
+
+test('還沒讀版型、或右鍵不在格子上：不擋瀏覽器預設選單', async () => {
+  await withWindow(async () => {
+    const c = new FakeContainer();
+    mountTemplatePage(c, fakeApp());
+    let prevented = 0;
+    await c.fire('contextmenu', { target: { closest: () => null }, preventDefault: () => prevented++ });
+    await c.fire('contextmenu', { target: { closest: () => ({ dataset: { cell: '1.0' } }) }, preventDefault: () => prevented++ });
+    assert.equal(prevented, 0); // spec 是 null，格子也不存在
+  });
+});
+
+test('alignMenuHtml：水平／垂直各三項，目前的選擇打勾（沒寫＝靠左、垂直置中）', () => {
+  const html = alignMenuHtml({ kind: 'text' });
+  for (const v of ['left', 'center', 'right']) assert.match(html, new RegExp(`data-align="${v}"`));
+  for (const v of ['top', 'center', 'bottom']) assert.match(html, new RegExp(`data-valign="${v}"`));
+  assert.match(html, /on" data-align="left">/);
+  assert.match(html, /on" data-valign="center">/);
+  assert.equal((html.match(/tp-menu-tick/g) ?? []).length, 2);
+  const h2 = alignMenuHtml({ kind: 'photo', align: 'right', vAlign: 'bottom' });
+  assert.match(h2, /on" data-align="right">/);
+  assert.match(h2, /on" data-valign="bottom">/);
+  assert.doesNotMatch(h2, /on" data-align="left">/);
 });
 
 test('沒 unmount 就重掛會疊起來（證明前面那條測的是真的）', () => {

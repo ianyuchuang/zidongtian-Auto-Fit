@@ -232,3 +232,30 @@ test('validateSpec：每列張數／每頁列數要正整數、照片框不能�
   s.photo.maxW = NaN;
   assert.match(validateSpec(s).join(), /照片框/);
 });
+
+test('setCellAlign：改某一格的水平／垂直對齊；不合法的值直接丟錯', async () => {
+  const { setCellAlign, cellAlign } = await import('../../web/js/template/spec.js');
+  const s = defaultSpec();
+  assert.deepEqual(cellAlign(s.block.rows[1].cells[0]), { align: 'left', vAlign: 'center' }); // 沒寫＝預設
+  setCellAlign(s, 1, 0, { align: 'right' });
+  assert.equal(s.block.rows[1].cells[0].align, 'right');
+  assert.equal(s.block.rows[1].cells[0].vAlign, undefined, '只給 align 就不動 vAlign');
+  setCellAlign(s, 1, 0, { vAlign: 'bottom' });
+  assert.deepEqual(cellAlign(s.block.rows[1].cells[0]), { align: 'right', vAlign: 'bottom' });
+  setCellAlign(s, 0, 0, { align: 'left', vAlign: 'top' }); // 照片格也可以
+  assert.deepEqual(cellAlign(s.block.rows[0].cells[0]), { align: 'left', vAlign: 'top' });
+  assert.deepEqual(validateSpec(s), []);
+  assert.throws(() => setCellAlign(s, 1, 0, { align: 'middle' }), /水平對齊/);
+  assert.throws(() => setCellAlign(s, 1, 0, { vAlign: 'up' }), /垂直對齊/);
+  assert.throws(() => setCellAlign(s, 9, 0, { align: 'left' }), /沒有這一格/);
+  assert.deepEqual(cellAlign(s.block.rows[1].cells[0]), { align: 'right', vAlign: 'bottom' }, '丟錯時不能偷改');
+});
+
+test('validateSpec：格子的 align／vAlign 寫了不合法的值要擋', () => {
+  const s = defaultSpec();
+  s.block.rows[1].cells[0].align = 'justify';
+  assert.match(validateSpec(s).join(), /水平對齊不合法：justify/);
+  delete s.block.rows[1].cells[0].align;
+  s.block.rows[0].cells[0].vAlign = 'middle';
+  assert.match(validateSpec(s).join(), /垂直對齊不合法：middle/);
+});
