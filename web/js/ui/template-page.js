@@ -23,17 +23,19 @@ export function mountTemplatePage(container, app) {
 
   container.innerHTML = `
     <div class="tplpage">
-      <div class="tplbar">
-        <button class="btn" data-act="back">← 回入口頁</button>
-        <b>版型調整</b>
-        <span class="small muted" id="tpl-file"></span>
-        <span class="spacer"></span>
-        <input type="text" id="tpl-name" placeholder="版型名稱" hidden>
-        <button class="btn" data-act="save" hidden>存成版型</button>
-        <button class="btn btn-primary" data-act="use" hidden>完成，使用這個版型</button>
+      <div class="tplhead">
+        <div class="tplbar">
+          <button class="btn" data-act="back">← 回入口頁</button>
+          <b>版型調整</b>
+          <span class="small muted" id="tpl-file"></span>
+          <span class="spacer"></span>
+          <input type="text" id="tpl-name" placeholder="版型名稱" hidden>
+          <button class="btn" data-act="save" hidden>存成版型</button>
+          <button class="btn btn-primary" data-act="use" hidden>完成，使用這個版型</button>
+        </div>
+        <div class="tpltools" id="tpl-tools" hidden></div>
+        <div class="tplerrs" id="tpl-errs" hidden></div>
       </div>
-      <div class="tpltools" id="tpl-tools" hidden></div>
-      <div class="tplerrs" id="tpl-errs" hidden></div>
       <div class="tplstage" id="tpl-stage"></div>
     </div>`;
 
