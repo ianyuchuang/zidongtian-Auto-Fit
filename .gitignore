@@ -19,6 +19,9 @@ node_modules/
 # 需求與參考資料（不納入版控）
 需求及資訊來源/
 
+# Cowork 自動存下的交付檔（同一份已放進 docs/）
+Claude outputs/
+
 # 測試 / 紀錄
 .pytest_cache/
 *.log
