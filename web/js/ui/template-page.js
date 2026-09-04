@@ -503,11 +503,15 @@ export function mountTemplatePage(container, app) {
         el.classList.add('over');
       });
       el.addEventListener('dragleave', () => el.classList.remove('over'));
+      el.addEventListener('dragend', () => {
+        from = null; // 拖到一半放掉也要清，不然下次的 drop 會拿舊的來換
+      });
       el.addEventListener('drop', (e) => {
         el.classList.remove('over');
         if (drag) return;
         e.preventDefault();
         const a = from ?? Number(e.dataTransfer.getData('text/plain'));
+        from = null;
         const b = Number(el.dataset.slot);
         if (Number.isInteger(a) && a !== b) {
           swapSlots(spec, a, b);
