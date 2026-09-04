@@ -17,7 +17,7 @@ export function mountTable(container, app) {
     <div class="bulkbar off">
       <span>已勾選 <b class="n">0</b> 張<span class="hidden-note muted"></span></span>
       <select class="move-to" title="把勾選的照片搬到資料夾"><option value="">搬到資料夾…</option></select>
-      <button class="btn btn-danger" data-bulk="trash" title="搬到根資料夾下的 ${TRASH_DIR}，可再拖回來">🗑 刪除（移到 ${TRASH_DIR}）</button>
+      <button class="btn btn-danger" data-bulk="trash" title="搬進各自所在資料夾的 ${TRASH_DIR}（留在原位反灰，按「↩ 還原」搬回來）">🗑 刪除（移到 ${TRASH_DIR}）</button>
       <button class="btn" data-bulk="clear">取消勾選</button>
     </div>
     <div class="table-wrap">
