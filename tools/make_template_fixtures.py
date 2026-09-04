@@ -1,0 +1,131 @@
+# -*- coding: utf-8 -*-
+"""把 需求及資訊來源/版型/*.docx 抽成測試用的 XML fixture。
+
+只取版面需要的 word/document.xml 與預設頁首，去掉 rsid 這類雜訊，
+並把工程案名、公司名、說明內容一律換成「範例…」——fixture 會進 git，
+實際案名不進去。
+
+用法：python tools/make_template_fixtures.py [版型資料夾]
+"""
+import re
+import sys
+import zipfile
+from pathlib import Path
+from xml.etree import ElementTree as ET
+
+ROOT = Path(__file__).resolve().parent.parent
+SRC = ROOT.parent / "需求及資訊來源" / "版型"
+OUT = ROOT / "tests" / "fixtures" / "版型"
+
+W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+R = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
+XML_SPACE = "{http://www.w3.org/XML/1998/namespace}space"
+
+NS = {
+    "wpc": "http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas",
+    "cx": "http://schemas.microsoft.com/office/drawing/2014/chartex",
+    "mc": "http://schemas.openxmlformats.org/markup-compatibility/2006",
+    "o": "urn:schemas-microsoft-com:office:office",
+    "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
+    "m": "http://schemas.openxmlformats.org/officeDocument/2006/math",
+    "v": "urn:schemas-microsoft-com:vml",
+    "wp14": "http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing",
+    "wp": "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing",
+    "w10": "urn:schemas-microsoft-com:office:word",
+    "w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
+    "w14": "http://schemas.microsoft.com/office/word/2010/wordml",
+    "w15": "http://schemas.microsoft.com/office/word/2012/wordml",
+    "wpg": "http://schemas.microsoft.com/office/word/2010/wordprocessingGroup",
+    "wps": "http://schemas.microsoft.com/office/word/2010/wordprocessingShape",
+    "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
+    "pic": "http://schemas.openxmlformats.org/drawingml/2006/picture",
+    "a14": "http://schemas.microsoft.com/office/drawing/2010/main",
+}
+
+# 檔名 → fixture 目錄名（英數，好在測試裡引用）
+NAMES = {
+    "1150614 輕隔間尺寸11F.docx": "a-portrait-3x2",
+    "D棟3樓.docx": "b-landscape-5rows",
+    "電氣設備 材料進場自檢(照片).docx": "c-portrait-label-cell",
+}
+
+# 段落文字的匿名規則（照順序，第一條命中就停）；只換值，不動欄位名。
+SUBS = [
+    (r"^高雄市.*工程$", "範例工程"),
+    (r"^永青營造工程股份有限公司/.*$", "範例營造股份有限公司/範例機電股份有限公司"),
+    (r"^永青營造工程股份有限公司$", "範例營造股份有限公司"),
+    (r"^(內容說明：).*$", r"\1範例說明"),
+    (r"^(設\s*計：).*$", r"\1範例設計"),
+    (r"^(實\s*際：).*$", r"\1範例實際"),
+    (r"^D棟.*$", "範例圖片說明"),
+    (r"^EMT.*$", "範例說明"),
+]
+
+DROP_ATTRS = re.compile(
+    r'\s(?:w:rsid[A-Za-z]*|w14:paraId|w14:textId|wp14:anchorId|wp14:editId)="[^"]*"'
+)
+
+
+def anonymize(p):
+    """段落套匿名規則；有換過就把文字集中到第一個 run，其餘清空（保留 run 結構）。"""
+    ts = list(p.iter(W + "t"))
+    if not ts:
+        return
+    text = "".join(t.text or "" for t in ts)
+    for pat, rep in SUBS:
+        new = re.sub(pat, rep, text)
+        if new != text:
+            ts[0].text = new
+            ts[0].set(XML_SPACE, "preserve")
+            for t in ts[1:]:
+                t.text = ""
+            return
+
+
+def write_xml(el, path: Path):
+    xml = DROP_ATTRS.sub("", ET.tostring(el, encoding="unicode"))
+    path.write_text('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' + xml, encoding="utf-8")
+
+
+def extract(src: Path, dst: Path):
+    z = zipfile.ZipFile(src)
+    dst.mkdir(parents=True, exist_ok=True)
+
+    doc = ET.fromstring(z.read("word/document.xml"))
+    for p in doc.iter(W + "p"):
+        anonymize(p)
+    write_xml(doc, dst / "document.xml")
+
+    rels = ET.fromstring(z.read("word/_rels/document.xml.rels"))
+    target = {r.get("Id"): r.get("Target") for r in rels}
+    ref = None
+    for sect in doc.iter(W + "sectPr"):
+        for h in sect.findall(W + "headerReference"):
+            if h.get(W + "type") == "default":
+                ref = target.get(h.get(R + "id"))
+    if ref:
+        hdr = ET.fromstring(z.read("word/" + ref))
+        for p in hdr.iter(W + "p"):
+            anonymize(p)
+        write_xml(hdr, dst / "header.xml")
+
+
+def main(argv):
+    src_dir = Path(argv[1]) if len(argv) > 1 else SRC
+    if not src_dir.is_dir():
+        print(f"找不到 {src_dir}", file=sys.stderr)
+        return 1
+    for prefix, uri in NS.items():
+        ET.register_namespace(prefix, uri)
+    for name, slug in NAMES.items():
+        src = src_dir / name
+        if not src.is_file():
+            print(f"跳過（沒有這份）：{name}", file=sys.stderr)
+            continue
+        extract(src, OUT / slug)
+        print(f"OK {slug}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv))
