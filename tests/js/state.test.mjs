@@ -85,6 +85,10 @@ test('nextPendingReview：從目前之後循環找', () => {
   assert.equal(nextPendingReview(photos, 'zzz').id, 'c'); // 找不到起點就從頭
   assert.equal(nextPendingReview([photos[0]], 'a'), null);
   assert.equal(nextPendingReview([], 'a'), null);
+  // 自己是唯一一張待校對 → 沒有「其他」待校對，回 null 才會有「沒有其他待校對」提示（回歸 W13）
+  assert.equal(nextPendingReview([photos[0], photos[2]], 'c'), null);
+  assert.equal(nextPendingReview([photos[2]], 'c'), null);
+  assert.equal(nextPendingReview([photos[0], photos[2]], 'a').id, 'c');
 });
 
 test('sortPhotos：依資料夾順序再依 order', () => {

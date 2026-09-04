@@ -117,14 +117,16 @@ export function isPendingReview(p) {
   return p.status === STATUS.AI || p.status === STATUS.LOW || p.status === STATUS.ERROR;
 }
 
-/** 從 fromId 之後（循環）找下一張待校對；沒有就回 null。 */
+/** 從 fromId 之後（循環）找下一張待校對，不含 fromId 自己；沒有就回 null。 */
 export function nextPendingReview(orderedPhotos, fromId) {
   const n = orderedPhotos.length;
   if (!n) return null;
   let start = orderedPhotos.findIndex((p) => p.id === fromId);
   if (start < 0) start = -1;
   for (let k = 1; k <= n; k++) {
-    const p = orderedPhotos[(start + k) % n];
+    const i = (start + k) % n;
+    if (i === start) continue; // 繞一圈回到自己＝沒有「其他」待校對，呼叫端才給得出提示（bug W13）
+    const p = orderedPhotos[i];
     if (isPendingReview(p)) return p;
   }
   return null;
