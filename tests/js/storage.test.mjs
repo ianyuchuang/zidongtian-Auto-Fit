@@ -17,13 +17,33 @@ class FakeStorage {
   }
 }
 
-test('serializePhotos：只存需要的欄位、略過 pending，不存 handle/file', () => {
+test('serializePhotos：只存需要的欄位，不存 handle/file；pending 也存', () => {
   const out = serializePhotos([
     { path: '4F/a.jpg', desc: 'a', design: '1', actual: '2', status: 'confirmed', order: 3, handle: {}, file: {}, confidence: null, source: 'filename', bbox: null },
     { path: '5F/b.jpg', desc: '', status: 'pending', order: 0 },
   ]);
-  assert.deepEqual(Object.keys(out), ['4F/a.jpg']);
+  assert.deepEqual(Object.keys(out), ['4F/a.jpg', '5F/b.jpg']);
   assert.deepEqual(out['4F/a.jpg'], { desc: 'a', design: '1', actual: '2', confidence: null, source: 'filename', status: 'confirmed', bbox: null, order: 3 });
+});
+
+test('沒跑 AI、純手打的照片（狀態仍是 pending）：三欄與拖曳順序重開要還在（回歸 W2）', () => {
+  const st = new FakeStorage();
+  savePhotos(
+    'root',
+    [
+      { path: 'a.jpg', desc: '手打', design: '10', actual: '11', status: 'pending', confidence: null, source: null, bbox: null, order: 1 },
+      { path: 'b.jpg', desc: '', design: '', actual: '', status: 'pending', confidence: null, source: null, bbox: null, order: 0 },
+    ],
+    st,
+  );
+  const fresh = [
+    { path: 'a.jpg', desc: '', design: '', actual: '', status: 'pending', order: 0 },
+    { path: 'b.jpg', desc: '', design: '', actual: '', status: 'pending', order: 1 },
+  ];
+  const { applied } = applySaved(fresh, loadSaved('root', st), { engine: 'mock' });
+  assert.equal(applied, 2);
+  assert.deepEqual([fresh[0].desc, fresh[0].design, fresh[0].actual, fresh[0].status], ['手打', '10', '11', 'pending']);
+  assert.deepEqual([fresh[0].order, fresh[1].order], [1, 0], '拖過的順序要保留');
 });
 
 test('save → load → apply 來回一致', () => {

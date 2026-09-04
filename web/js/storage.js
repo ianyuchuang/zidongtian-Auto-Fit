@@ -21,7 +21,8 @@ export function loadSaved(rootName, store = globalThis.localStorage) {
 export function serializePhotos(photos) {
   const out = {};
   for (const p of photos) {
-    if (p.status === 'pending') continue; // 還沒辨識完的不存
+    // 「待辨識」的也要存：沒跑 AI、純手打三欄的照片狀態一直是 pending，
+    // 不存的話手打的字與拖曳的順序重開就不見了（bug W2）。
     const rec = {};
     for (const f of FIELDS) if (p[f] !== undefined) rec[f] = p[f];
     out[p.path] = rec;
