@@ -2,17 +2,21 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { RECOGNIZERS, getRecognizer, DEFAULT_PROMPT } from '../../web/js/recognizer/index.js';
 
-test('登錄表：模擬版與 LLM API 可用，本地模型明確標示未接', () => {
-  assert.equal(getRecognizer('mock').available, true);
-  assert.equal(getRecognizer('local').available, false);
-  assert.equal(getRecognizer('api').available, true);
-  assert.equal(RECOGNIZERS.length, 3);
+test('登錄表：模擬版、本地模型、LLM API 三種都可用', () => {
+  assert.deepEqual(RECOGNIZERS.map((r) => r.id), ['mock', 'local', 'api']);
+  for (const r of RECOGNIZERS) assert.equal(r.available, true, r.id);
   assert.ok(DEFAULT_PROMPT.length > 0);
   assert.throws(() => getRecognizer('nope'), /沒有這個辨識方式/);
 });
 
-test('未接的辨識器呼叫要大聲失敗', async () => {
-  await assert.rejects(getRecognizer('local').recognize(new File([], 'a.jpg')), /尚未實作/);
+// 本地模型是本機 llama-server，不是 Hugging Face；選項名稱要跟實際接的東西一致，
+// 而且要講明照片不出這台電腦（需求 1）。細節測試在 local.test.mjs。
+test('本地模型：名稱講清楚是本機 llama.cpp、照片不離開這台電腦', () => {
+  const r = getRecognizer('local');
+  assert.match(r.label, /本地模型/);
+  assert.match(r.label, /llama\.cpp/);
+  assert.match(r.label, /不離開這台電腦/);
+  assert.doesNotMatch(r.label, /Hugging Face/);
 });
 
 test('模擬辨識：同檔名結果固定、信心 55–95、有 bbox', async () => {

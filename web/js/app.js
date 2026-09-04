@@ -50,6 +50,7 @@ export function createApp() {
     prompt: '',
     recognizerId: null, // 還沒在頂列「AI 辨識」選過辨識方式；選過就留著（回首頁再讀取也不清）
     api: null, // LLM API 設定 {provider, apiKey, model}（只在記憶體，不存進校對暫存）
+    local: null, // 本機模型設定 {baseUrl, model}（llama-server；照片不出這台電腦）
     engine: null, // 辨識引擎識別（'mock' / 'api:claude'…），存進暫存以便換引擎時重跑；null＝還沒選
     selectedId: null,
     dirFilter: null, // 左樹點選的資料夾路徑；null = 全部
@@ -131,7 +132,7 @@ export function createApp() {
       state.rootSummary = text;
     },
 
-    async open({ rootHandle, readOnly = false, template = null, prompt = null, recognizerId = null, api = null }) {
+    async open({ rootHandle, readOnly = false, template = null, prompt = null, recognizerId = null, api = null, local = null }) {
       app.pickRoot({ rootHandle, readOnly });
       state.date = new Date(); // 預設今天；各資料夾可在工作台的群組列各自改
       state.dates = loadDates(rootHandle.name);
@@ -142,6 +143,7 @@ export function createApp() {
       if (recognizerId != null) {
         state.recognizerId = recognizerId;
         state.api = api;
+        state.local = local;
       }
       state.engine = state.recognizerId ? engineId(state.recognizerId, state.api) : null;
       await app.rescan();
@@ -162,9 +164,10 @@ export function createApp() {
      * 只發 'engine'：這裡沒有換頁，發 'page' 會害 main.js 重掛整個工作台，
      * 拆掉的那一輪 history.back() 又被新掛上的 popstate 接到 → 直接跳回首頁（bug 2026-09-03）。
      */
-    setRecognizer({ recognizerId, api = null, prompt = '' }) {
+    setRecognizer({ recognizerId, api = null, local = null, prompt = '' }) {
       state.recognizerId = recognizerId;
       state.api = api;
+      state.local = local;
       state.prompt = prompt;
       state.engine = engineId(recognizerId, api);
       emit('engine');
@@ -279,6 +282,7 @@ export function createApp() {
               folderName: dir?.name ?? '',
               rootName: state.root.name,
               api: state.api,
+              local: state.local,
             });
             if (torn()) return;
             const touched = p.status !== before.status || p.desc !== before.desc || p.design !== before.design || p.actual !== before.actual;
