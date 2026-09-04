@@ -170,9 +170,9 @@ export function createApp() {
       emit('engine');
     },
 
-    /** 還沒辨識過的照片（不含回收桶）。 */
+    /** 還沒辨識出結果的照片（待辨識＋辨識失敗；不含回收桶）。失敗的也算，否則「尚未辨識」範圍永遠補不到它們（bug W11）。 */
     pendingPhotos() {
-      return state.photos.filter((p) => p.status === STATUS.PENDING && !isTrashed(p));
+      return state.photos.filter((p) => (p.status === STATUS.PENDING || p.status === STATUS.ERROR) && !isTrashed(p));
     },
     /** 可以重跑的照片（不含回收桶；預設不含已確認的，避免把校對成果洗掉）。 */
     redoablePhotos({ includeConfirmed = false } = {}) {

@@ -112,8 +112,9 @@ export function counts(photos) {
   return c;
 }
 
+/** 要人看一眼的：AI 待校對、低信心、辨識失敗（失敗的要人自己填或重跑，不能被「下一張」跳過）。 */
 export function isPendingReview(p) {
-  return p.status === STATUS.AI || p.status === STATUS.LOW;
+  return p.status === STATUS.AI || p.status === STATUS.LOW || p.status === STATUS.ERROR;
 }
 
 /** 從 fromId 之後（循環）找下一張待校對；沒有就回 null。 */

@@ -415,3 +415,14 @@ test('搬移／刪除／還原後，舊檔案的大圖與裁切 URL 要清掉讓
   await app.moveToDir('4F/b.jpg', '5F');
   assert.equal(app.photo('5F/b.jpg').fullUrl, null);
 });
+
+test('辨識失敗的照片仍算「尚未辨識」，能被再排進辨識、也會被「下一張」走到（回歸 W11）', async () => {
+  const { app } = await setup();
+  const p = app.state.photos[0];
+  p.status = 'error';
+  p.error = '沒金鑰';
+  assert.ok(app.pendingPhotos().includes(p));
+  app.select(app.state.photos[1].id);
+  assert.equal(app.gotoNextPending(app.state.photos[1].id), true);
+  assert.equal(app.state.selectedId, p.id);
+});
