@@ -48,6 +48,32 @@ async function showApiGuide(p) {
 }
 
 /**
+ * 「測試連線」：向 pid 這家要型號清單、套進下拉、再用選到的型號試打一句。
+ * 兩次 await 回來都要先問 isCurrent()：使用者等待時可能已經切到另一家，
+ * 這時清單與記住的型號不能寫到新的那家底下（bug W16）；回 'stale' 表示整個丟掉。
+ * list / test 可注入（測試用）。
+ */
+export async function probeProvider(pid, { key, extra = {}, isCurrent, setStatus, applyModels, onError = null, list = listModels, test = testConnection }) {
+  try {
+    setStatus('取得型號清單…');
+    const models = await list(pid, { apiKey: key, extra });
+    if (!isCurrent()) return 'stale';
+    const model = applyModels(models);
+    if (!model) throw new Error('伺服器沒有回傳看得懂圖的型號（勾「連不能看圖的型號也列出來」可自己挑）');
+    setStatus(`型號清單 ${models.length} 個，正在用 ${model} 試打…`);
+    const reply = await test(pid, { apiKey: key, model, extra });
+    if (!isCurrent()) return 'stale';
+    setStatus(`✅ 連線成功，可用型號 ${models.filter((m) => m.usable).length} 個；${model} 回覆「${reply.trim().slice(0, 20)}」`, 'ok');
+    return 'ok';
+  } catch (e) {
+    if (!isCurrent()) return 'stale';
+    setStatus(`❌ ${e.message}`, 'err');
+    onError?.(e);
+    return 'error';
+  }
+}
+
+/**
  * 辨識範圍 → 這次要辨識的照片。三種範圍都遵守同一條規則：
  * 「已確認」的只有勾了「連已確認的也一起重跑」才會排進去（介面規格：另有勾選項才會連已確認的一起重跑）；
  * 之前「目前勾選的」沒套這條，勾到已確認的照片會被 AI 直接洗掉（bug W5）。
@@ -245,21 +271,23 @@ async function askSettings(app) {
         }
         const btn = $('#api-test');
         btn.disabled = true;
-        const extra = { ...(apiState.extras[pid] || {}) };
         try {
-          setStatus('取得型號清單…');
-          modelList = await listModels(pid, { apiKey: key, extra });
-          fillModels(apiState.models[pid] || '');
-          const model = $('#api-model').value;
-          if (!model) throw new Error('伺服器沒有回傳看得懂圖的型號（勾「連不能看圖的型號也列出來」可自己挑）');
-          setStatus(`型號清單 ${modelList.length} 個，正在用 ${model} 試打…`);
-          const reply = await testConnection(pid, { apiKey: key, model, extra });
-          setStatus(`✅ 連線成功，可用型號 ${modelList.filter((m) => m.usable).length} 個；${model} 回覆「${reply.trim().slice(0, 20)}」`, 'ok');
-        } catch (e) {
-          setStatus(`❌ ${e.message}`, 'err');
-          // workspace 沒填就是這個錯，直接把游標送到那一格
-          const ws = d.querySelector('[data-extra="workspaceId"]');
-          if (ws && /workspace-id/i.test(e.message)) ws.focus();
+          await probeProvider(pid, {
+            key,
+            extra: { ...(apiState.extras[pid] || {}) },
+            isCurrent: () => apiState.provider === pid,
+            setStatus,
+            applyModels: (list) => {
+              modelList = list;
+              fillModels(apiState.models[pid] || '');
+              return $('#api-model').value;
+            },
+            onError: (e) => {
+              // workspace 沒填就是這個錯，直接把游標送到那一格
+              const ws = d.querySelector('[data-extra="workspaceId"]');
+              if (ws && /workspace-id/i.test(e.message)) ws.focus();
+            },
+          });
         } finally {
           btn.disabled = false;
         }
