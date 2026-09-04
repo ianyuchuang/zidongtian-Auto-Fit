@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """tools/dev_server.py：範例清單與路徑安全。"""
+import io
 import sys
 from pathlib import Path
 
@@ -99,3 +100,42 @@ def test_banner_lan_without_ip_tells_user_to_run_ipconfig():
 def test_lan_ip_returns_none_or_dotted_quad():
     ip = ds.lan_ip()
     assert ip is None or len(ip.split(".")) == 4
+
+
+class _NoCloseBytesIO(io.BytesIO):
+    """Handler.finish() 會 close 掉 wfile，關掉就讀不到回應；這裡讓 close 不生效。"""
+
+    def close(self):
+        pass
+
+
+class _FakeRequest:
+    """假 socket：餵一段 HTTP 請求、收回應。"""
+
+    def __init__(self, raw):
+        self.rfile = io.BytesIO(raw)
+        self.wfile = _NoCloseBytesIO()
+
+    def makefile(self, mode, *a, **kw):
+        return self.rfile if "r" in mode else self.wfile
+
+    def sendall(self, data):
+        self.wfile.write(data)
+
+
+def _get(path, samples_dir):
+    saved = ds.Handler.samples_dir
+    ds.Handler.samples_dir = samples_dir
+    req = _FakeRequest(f"GET {path} HTTP/1.1\r\nHost: x\r\n\r\n".encode("ascii"))
+    try:
+        ds.Handler(req, ("127.0.0.1", 1), None)
+    finally:
+        ds.Handler.samples_dir = saved
+    return req.wfile.getvalue()
+
+
+def test_samples_without_dir_returns_404_not_traceback():
+    # 狀態行只能是 latin-1：原本 send_error(404, "沒有掛範例資料夾") 每次入口頁載入都噴 UnicodeEncodeError
+    out = _get("/samples/index.json", None)
+    assert out.startswith(b"HTTP/1.0 404 no samples\r\n"), out[:80]
+    assert "沒有掛範例資料夾".encode("utf-8") in out

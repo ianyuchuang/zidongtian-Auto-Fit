@@ -120,7 +120,8 @@ class Handler(SimpleHTTPRequestHandler):
 
     def _serve_sample(self, path):
         if self.samples_dir is None:
-            return self.send_error(404, "沒有掛範例資料夾")
+            # 狀態行只能是 latin-1，中文放 explain（進 body）；放在 message 會 UnicodeEncodeError
+            return self.send_error(404, "no samples", "沒有掛範例資料夾")
         if path == "/samples/index.json":
             body = json.dumps(list_samples(self.samples_dir), ensure_ascii=False).encode("utf-8")
             self.send_response(200)
