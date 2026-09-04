@@ -68,6 +68,13 @@ export function createApp() {
     if (state.root) savePhotos(state.root.name, state.photos);
   };
   const byId = (id) => state.photos.find((p) => p.id === id) || null;
+  /** 釋放照片上的 object URL 並清成 null，之後要用時會重做（Node 測試環境沒有 blob URL，守住）。 */
+  const dropUrls = (p, keys) => {
+    for (const k of keys) {
+      if (p[k] && typeof URL?.revokeObjectURL === 'function') URL.revokeObjectURL(p[k]);
+      p[k] = null;
+    }
+  };
 
   const app = {
     state,
@@ -277,6 +284,7 @@ export function createApp() {
             const touched = p.status !== before.status || p.desc !== before.desc || p.design !== before.design || p.actual !== before.actual;
             p.confidence = r.confidence ?? null;
             p.bbox = r.bbox ?? null;
+            dropUrls(p, ['cropUrl']); // 框換了，舊的白板裁切要重做，不然重跑辨識永遠看到舊圖（bug W7）
             p.engine = state.engine;
             p.error = undefined;
             if (touched) {
@@ -446,9 +454,7 @@ export function createApp() {
      */
     goHome() {
       app.stopRecognize(); // 瀏覽器「上一頁」也會走到這裡，辨識可能還在跑（bug W1）
-      for (const p of state.photos) {
-        for (const k of ['thumbUrl', 'fullUrl', 'cropUrl']) if (p[k]) URL.revokeObjectURL(p[k]);
-      }
+      for (const p of state.photos) dropUrls(p, ['thumbUrl', 'fullUrl', 'cropUrl']);
       // rootSummary 清掉：工作台可能搬過／刪過檔案，入口頁要重掃一次才不會顯示舊的張數
       Object.assign(state, { page: 'entry', tree: null, dirs: [], photos: [], selectedId: null, dirFilter: null, chip: 'all', query: '', recognizing: false, progress: null, rootSummary: null });
       state.collapsed = new Set();

@@ -375,3 +375,14 @@ test('recognizeAll：排隊時已經「已確認」的不重跑，除非明講 i
   assert.equal(done.source, 'ai');
   assert.notEqual(done.status, 'confirmed', '重跑後回到待校對');
 });
+
+test('recognizeAll：重跑辨識要把舊的白板裁切丟掉，之後才會照新的 bbox 重裁（回歸 W7）', async () => {
+  const { app } = await setup();
+  app.state.recognizerId = 'mock';
+  app.state.engine = 'mock';
+  const p = app.state.photos[0];
+  p.cropUrl = 'blob:old';
+  await app.recognizeAll({ photos: [p] });
+  assert.ok(p.bbox);
+  assert.equal(p.cropUrl, null);
+});
