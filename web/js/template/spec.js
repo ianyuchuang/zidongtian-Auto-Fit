@@ -245,3 +245,42 @@ export function fieldRows(spec) {
   if (pending) out.push({ labelLine: pending, valueLine: null });
   return out;
 }
+
+// ---------- 說明欄位的增／刪／搬（預覽頁拖曳用；純資料操作） ----------
+
+const cellAt = (spec, r, c) => spec?.block?.rows?.[r]?.cells?.[c] ?? null;
+
+/** 新增一行說明欄位。index 省略或超出範圍＝加在最後。回傳有沒有成功。 */
+export function addLine(spec, r, c, line, index = null) {
+  const cell = cellAt(spec, r, c);
+  if (!cell || cell.kind === 'photo') return false; // 照片格不能放欄位
+  cell.lines = cell.lines ?? [];
+  const at = index == null ? cell.lines.length : Math.max(0, Math.min(index, cell.lines.length));
+  cell.lines.splice(at, 0, line);
+  return true;
+}
+
+/** 刪掉一行說明欄位。 */
+export function removeLine(spec, r, c, i) {
+  const cell = cellAt(spec, r, c);
+  if (!cell?.lines?.[i]) return false;
+  cell.lines.splice(i, 1);
+  return true;
+}
+
+/**
+ * 把一行搬到別的位置。from: {r,c,i}；to: {r,c,index}（index 省略＝放最後）。
+ * 放不進去（例如目標是照片格）就原封不動。
+ */
+export function moveLine(spec, from, to) {
+  const src = cellAt(spec, from.r, from.c);
+  if (!src?.lines?.[from.i]) return false;
+  const dst = cellAt(spec, to.r, to.c);
+  if (!dst || dst.kind === 'photo') return false;
+  const [line] = src.lines.splice(from.i, 1);
+  let index = to.index;
+  // 同一格往後搬：抽掉自己之後，後面的位置會往前挪一格
+  if (index != null && to.r === from.r && to.c === from.c && index > from.i) index -= 1;
+  addLine(spec, to.r, to.c, line, index);
+  return true;
+}

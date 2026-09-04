@@ -122,3 +122,38 @@ test('validateSpec：預設版型沒問題；壞掉的要講出哪裡壞', () =>
   t.unknown = ['每頁列數'];
   assert.match(validateSpec(t).join(), /沒解析出來/);
 });
+
+test('addLine / removeLine：說明欄位可以加、可以刪；照片格不收', async () => {
+  const { addLine, removeLine } = await import('../../web/js/template/spec.js');
+  const s = defaultSpec();
+  const cell = s.block.rows[1].cells[0];
+  assert.equal(addLine(s, 1, 0, { label: '', field: 'seq' }), true);
+  assert.deepEqual(cell.lines.map((l) => l.field), ['desc', 'design', 'actual', 'seq']);
+  assert.equal(addLine(s, 1, 0, { label: '', field: 'photoDate' }, 0), true);
+  assert.deepEqual(cell.lines.map((l) => l.field), ['photoDate', 'desc', 'design', 'actual', 'seq']);
+  assert.equal(addLine(s, 0, 0, { label: '', field: 'desc' }), false); // 照片格
+  assert.equal(removeLine(s, 1, 0, 0), true);
+  assert.deepEqual(cell.lines.map((l) => l.field), ['desc', 'design', 'actual', 'seq']);
+  assert.equal(removeLine(s, 1, 0, 99), false);
+});
+
+test('moveLine：同一格換位置、搬到別格、搬不進照片格就不動', async () => {
+  const { moveLine } = await import('../../web/js/template/spec.js');
+  const s = defaultSpec();
+  const lines = () => s.block.rows[1].cells[0].lines.map((l) => l.field);
+
+  moveLine(s, { r: 1, c: 0, i: 0 }, { r: 1, c: 0, index: 2 }); // desc 往後搬到中間
+  assert.deepEqual(lines(), ['design', 'desc', 'actual']);
+  moveLine(s, { r: 1, c: 0, i: 2 }, { r: 1, c: 0, index: 0 }); // actual 搬到最前面
+  assert.deepEqual(lines(), ['actual', 'design', 'desc']);
+
+  // 搬到照片格：不動
+  assert.equal(moveLine(s, { r: 1, c: 0, i: 0 }, { r: 0, c: 0 }), false);
+  assert.deepEqual(lines(), ['actual', 'design', 'desc']);
+
+  // 搬到另一個說明格
+  s.block.rows[1].cells.push({ kind: 'text', col: 0, lines: [] });
+  moveLine(s, { r: 1, c: 0, i: 0 }, { r: 1, c: 1 });
+  assert.deepEqual(lines(), ['design', 'desc']);
+  assert.deepEqual(s.block.rows[1].cells[1].lines.map((l) => l.field), ['actual']);
+});
