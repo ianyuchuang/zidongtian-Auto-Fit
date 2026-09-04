@@ -386,3 +386,14 @@ test('recognizeAll：重跑辨識要把舊的白板裁切丟掉，之後才會�
   assert.ok(p.bbox);
   assert.equal(p.cropUrl, null);
 });
+
+test('confirm：已刪除的照片不能被確認（回歸 W9：全域 Enter 會確認到回收桶裡的那張）', async () => {
+  const { app } = await setup();
+  await app.trash(['4F/a.jpg']);
+  const gone = app.photo('4F/_回收桶/a.jpg');
+  assert.equal(app.confirm(gone.id), false);
+  assert.equal(gone.status, 'pending');
+  assert.equal(app.confirm('ghost'), false);
+  assert.equal(app.confirm('4F/b.jpg'), true);
+  assert.equal(app.photo('4F/b.jpg').status, 'confirmed');
+});

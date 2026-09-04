@@ -15,6 +15,9 @@ export function mountWorkbench(container, app) {
     const tag = document.activeElement?.tagName;
     const typing = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
     if (document.querySelector('.overlay:not(.lightbox)')) return; // 燈箱是非強制視窗，快捷鍵照舊
+    // 焦點在按鈕上時 Enter 就是按那顆鈕（瀏覽器會自己發 click），這裡不能再確認一次，
+    // 否則按「跳過」「🗑」或 Tab 到任何按鈕上按 Enter 都會多確認一張（bug W9）
+    if (e.key === 'Enter' && e.target?.closest?.('button')) return;
     if (e.key === 'Enter' && !typing && app.state.selectedId) {
       e.preventDefault();
       app.confirm(app.state.selectedId);

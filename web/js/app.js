@@ -380,13 +380,15 @@ export function createApp() {
       save();
       emit('photos');
     },
+    /** 確認這張並跳下一張待校對。已刪除的不能確認（欄位鎖住、統計不含它）；回傳有沒有確認成功。 */
     confirm(id) {
       const p = byId(id);
-      if (!p) return;
+      if (!p || isTrashed(p)) return false;
       p.status = STATUS.CONFIRMED;
       save();
       emit('photos');
       app.gotoNextPending(id);
+      return true;
     },
     skip(id) {
       return app.gotoNextPending(id);
