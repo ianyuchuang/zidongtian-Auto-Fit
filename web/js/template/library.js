@@ -55,6 +55,16 @@ export function saveTemplate(spec, name, store = globalThis.localStorage) {
   return entry;
 }
 
+/**
+ * 這份 spec 帶著版型庫的 id，但內容已經和庫裡那份不一樣了嗎？
+ * 沒 id、或庫裡已經沒這份 → false（沒什麼好比）。
+ */
+export function differsFromLibrary(spec, store = globalThis.localStorage) {
+  const saved = spec?.id ? getTemplate(spec.id, store) : null;
+  if (!saved) return false;
+  return JSON.stringify(saved.spec) !== JSON.stringify(spec);
+}
+
 export function removeTemplate(id, store = globalThis.localStorage) {
   write(LIB_KEY, listTemplates(store).filter((t) => t.id !== id), store);
 }
