@@ -3,6 +3,7 @@
 //   2. 版型調整：整頁畫出接近實際大小的版面，直接在頁面上改——抬頭與說明格點下去就能打字，
 //      要填值的位置是一顆「欄位膠囊」（下拉可換欄位、選「（留空）」就移除），
 //      從上面的工具列把欄位拖進句子裡就多一個，拖到行與行之間就多一行，也可以拖到別格或刪掉。
+//      Enter＝分段（切成上下兩行）、Shift+Enter＝段落內換行，和 Word 一樣。
 // 版型的資料結構與純邏輯在 template/spec.js。
 
 import { esc, toast, confirmDialog } from './dialog.js';
@@ -141,8 +142,8 @@ export function mountTemplatePage(container, app) {
   function lineHtml(spec, r, c, l, i) {
     const key = `${r}.${c}.${i}`;
     const inner = lineParts(l)
-      .filter((p) => p.text != null || p.field !== 'none')
-      .map((p) => (p.text != null ? esc(p.text) : tagHtml(p.field)))
+      .filter((p) => p.br || p.text != null || p.field !== 'none')
+      .map((p) => (p.br ? '<br>' : p.text != null ? esc(p.text) : tagHtml(p.field)))
       .join('');
     const tools = `<span class="tp-grip" draggable="true" data-grip="${key}" title="拖曳搬到別的位置">⠿</span>`;
     const del = `<button type="button" class="tp-del" data-del="${key}" title="刪掉這一行">×</button>`;
@@ -151,13 +152,17 @@ export function mountTemplatePage(container, app) {
     return `<div class="tp-line" data-line="${key}">${tools}${body}${del}</div>`;
   }
 
-  /** 把畫面上的一行讀回資料：文字節點是文字，膠囊是欄位。 */
+  /** 把畫面上的一行讀回資料：文字節點是文字，膠囊是欄位，<br> 是段落內換行。 */
   function readParts(el) {
+    const nodes = [...el.childNodes];
+    // contenteditable 的最後一顆 <br> 是瀏覽器補的佔位符，不是使用者按出來的換行
+    if (nodes[nodes.length - 1]?.nodeName === 'BR') nodes.pop();
     const out = [];
-    for (const n of el.childNodes) {
+    for (const n of nodes) {
       if (n.nodeType === Node.TEXT_NODE) out.push({ text: n.nodeValue });
+      else if (n.nodeName === 'BR') out.push({ br: true });
       else if (n.nodeType === Node.ELEMENT_NODE && n.classList.contains('tp-tag')) out.push({ field: n.dataset.field || null });
-      else if (n.nodeType === Node.ELEMENT_NODE) out.push({ text: n.textContent }); // 瀏覽器自己塞的 <br>、<div>
+      else if (n.nodeType === Node.ELEMENT_NODE) out.push({ text: n.textContent }); // 瀏覽器自己塞的 <div> 之類
     }
     return out;
   }
@@ -298,6 +303,65 @@ export function mountTemplatePage(container, app) {
     spec.block.rows[r].cells[c].lines[i] = makeLine(readParts(partsEl));
   }
 
+  /** Enter：從游標處把一行切成兩行（＝Word 的分段）。 */
+  function splitLineAtCaret(el, r, c, i) {
+    const sel = getSelection();
+    const holder = document.createElement('span');
+    if (sel?.rangeCount && el.lastChild) {
+      const caret = sel.getRangeAt(0);
+      const tail = document.createRange();
+      tail.setStart(caret.endContainer, caret.endOffset);
+      tail.setEndAfter(el.lastChild);
+      holder.appendChild(tail.extractContents()); // 游標之後的內容搬到新的一行
+    }
+    spec.block.rows[r].cells[c].lines[i] = makeLine(readParts(el));
+    addLine(spec, r, c, makeLine(readParts(holder)), i + 1);
+    render();
+    const next = container.querySelector(`[data-parts="${r}.${c}.${i + 1}"]`);
+    if (next) caretToStart(next);
+  }
+
+  /** 把游標放到某一行的最前面。 */
+  function caretToStart(el) {
+    el.focus();
+    const r = document.createRange();
+    r.selectNodeContents(el);
+    r.collapse(true);
+    const sel = getSelection();
+    sel.removeAllRanges();
+    sel.addRange(r);
+  }
+
+  /** 把游標放到某一行的最後面。 */
+  function caretToEnd(el) {
+    el.focus();
+    const r = document.createRange();
+    r.selectNodeContents(el);
+    r.collapse(false);
+    const sel = getSelection();
+    sel.removeAllRanges();
+    sel.addRange(r);
+  }
+
+  /**
+   * 點說明格的空白處也要能打字：格子比字高（例如圖片說明那種高格），
+   * 或字被欄位膠囊佔滿時，點不到那一行就打不了字。這裡把游標接到最近的一行後面。
+   */
+  stage.addEventListener('mousedown', (e) => {
+    const cell = e.target.closest('.tp-text');
+    if (!cell || e.target.closest('.tp-parts, select, button, .tp-grip')) return; // 本來就點在能操作的東西上
+    const lines = [...cell.querySelectorAll('.tp-parts')];
+    if (!lines.length) return;
+    e.preventDefault(); // 不要讓瀏覽器把選取清掉
+    let best = null;
+    for (const el of lines) {
+      const box = el.getBoundingClientRect();
+      const d = Math.abs(e.clientY - (box.top + box.height / 2));
+      if (!best || d < best.d) best = { el, d };
+    }
+    caretToEnd(best.el);
+  });
+
   function bindFieldDrag() {
     stage.addEventListener('dragover', (e) => {
       if (!drag) return;
@@ -362,7 +426,10 @@ export function mountTemplatePage(container, app) {
       };
       el.addEventListener('input', sync);
       el.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') e.preventDefault(); // 一行就是一段，要多一行請拖欄位到行與行之間
+        if (e.key !== 'Enter') return;
+        if (e.shiftKey) return; // Shift+Enter＝段落內換行，交給瀏覽器插 <br>
+        e.preventDefault(); // Enter＝分段，切成上下兩行
+        splitLineAtCaret(el, r, c, i);
       });
       el.addEventListener('paste', (e) => {
         e.preventDefault(); // 只收純文字，不要把 Word 的樣式和換行貼進來

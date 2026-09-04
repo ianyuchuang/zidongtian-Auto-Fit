@@ -235,3 +235,21 @@ def test_multi_field_line_joins_with_typed_text(tmp_path):
     assert "說明3，設計3，實際3" in doc
     assert doc.count("說明：") == 3            # 左邊的欄位名照舊每張一次
     assert "，，" not in doc                    # 三個值都有，不該出現空值連著的逗號
+def test_line_break_inside_paragraph(tmp_path):
+    """段落內換行（版型調整頁按 Shift+Enter）要變成 Word 的 <w:br/>，不是另起一段。"""
+    import copy
+
+    spec = copy.deepcopy(BODY_HEADING_SPEC)
+    spec["block"]["rows"][1]["cells"][1]["lines"] = [
+        {"parts": [{"field": "desc"}, {"br": True}, {"field": "design"}]}
+    ]
+    z, doc, media = _build(tmp_path, _photos(tmp_path), spec=spec, name="linebreak.docx")
+
+    assert doc.count("<w:br/>") == 3           # 3 張各一個換行
+    assert "說明1" in doc and "設計1" in doc
+    assert doc.count("<w:tbl>") == 3           # 還是 3 頁 3 張表，沒被拆成多一段
+
+    # 瀏覽器把 Shift+Enter 存成文字裡的 \n（white-space: pre-wrap 的行為），也要一樣
+    spec["block"]["rows"][1]["cells"][1]["lines"] = [{"parts": [{"field": "desc"}, {"text": "\n備註"}]}]
+    z, doc, media = _build(tmp_path, _photos(tmp_path), spec=spec, name="linebreak2.docx")
+    assert doc.count("<w:br/>") == 3 and "備註" in doc

@@ -17,7 +17,10 @@ function textPara(spec, text, halfPt, { align, bold, pageBreakBefore } = {}) {
     alignment: align === 'center' ? AlignmentType.CENTER : AlignmentType.LEFT,
     spacing: { before: 0, after: 0 },
     pageBreakBefore: !!pageBreakBefore,
-    children: [new TextRun({ text, size: halfPt, bold: !!bold, font: fontsOf(spec) })],
+    // 字串裡的 \n 是段落內的換行（Word 的 Shift+Enter）：拆成多個 run，第二個起加 break
+    children: String(text)
+      .split('\n')
+      .map((t, i) => new TextRun({ text: t, size: halfPt, bold: !!bold, font: fontsOf(spec), ...(i ? { break: 1 } : {}) })),
   });
 }
 

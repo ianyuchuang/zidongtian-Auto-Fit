@@ -84,11 +84,25 @@ test('cellText：同一行放多個欄位，用打的字隔開（空值照原樣
   assert.deepEqual(cellText(cell, { desc: '輕隔間 1107梯廳' }), ['輕隔間 1107梯廳，，']);
 });
 
+test('段落內換行（Shift+Enter）：cellText 給出 \\n，不會被當成沒指定欄位', () => {
+  const cell = { kind: 'text', lines: [{ parts: [{ field: 'desc' }, { br: true }, { field: 'design' }] }] };
+  assert.deepEqual(cellText(cell, { desc: '甲', design: '乙' }), ['甲\n乙']);
+  // 瀏覽器也可能直接把換行存成文字裡的 \n，結果要一樣
+  const asText = { kind: 'text', lines: [{ parts: [{ field: 'desc' }, { text: '\n' }, { field: 'design' }] }] };
+  assert.deepEqual(cellText(asText, { desc: '甲', design: '乙' }), ['甲\n乙']);
+  const s = defaultSpec();
+  s.block.rows[1].cells[0].lines = cell.lines;
+  assert.deepEqual(validateSpec(s), []);
+  assert.deepEqual(makeLine([{ field: 'desc' }, { br: true }, { text: '' }, { field: 'design' }]), {
+    parts: [{ field: 'desc' }, { br: true }, { field: 'design' }],
+  });
+});
+
 test('makeLine：相鄰文字併起來、空文字丟掉；簡單的一行存回舊格式', () => {
   assert.deepEqual(makeLine([{ text: '說明：' }, { text: '' }, { field: 'desc' }]), { label: '說明：', field: 'desc' });
   assert.deepEqual(makeLine([{ field: 'desc' }]), { label: '', field: 'desc' });
   assert.deepEqual(makeLine([{ text: '說明：' }]), { label: '說明：', field: 'none' });
-  assert.deepEqual(makeLine([]), { label: '', field: null });
+  assert.deepEqual(makeLine([]), { label: '', field: 'none' }); // 空白段落，不是「還沒指定」
   // 欄位膠囊選「（留空）」＝移除它，只留旁邊打的字
   assert.deepEqual(makeLine([{ text: '說明：' }, { field: 'none' }]), { label: '說明：', field: 'none' });
   assert.deepEqual(makeLine([{ field: 'desc' }, { text: '，' }, { field: 'none' }]), {
