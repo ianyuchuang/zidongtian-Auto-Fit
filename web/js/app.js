@@ -499,6 +499,7 @@ export function createApp() {
           const newHandle = await moveFile(p.handle, from.handle, to.handle);
           p.handle = newHandle;
           p.file = null;
+          dropUrls(p, ['fullUrl', 'cropUrl']); // 舊 File 的 blob URL 不能留給新 handle 用，讓檢視器重新讀（bug W10）；縮圖不變可留
           p.dir = dirPath;
           p.path = dirPath ? `${dirPath}/${p.name}` : p.name;
           state.checked.delete(p.id);

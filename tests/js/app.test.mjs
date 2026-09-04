@@ -397,3 +397,21 @@ test('confirm：已刪除的照片不能被確認（回歸 W9：全域 Enter 會
   assert.equal(app.confirm('4F/b.jpg'), true);
   assert.equal(app.photo('4F/b.jpg').status, 'confirmed');
 });
+
+test('搬移／刪除／還原後，舊檔案的大圖與裁切 URL 要清掉讓檢視器重讀（回歸 W10）', async () => {
+  const { app } = await setup();
+  const mark = (p) => Object.assign(p, { fullUrl: 'blob:full', cropUrl: 'blob:crop', thumbUrl: 'blob:thumb' });
+  mark(app.photo('4F/a.jpg'));
+  await app.trash(['4F/a.jpg']);
+  let p = app.photo('4F/_回收桶/a.jpg');
+  assert.equal(p.fullUrl, null);
+  assert.equal(p.cropUrl, null);
+  assert.equal(p.thumbUrl, 'blob:thumb', '縮圖內容沒變，留著');
+  mark(p);
+  await app.restore([p.id]);
+  p = app.photo('4F/a.jpg');
+  assert.equal(p.fullUrl, null);
+  mark(app.photo('4F/b.jpg'));
+  await app.moveToDir('4F/b.jpg', '5F');
+  assert.equal(app.photo('5F/b.jpg').fullUrl, null);
+});
