@@ -136,3 +136,23 @@ test('頁首有字卻讀不出段落時要列進 unknown，不要靜靜給空抬
   assert.ok(s.unknown.some((u) => u.includes('頁首')));
   assert.match(validateSpec(s).join(), /頁首/);
 });
+
+test('「欄位名：值」後面接的續行段落是值太長換行，不是新的欄位', () => {
+  const tc = (...ps) => `<w:tc>${ps.map((t) => `<w:p><w:r><w:t>${t}</w:t></w:r></w:p>`).join('')}</w:tc>`;
+  const photo = '<w:tc><w:p><w:r><w:drawing><wp:inline><wp:extent cx="1905000" cy="1428750"/></wp:inline></w:drawing></w:r></w:p></w:tc>';
+  const xml =
+    `<w:document ${W} xmlns:wp="wp"><w:body><w:tbl><w:tblGrid><w:gridCol w:w="4000"/><w:gridCol w:w="4000"/></w:tblGrid>` +
+    `<w:tr>${photo}${tc('內容說明：這一段範例說明很長', '所以在樣本裡換到第二段', '設計值：10cm', '實際值：10cm')}</w:tr>` +
+    '</w:tbl><w:sectPr><w:pgSz w:w="11906" w:h="16838"/></w:sectPr></w:body></w:document>';
+  const s = parseTemplate({ documentXml: xml, name: 'cont' });
+  const cell = s.block.rows[0].cells.find((c) => c.kind === 'text');
+  assert.deepEqual(
+    cell.lines.map((l) => [l.label, l.field]),
+    [
+      ['內容說明：', 'desc'],
+      ['設計值：', 'design'],
+      ['實際值：', 'actual'],
+    ],
+  );
+  assert.deepEqual(validateSpec(s), []);
+});

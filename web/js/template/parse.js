@@ -192,17 +192,22 @@ export function parseTemplate({ documentXml, headerXml = null, name = '' } = {})
         slots.push({ r, cell, line: cell.lines[0] });
       }
       let valueLine = null; // 同一格裡連續的純值段落算同一個欄位（樣本文字換行不代表多欄）
+      let inlineValue = false; // 上一段是「欄位名：值」，接著的純文字段落是那個值太長換行，不是新欄位
       for (const t of paras) {
         const { label, rest } = splitLine(t);
         if (label && rest) {
           // 欄位名和值在同一行（例：「內容說明：範例說明」）
           cell.lines.push({ label, field: guessField(label) ?? 'none' });
           valueLine = null;
+          inlineValue = true;
         } else if (label) {
           // 只有欄位名，值在別格
           cell.lines.push({ label, field: 'none' });
           pending.push({ r, col: c.col, field: guessField(label) });
           valueLine = null;
+          inlineValue = false;
+        } else if (inlineValue) {
+          // 樣本值的續行：值本來就會丟掉，不開新的值格
         } else if (!valueLine) {
           valueLine = { label: '', field: null };
           cell.lines.push(valueLine);
