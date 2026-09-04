@@ -33,7 +33,7 @@ export function defaultSpec() {
         l: Math.round(720090 / EMU_PER_TWIP), // 1134
       },
     },
-    // place: 'header' 放頁首（每頁重複）；'body' 放內文表格前（只有第一頁）。{date} 會換成檢查日期。
+    // place: 'header' 放頁首（Word 自己每頁重印）；'body' 放內文（一頁一張表，每張表前都印一次）。{date} 會換成檢查日期。
     heading: {
       place: 'header',
       lines: [

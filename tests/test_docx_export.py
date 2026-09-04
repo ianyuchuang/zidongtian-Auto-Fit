@@ -176,3 +176,47 @@ def test_docx_from_parsed_template_c_label_cell(tmp_path):
     assert "說明：" in doc and "說明1" in doc                       # 欄位名照印、值填進右邊那格
     assert "內容說明：" not in doc
     assert len(media) == 3
+# 抬頭在內文的版型：每頁 1 張，用來驗「每一頁都要有抬頭」。
+BODY_HEADING_SPEC = {
+    "id": "t3",
+    "name": "每頁抬頭測試",
+    "font": "標楷體",
+    "page": {"w": 11906, "h": 16838, "orient": "portrait",
+             "margin": {"t": 454, "r": 567, "b": 454, "l": 567}},
+    "heading": {"place": "body", "lines": [
+        {"text": "範例營造/範例機電", "sizePt": 16, "bold": True, "align": "center"},
+        {"text": "自主檢查照片(檢查日期:{date})", "sizePt": 16, "align": "center"},
+    ]},
+    "grid": {"perRow": 1, "blockRows": 1, "order": "row", "seq": None, "tableIndent": 0},
+    "photo": {"h": 258, "maxW": 344},
+    "caption": {"sizePt": 12},
+    "stamp": {"on": False, "corner": "bl"},
+    "block": {"cols": [988, 4392], "rows": [
+        {"h": 3969, "cells": [{"kind": "photo", "colSpan": 2, "vAlign": "center"}]},
+        {"h": 567, "cells": [
+            {"kind": "text", "lines": [{"label": "說明：", "field": "none"}]},
+            {"kind": "text", "lines": [{"label": "", "field": "desc"}]},
+        ]},
+    ]},
+    "unknown": [],
+}
+
+
+def test_body_heading_repeats_on_every_page(tmp_path):
+    """回歸（2026-09-04）：抬頭在內文時，原本只印在第一頁，第二頁起是空的。
+    現在改成一頁一張表、每張表前各印一次抬頭，第 2 頁起強制分頁。"""
+    z, doc, media = _build(tmp_path, _photos(tmp_path), spec=BODY_HEADING_SPEC, name="body_heading.docx")
+
+    assert not [n for n in z.namelist() if re.match(r"word/header\d*\.xml", n)]  # 不放頁首
+    assert doc.count("範例營造/範例機電") == 3                    # 3 張、每頁 1 張 → 3 頁都有抬頭
+    assert doc.count("自主檢查照片(檢查日期:115年07月25日)") == 3
+    assert doc.count("<w:tbl>") == 3                              # 一頁一張表
+    assert doc.count("<w:pageBreakBefore") == 2                   # 第 2、3 頁各強制分頁
+    assert len(media) == 3
+
+
+def test_header_heading_stays_one_table(tmp_path):
+    """抬頭在頁首時維持整份一張表（Word 自己每頁重印），不要被上面的改動拆開。"""
+    z, doc, media = _build(tmp_path, _photos(tmp_path))
+    assert doc.count("<w:tbl>") == 1
+    assert "<w:pageBreakBefore" not in doc

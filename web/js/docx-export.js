@@ -11,11 +11,12 @@ function lib() {
 
 const fontsOf = (spec) => ({ ascii: spec.font, hAnsi: spec.font, eastAsia: spec.font, cs: spec.font });
 
-function textPara(spec, text, halfPt, { align, bold } = {}) {
+function textPara(spec, text, halfPt, { align, bold, pageBreakBefore } = {}) {
   const { Paragraph, TextRun, AlignmentType } = lib();
   return new Paragraph({
     alignment: align === 'center' ? AlignmentType.CENTER : AlignmentType.LEFT,
     spacing: { before: 0, after: 0 },
+    pageBreakBefore: !!pageBreakBefore,
     children: [new TextRun({ text, size: halfPt, bold: !!bold, font: fontsOf(spec) })],
   });
 }
@@ -83,7 +84,7 @@ function buildBlockRows(spec, slotPhotos, byPhoto) {
  * render(file, {stamp}) 預設用 canvas（imaging.js），測試時可換成不需瀏覽器的版本。
  */
 export async function buildDocxBlob(group, { spec = defaultSpec(), rocDisplay, stamp, onProgress, render = renderForDocx } = {}) {
-  const { Document, Packer, Table, TableRow, Header, WidthType } = lib();
+  const { Document, Packer, Table, Header, WidthType } = lib();
   const errs = validateSpec(spec);
   if (errs.length) throw new Error(`版型不完整，無法輸出：${errs.join('；')}`);
 
@@ -103,23 +104,39 @@ export async function buildDocxBlob(group, { spec = defaultSpec(), rocDisplay, s
     onProgress?.(i + 1, photos.length);
   }
 
-  const rows = [];
-  for (const page of layoutPages(spec, photos)) {
-    for (const slotPhotos of page) rows.push(...buildBlockRows(spec, slotPhotos, byPhoto));
-  }
-
+  const pages = layoutPages(spec, photos);
   const cols = tableCols(spec);
-  const table = new Table({
-    rows,
-    width: { size: blockWidth(spec) * spec.grid.perRow, type: WidthType.DXA },
-    columnWidths: cols,
-    indent: { size: spec.grid.tableIndent ?? 0, type: WidthType.DXA },
-  });
+  const makeTable = (pageRows) =>
+    new Table({
+      rows: pageRows.flatMap((slotPhotos) => buildBlockRows(spec, slotPhotos, byPhoto)),
+      width: { size: blockWidth(spec) * spec.grid.perRow, type: WidthType.DXA },
+      columnWidths: cols,
+      indent: { size: spec.grid.tableIndent ?? 0, type: WidthType.DXA },
+    });
 
-  const headingParas = (spec.heading?.lines ?? []).map((l) =>
-    textPara(spec, (l.text ?? '').replace('{date}', rocDisplay ?? ''), (l.sizePt ?? 14) * 2, { align: l.align ?? 'center', bold: l.bold }),
-  );
+  // pageBreakBefore：抬頭在內文時，第 2 頁起強制分頁，抬頭才會落在每頁最上面。
+  const headingParas = ({ pageBreakBefore = false } = {}) =>
+    (spec.heading?.lines ?? []).map((l, i) =>
+      textPara(spec, (l.text ?? '').replace('{date}', rocDisplay ?? ''), (l.sizePt ?? 14) * 2, {
+        align: l.align ?? 'center',
+        bold: l.bold,
+        pageBreakBefore: pageBreakBefore && i === 0,
+      }),
+    );
   const inHeader = spec.heading?.place !== 'body';
+
+  // 抬頭在頁首：Word 自己每頁重印，整份一張表就好。
+  // 抬頭在內文：一頁一張表，每張表前面各放一組抬頭。
+  const children = [];
+  if (inHeader) {
+    children.push(makeTable(pages.flat()));
+  } else {
+    const list = pages.length ? pages : [[]];
+    list.forEach((page, i) => {
+      children.push(...headingParas({ pageBreakBefore: i > 0 }));
+      children.push(makeTable(page));
+    });
+  }
 
   // docx 函式庫在 landscape 時會自己把長寬對調，所以這裡要餵「轉正前」的尺寸。
   const landscape = spec.page.orient === 'landscape';
@@ -134,9 +151,9 @@ export async function buildDocxBlob(group, { spec = defaultSpec(), rocDisplay, s
         margin: { top: spec.page.margin.t, right: spec.page.margin.r, bottom: spec.page.margin.b, left: spec.page.margin.l },
       },
     },
-    children: inHeader ? [table] : [...headingParas, table],
+    children,
   };
-  if (inHeader) section.headers = { default: new Header({ children: headingParas }) };
+  if (inHeader) section.headers = { default: new Header({ children: headingParas() }) };
 
   const doc = new Document({
     styles: { default: { document: { run: { font: fontsOf(spec), size: spec.caption.sizePt * 2 } } } },
