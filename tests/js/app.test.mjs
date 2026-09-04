@@ -224,3 +224,49 @@ test('檢查日期：每個資料夾各一個，沒設過用今天，不合法�
   assert.throws(() => app.setDirDate('5F', '115072'), /看不懂的日期|日期不存在/);
   assert.equal(app.dateInfo('5F').compact, today);
 });
+
+test('pickRoot：入口頁選好的資料夾要留在 state（回歸：選完資料夾再拖 docx 進來就忘掉）', () => {
+  const app = createApp();
+  const root = new MemoryDirectoryHandle('帷幕骨架');
+  app.pickRoot({ rootHandle: root, readOnly: false, label: '帷幕骨架' });
+  app.setRootSummary('4F・5F 共 12 張');
+  // 拖版型 docx 進入口頁 → 版型調整頁 → 回入口頁（不管是套用或取消）
+  app.openTemplatePage(new File(['x'], 'a.docx'));
+  assert.equal(app.state.page, 'template');
+  app.applyTemplate({ name: 'a.docx', file: null, spec: { id: 't1' } });
+  assert.equal(app.state.page, 'entry');
+  assert.equal(app.state.root, root, '資料夾要還在');
+  assert.equal(app.state.rootLabel, '帷幕骨架');
+  assert.equal(app.state.rootSummary, '4F・5F 共 12 張', '掃過的摘要留著，回來不必重掃');
+  app.openTemplatePage(null);
+  app.closeTemplatePage(); // 取消也一樣
+  assert.equal(app.state.root, root);
+});
+
+test('pickRoot：換資料夾要清掉舊摘要；同一個資料夾不覆蓋「（範例）」這種標示', () => {
+  const app = createApp();
+  const a = new MemoryDirectoryHandle('甲案');
+  const b = new MemoryDirectoryHandle('乙案');
+  app.pickRoot({ rootHandle: a, readOnly: true, label: '甲案（範例）' });
+  app.setRootSummary('甲案的摘要');
+  app.pickRoot({ rootHandle: a, readOnly: true }); // 沒帶 label＝同一個資料夾，維持原樣
+  assert.equal(app.state.rootLabel, '甲案（範例）');
+  assert.equal(app.state.rootSummary, '甲案的摘要');
+  app.pickRoot({ rootHandle: b, readOnly: false });
+  assert.equal(app.state.root, b);
+  assert.equal(app.state.rootLabel, '乙案');
+  assert.equal(app.state.rootSummary, null, '換了資料夾不能顯示上一個的摘要');
+  assert.equal(app.state.readOnly, false);
+});
+
+test('goHome：資料夾留著、摘要要重掃（工作台可能搬過或刪過檔案）', async () => {
+  const { app } = await setup();
+  app.pickRoot({ rootHandle: app.state.root, readOnly: false, label: '帷幕骨架' });
+  app.setRootSummary('舊的摘要');
+  app.state.page = 'work';
+  app.goHome();
+  assert.equal(app.state.page, 'entry');
+  assert.ok(app.state.root, '資料夾不必重選');
+  assert.equal(app.state.rootLabel, '帷幕骨架');
+  assert.equal(app.state.rootSummary, null);
+});

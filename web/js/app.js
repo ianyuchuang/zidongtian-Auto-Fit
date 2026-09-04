@@ -36,7 +36,9 @@ export function createApp() {
   const listeners = new Set();
   const state = {
     page: 'entry',
-    root: null, // 根資料夾 handle
+    root: null, // 根資料夾 handle（入口頁選到就存進來，不是按了「開始讀取」才有）
+    rootLabel: '', // 入口頁要顯示的名稱（範例是「XXX（範例）」，跟 handle.name 不一定一樣）
+    rootSummary: null, // 掃過一次的子資料夾摘要，回入口頁不必再掃一次；null＝要重掃
     readOnly: false, // 記憶體複本（範例 / 不支援 File System Access API）
     tree: null,
     dirs: [], // flattenDirs(tree)
@@ -104,9 +106,26 @@ export function createApp() {
     },
 
     // ---------- 開啟資料夾 ----------
-    async open({ rootHandle, readOnly = false, template = null, prompt = '', recognizerId = null, api = null }) {
+    /**
+     * 入口頁選好照片資料夾（還沒按「開始讀取」）。一定要存進 state：入口頁離開後會被
+     * 拆掉重掛（選完資料夾再拖版型 docx 進來 → 版型調整頁 → 回來），只放在入口頁的
+     * 區域變數裡就會忘掉（bug 2026-09-04）。
+     */
+    pickRoot({ rootHandle, readOnly = false, label = null }) {
+      const same = state.root === rootHandle;
+      if (!same) state.rootSummary = null; // 換了資料夾，舊摘要不能留
       state.root = rootHandle;
       state.readOnly = readOnly;
+      if (label != null) state.rootLabel = label;
+      else if (!same) state.rootLabel = rootHandle?.name ?? ''; // 同一個資料夾就別把「（範例）」這種標示洗掉
+    },
+    /** 記住入口頁掃出來的子資料夾摘要，回入口頁時直接用，不必重掃。 */
+    setRootSummary(text) {
+      state.rootSummary = text;
+    },
+
+    async open({ rootHandle, readOnly = false, template = null, prompt = '', recognizerId = null, api = null }) {
+      app.pickRoot({ rootHandle, readOnly });
       state.date = new Date(); // 預設今天；各資料夾可在工作台的群組列各自改
       state.dates = loadDates(rootHandle.name);
       state.template = template;
@@ -415,7 +434,8 @@ export function createApp() {
       for (const p of state.photos) {
         for (const k of ['thumbUrl', 'fullUrl', 'cropUrl']) if (p[k]) URL.revokeObjectURL(p[k]);
       }
-      Object.assign(state, { page: 'entry', tree: null, dirs: [], photos: [], selectedId: null, dirFilter: null, chip: 'all', query: '', recognizing: false, progress: null });
+      // rootSummary 清掉：工作台可能搬過／刪過檔案，入口頁要重掃一次才不會顯示舊的張數
+      Object.assign(state, { page: 'entry', tree: null, dirs: [], photos: [], selectedId: null, dirFilter: null, chip: 'all', query: '', recognizing: false, progress: null, rootSummary: null });
       state.collapsed = new Set();
       state.checked = new Set();
       emit('page');

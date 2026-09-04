@@ -97,9 +97,13 @@ export function mountEntry(container, app) {
   //（瀏覽器基於安全限制拿不到完整磁碟路徑，只能顯示資料夾名稱與底下結構）。
   let pickSeq = 0;
   const setFolder = async (handle, ro, label) => {
+    const fresh = app.state.root !== handle; // 不是「回入口頁把原本選的接回來」
     rootHandle = handle;
     readOnly = ro;
-    if (!template) {
+    // 選到的資料夾存進 app.state：入口頁離開（拖版型 docx 進調整頁）再回來時會重新掛，
+    // 只放在這裡的區域變數就會忘掉（bug 2026-09-04）。
+    app.pickRoot({ rootHandle: handle, readOnly: ro, label });
+    if (fresh && !template) {
       const last = lastFor(handle.name);
       if (last) {
         setTemplate({ name: last.name, file: null, spec: last.spec });
@@ -108,18 +112,26 @@ export function mountEntry(container, app) {
     }
     const seq = ++pickSeq;
     const roTag = ro ? ' <span class="small muted">（唯讀複本）</span>' : '';
+    const show = (inner) => ($('#folder-text').innerHTML = `<span class="picked">🗀 ${esc(label)}</span>${roTag}${inner}`);
     $('#dz-folder').classList.add('has-pick');
-    $('#folder-text').innerHTML = `<span class="picked">🗀 ${esc(label)}</span>${roTag}<div class="small muted summary">讀取資料夾結構中…</div>`;
+    if (app.state.rootSummary != null) {
+      // 同一個資料夾掃過了（例如剛從版型調整頁回來），直接用上次的摘要，不重掃
+      show(`<div class="small muted summary">${esc(app.state.rootSummary)}</div>`);
+      updateStart();
+      return;
+    }
+    show('<div class="small muted summary">讀取資料夾結構中…</div>');
     $('#start').disabled = true;
     try {
       const summary = treeSummaryText(describeTree(await scanTree(handle)));
       if (seq !== pickSeq) return; // 期間又選了別的資料夾
-      $('#folder-text').innerHTML = `<span class="picked">🗀 ${esc(label)}</span>${roTag}<div class="small muted summary">${esc(summary)}</div>`;
+      app.setRootSummary(summary);
+      show(`<div class="small muted summary">${esc(summary)}</div>`);
       updateStart();
     } catch (e) {
       if (seq !== pickSeq) return;
       console.error(e);
-      $('#folder-text').innerHTML = `<span class="picked">🗀 ${esc(label)}</span>${roTag}<div class="small summary" style="color:var(--red-text)">讀取資料夾結構失敗：${esc(e.message)}</div>`;
+      show(`<div class="small summary" style="color:var(--red-text)">讀取資料夾結構失敗：${esc(e.message)}</div>`);
     }
   };
 
@@ -127,7 +139,7 @@ export function mountEntry(container, app) {
   // 回首頁時 app.state.root 還在，直接接回去；重新整理後 handle 從 IndexedDB 撈，
   // Chrome 需要使用者點一下才會給權限，所以放一顆按鈕。
   if (app.state.root) {
-    setFolder(app.state.root, app.state.readOnly, app.state.root.name);
+    setFolder(app.state.root, app.state.readOnly, app.state.rootLabel || app.state.root.name);
   } else {
     loadLastRoot().then(async (h) => {
       if (!h || rootHandle) return;
