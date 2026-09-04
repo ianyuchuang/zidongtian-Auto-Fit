@@ -313,3 +313,25 @@ test('goHome 在辨識中途（瀏覽器上一頁）：停掉辨識、還在飛�
     globalThis.localStorage = prev;
   }
 });
+
+test('open：入口頁沒帶辨識設定 → 沿用上次選的方式／金鑰／提示詞，引擎比對照常（回歸 W3）', async () => {
+  const app = createApp();
+  const root = new MemoryDirectoryHandle('帷幕骨架');
+  (await root.getDirectoryHandle('4F', { create: true })).putFile('a.jpg', new File(['a'], 'a.jpg'));
+  await app.open({ rootHandle: root });
+  assert.equal(app.state.recognizerId, null, '還沒選過辨識方式');
+  assert.equal(app.state.engine, null);
+  const api = { provider: 'claude', apiKey: 'k', model: 'm' };
+  app.setRecognizer({ recognizerId: 'api', api, prompt: '白板在右下' });
+  app.goHome();
+  await app.open({ rootHandle: root }); // 入口頁的呼叫方式：只帶資料夾與版型
+  assert.equal(app.state.recognizerId, 'api');
+  assert.deepEqual(app.state.api, api);
+  assert.equal(app.state.prompt, '白板在右下');
+  assert.equal(app.state.engine, 'api:claude');
+  await app.open({ rootHandle: root, recognizerId: 'mock', prompt: '' }); // 明確帶就照帶的
+  assert.equal(app.state.recognizerId, 'mock');
+  assert.equal(app.state.api, null);
+  assert.equal(app.state.prompt, '');
+  assert.equal(app.state.engine, 'mock');
+});

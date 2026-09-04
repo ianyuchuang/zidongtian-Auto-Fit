@@ -48,9 +48,9 @@ export function createApp() {
     template: null, // {name, file, spec} | null；spec 是解析出來的 LayoutSpec（template/spec.js）
     templateFile: null, // 拖進入口頁、要帶去版型調整頁解析的 docx
     prompt: '',
-    recognizerId: 'mock',
+    recognizerId: null, // 還沒在頂列「AI 辨識」選過辨識方式；選過就留著（回首頁再讀取也不清）
     api: null, // LLM API 設定 {provider, apiKey, model}（只在記憶體，不存進校對暫存）
-    engine: 'mock', // 辨識引擎識別（'mock' / 'api:claude'…），存進暫存以便換引擎時重跑
+    engine: null, // 辨識引擎識別（'mock' / 'api:claude'…），存進暫存以便換引擎時重跑；null＝還沒選
     selectedId: null,
     dirFilter: null, // 左樹點選的資料夾路徑；null = 全部
     chip: 'all',
@@ -124,15 +124,19 @@ export function createApp() {
       state.rootSummary = text;
     },
 
-    async open({ rootHandle, readOnly = false, template = null, prompt = '', recognizerId = null, api = null }) {
+    async open({ rootHandle, readOnly = false, template = null, prompt = null, recognizerId = null, api = null }) {
       app.pickRoot({ rootHandle, readOnly });
       state.date = new Date(); // 預設今天；各資料夾可在工作台的群組列各自改
       state.dates = loadDates(rootHandle.name);
       state.template = template;
-      state.prompt = prompt;
-      state.recognizerId = recognizerId;
-      state.api = api;
-      state.engine = recognizerId ? engineId(recognizerId, api) : null;
+      // 辨識設定沒帶就沿用目前的（入口頁不帶）：否則「回首頁→再讀取」會把選好的方式／金鑰／提示詞
+      // 清掉，而且 engine 變 null 之後 applySaved 就不再比對引擎（bug W3）。
+      if (prompt != null) state.prompt = prompt;
+      if (recognizerId != null) {
+        state.recognizerId = recognizerId;
+        state.api = api;
+      }
+      state.engine = state.recognizerId ? engineId(state.recognizerId, state.api) : null;
       await app.rescan();
       const saved = loadSaved(rootHandle.name);
       const { redo } = applySaved(state.photos, saved, { engine: state.engine });
