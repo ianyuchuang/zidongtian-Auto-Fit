@@ -50,9 +50,6 @@ export function exportWarnings(orderedPhotos, spec = null) {
   if (empty.length) warnings.push(`有 ${empty.length} 張內容說明為空，將略過不輸出。`);
   if (spec) {
     const used = usedFields(spec);
-    if (used.has('photoDate') && !orderedPhotos.some((p) => p.photoDate)) {
-      warnings.push('版型有「拍照日期」欄位，但沒有每張照片的拍照日期（沒讀 EXIF），會一律填該資料夾的檢查日期。');
-    }
     for (const [key, label] of [['design', '設計'], ['actual', '實際']]) {
       if (!used.has(key)) continue;
       const blank = orderedPhotos.filter((p) => (p.desc || '').trim() && !(p[key] || '').trim()).length;

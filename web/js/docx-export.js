@@ -87,7 +87,7 @@ function buildBlockRows(spec, slotPhotos, byPhoto) {
  * 產生一份 docx Blob。
  * group: { photos: [{name, file, desc, design, actual}] }（表格順序）
  * opts: { spec, rocDisplay: '115年07月25日', rocPhotoDate: '115.7.25', stamp: '2026-07-25', onProgress(i, n), render }
- * rocPhotoDate＝該資料夾的檢查日期，照片沒有自己的拍照日期時用它（沒讀 EXIF）。
+ * rocPhotoDate＝該資料夾的檢查日期；版型的「拍照日期」一律填它（不讀照片 EXIF，全案統一用資料夾列的日期格）。
  * render(file, {stamp}) 預設用 canvas（imaging.js），測試時可換成不需瀏覽器的版本。
  */
 export async function buildDocxBlob(group, { spec = defaultSpec(), rocDisplay, rocPhotoDate, stamp, onProgress, render = renderForDocx } = {}) {
@@ -107,7 +107,7 @@ export async function buildDocxBlob(group, { spec = defaultSpec(), rocDisplay, r
     } catch (e) {
       failures.push(`${p.name}：${e.message}`);
     }
-    byPhoto.set(p, { photo: p, rendered, ctx: { seq: i + 1, photoDate: p.photoDate || rocPhotoDate || '' } });
+    byPhoto.set(p, { photo: p, rendered, ctx: { seq: i + 1, photoDate: rocPhotoDate || '' } });
     onProgress?.(i + 1, photos.length);
   }
 

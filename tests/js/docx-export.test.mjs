@@ -65,3 +65,15 @@ test('抬頭裡的 {date} 每一個都要換掉，不是只換第一個', () => 
   assert.equal(headingText(undefined, '115年07月25日'), '');
   assert.equal(headingText('{date}', undefined), '');
 });
+
+test('「拍照日期」一律填該資料夾的檢查日期，照片自己帶的 photoDate 不採用（不讀 EXIF）', async () => {
+  const { unzipText } = await import('../../web/js/template/unzip.js');
+  const spec = defaultSpec();
+  spec.block.rows[1].cells[0].lines.push({ label: '拍照日期：', field: 'photoDate' });
+  const g = { photos: [{ name: 'a.jpg', file: 'a', desc: 'A', photoDate: '112.6.29' }] };
+  const { blob } = await buildDocxBlob(g, { spec, rocDisplay: '115年07月25日', rocPhotoDate: '115.7.25', render: fakeRender([]) });
+  const files = await unzipText(await blob.arrayBuffer(), (n) => n === 'word/document.xml');
+  const doc = files.get('word/document.xml');
+  assert.match(doc, /拍照日期：115\.7\.25/);
+  assert.doesNotMatch(doc, /112\.6\.29/);
+});
