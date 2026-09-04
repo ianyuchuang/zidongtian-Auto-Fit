@@ -124,9 +124,11 @@ export function mountViewer(container, app) {
   }
 
   function patch(p) {
-    // 上一輪載圖失敗或被取消時，這裡補救——否則畫面會一直停在黑框、點了也沒反應
+    // 上一輪載圖被取消時，這裡補救——否則畫面會一直停在黑框、點了也沒反應。
+    // 已經顯示「讀不到」的不自動重試：每次 'photos' 事件都重試會把錯誤框清掉再出現，一直閃（bug W12），
+    // 留給使用者按「重試」。
     const bigImg = container.querySelector('.big img');
-    if (bigImg && !bigImg.getAttribute('src')) loadBig(p, viewSeq);
+    if (bigImg && !bigImg.getAttribute('src') && !container.querySelector('.big .load-err')) loadBig(p, viewSeq);
     const off = container.querySelector('.off-filter');
     if (off) off.hidden = app.visiblePhotos().some((x) => x.id === p.id);
     const badge = container.querySelector('.head .badge');
