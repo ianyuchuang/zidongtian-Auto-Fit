@@ -97,10 +97,10 @@ export function mountTable(container, app) {
       const gtr = document.createElement('tr');
       gtr.className = `group ${collapsed.has(d.path) ? 'collapsed' : ''}`;
       gtr.dataset.dir = d.path;
-      gtr.innerHTML = `<td colspan="7"><span class="toggle">▾</span> 🗀 ${esc(d.path || d.name)}<span class="n">${live} 張${gone ? `・已刪除 ${gone}` : ''}</span>
-          <label class="dir-date" title="這個資料夾的檢查日期：docx 檔名、頁首日期、照片日期戳都用它">📅 檢查日期
+      gtr.innerHTML = `<td colspan="7"><span class="toggle">▾</span> 🗀 ${esc(d.path || d.name)}
+          <label class="dir-date" title="這個資料夾的檢查日期：docx 檔名、頁首日期、照片日期戳、版型的「拍照日期」都用它">📅 檢查日期
             <input type="text" data-dir-date value="${esc(app.dateInfo(d.path).compact)}" maxlength="9" size="8">
-          </label></td>
+          </label><span class="n">${live} 張${gone ? `・已刪除 ${gone}` : ''}</span></td>
         <td class="chk"><input type="checkbox" data-chk-group tabindex="-1" title="全選 / 取消這個資料夾顯示中的照片"></td>`;
       tbody.appendChild(gtr);
       if (collapsed.has(d.path)) continue;
