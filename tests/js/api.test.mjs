@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { PROVIDERS, getProvider } from '../../web/js/recognizer/api/providers.js';
-import { loadApiKeys, saveApiKeys, clearApiKeys, KEYS_STORAGE_KEY } from '../../web/js/recognizer/api/keys.js';
+import { loadApiKeys, saveApiKeys, clearApiKeys, KEYS_STORAGE_KEY, SESSION_KEYS_KEY } from '../../web/js/recognizer/api/keys.js';
 import { buildRequest, callLLM, listModels, testConnection, errorMessage, hasAdapter } from '../../web/js/recognizer/api/call.js';
 import { buildPrompt, parseResult } from '../../web/js/recognizer/api/prompt.js';
 import { createApiRecognizer } from '../../web/js/recognizer/api.js';
@@ -69,6 +69,26 @@ test('金鑰：記住 → 存進去；不記住 → 只存旗標，金鑰不落�
   assert.ok(!st.getItem(KEYS_STORAGE_KEY).includes('sk-ant'));
   clearApiKeys(st);
   assert.equal(st.getItem(KEYS_STORAGE_KEY), null);
+});
+
+test('金鑰：不記住 → 放 sessionStorage，同分頁重開對話框還在、關閉分頁就沒了；改成記住就搬回 localStorage（回歸 W19）', () => {
+  const st = new FakeStorage();
+  const ss = new FakeStorage();
+  saveApiKeys({ provider: 'claude', remember: false, keys: { claude: 'sk-ant-x' } }, st, ss);
+  assert.ok(!st.getItem(KEYS_STORAGE_KEY).includes('sk-ant'), 'localStorage 不落地');
+  assert.ok(ss.getItem(SESSION_KEYS_KEY).includes('sk-ant-x'));
+  assert.deepEqual(loadApiKeys(st, ss).keys, { claude: 'sk-ant-x' }, '同一個分頁重開對話框還在');
+  assert.deepEqual(loadApiKeys(st, new FakeStorage()).keys, {}, '新分頁（sessionStorage 空的）就沒了');
+  assert.deepEqual(loadApiKeys(st, null).keys, {}, '沒有 sessionStorage 也不炸');
+  saveApiKeys({ provider: 'claude', remember: true, keys: { claude: 'sk-ant-x' } }, st, ss);
+  assert.equal(ss.getItem(SESSION_KEYS_KEY), null, '改成記住後分頁內那份清掉');
+  assert.deepEqual(loadApiKeys(st, ss).keys, { claude: 'sk-ant-x' });
+  clearApiKeys(st, ss);
+  assert.equal(st.getItem(KEYS_STORAGE_KEY), null);
+  // 「清除」鈕：不記住模式下把金鑰清空，分頁內那份也要跟著清
+  saveApiKeys({ provider: 'claude', remember: false, keys: { claude: 'sk' } }, st, ss);
+  saveApiKeys({ provider: 'claude', remember: false, keys: { claude: '' } }, st, ss);
+  assert.equal(ss.getItem(SESSION_KEYS_KEY), null);
 });
 
 test('金鑰：選過的型號與 Workspace ID 不是機密，不記金鑰時照樣留著（省得每次重測連線）', () => {
