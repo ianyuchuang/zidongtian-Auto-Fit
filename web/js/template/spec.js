@@ -179,9 +179,50 @@ export function cellColumns(row) {
   return out;
 }
 
-/** 一個文字格要印的每一行：label + 對應欄位的值。ctx: {seq, photoDate}。 */
+/**
+ * 一行的內容一律看成「文字／欄位交錯的多段」：`{text}` 照原樣印，`{field}` 換成該欄位的值。
+ * 舊格式 `{label, field}` 等於 `[{text:label}, {field}]`——同一行要放兩個以上欄位
+ * （例：「內容說明，設計值，實際值」）才會存成 `parts`。
+ */
+export function lineParts(line) {
+  if (Array.isArray(line?.parts)) return line.parts;
+  const out = [];
+  if (line?.label) out.push({ text: line.label });
+  out.push({ field: line?.field ?? null });
+  return out;
+}
+
+/**
+ * 把編輯後的多段收乾淨（相鄰文字併起來、空文字丟掉）再包成一行。
+ * 收完只剩「一段文字＋一個欄位」以內的，存回舊的簡單格式，版型 JSON 才不會無謂變胖。
+ */
+export function makeLine(parts) {
+  const p = [];
+  for (const x of parts ?? []) {
+    if (x && 'field' in x) {
+      if (x.field === 'none') continue; // 「（留空）」＝這個位置不填東西，不必留著
+      p.push({ field: x.field ?? null });
+      continue;
+    }
+    const t = x?.text ?? '';
+    if (!t) continue;
+    if (p.length && p[p.length - 1].text != null) p[p.length - 1].text += t;
+    else p.push({ text: t });
+  }
+  if (!p.length) return { label: '', field: null };
+  if (p.length === 1 && p[0].text != null) return { label: p[0].text, field: 'none' };
+  if (p.length === 1) return { label: '', field: p[0].field };
+  if (p.length === 2 && p[0].text != null && p[1].text == null) return { label: p[0].text, field: p[1].field };
+  return { parts: p };
+}
+
+/** 一個文字格要印的每一行：多段串起來。空值照原樣留空（分隔用的逗號不會自己消失）。ctx: {seq, photoDate}。 */
 export function cellText(cell, photo, ctx = {}) {
-  return (cell.lines ?? []).map((ln) => `${ln.label ?? ''}${ln.field ? valueOf(ln.field, photo, ctx) : ''}`);
+  return (cell.lines ?? []).map((ln) =>
+    lineParts(ln)
+      .map((p) => (p.text != null ? p.text : p.field && p.field !== 'none' ? valueOf(p.field, photo, ctx) : ''))
+      .join(''),
+  );
 }
 
 /** 版型檢查：回傳錯誤訊息陣列（空陣列＝可用）。寧可在這裡擋下來，不要產出錯的 Word。 */
@@ -204,7 +245,10 @@ export function validateSpec(spec) {
     }
     if (cursor > (spec.block.cols?.length ?? 0)) errs.push('區塊某一列的欄數超過欄寬定義');
   }
-  const blank = cells.flatMap((c) => c.lines ?? []).filter((l) => l.field == null).length;
+  const blank = cells
+    .flatMap((c) => c.lines ?? [])
+    .flatMap(lineParts)
+    .filter((p) => p.text == null && p.field == null).length;
   if (blank) errs.push(`有 ${blank} 個說明格還沒指定欄位`);
   if (spec.unknown?.length) errs.push(`版型有 ${spec.unknown.length} 項沒解析出來：${spec.unknown.join('、')}`);
   return errs;
@@ -215,7 +259,9 @@ export function usedFields(spec) {
   const out = new Set();
   for (const row of spec?.block?.rows ?? []) {
     for (const cell of row.cells ?? []) {
-      for (const line of cell.lines ?? []) if (line.field && line.field !== 'none') out.add(line.field);
+      for (const line of cell.lines ?? []) {
+        for (const p of lineParts(line)) if (p.field && p.field !== 'none') out.add(p.field);
+      }
     }
   }
   return out;

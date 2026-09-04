@@ -1,13 +1,14 @@
 // 版型頁：兩個步驟。
 //   1. 選版型：列出這台電腦存過的版型，或點選／拖入一份 docx 來讀。
-//   2. 版型調整：整頁畫出接近實際大小的版面，直接在頁面上改——抬頭與欄位名點下去就能打字，
-//      值的位置放下拉選它要填什麼，說明欄位可以從上面的工具列拖進來、也可以拖到別格或刪掉。
+//   2. 版型調整：整頁畫出接近實際大小的版面，直接在頁面上改——抬頭與說明格點下去就能打字，
+//      要填值的位置是一顆「欄位膠囊」（下拉可換欄位、選「（留空）」就移除），
+//      從上面的工具列把欄位拖進句子裡就多一個，拖到行與行之間就多一行，也可以拖到別格或刪掉。
 // 版型的資料結構與純邏輯在 template/spec.js。
 
 import { esc, toast, confirmDialog } from './dialog.js';
 import { bindFileDrop } from './dnd.js';
 import { parseTemplateDocx } from '../template/parse.js';
-import { FIELDS, slotOrder, swapSlots, validateSpec, blockWidth, addLine, removeLine, moveLine, perPage } from '../template/spec.js';
+import { FIELDS, slotOrder, swapSlots, validateSpec, blockWidth, addLine, removeLine, moveLine, perPage, lineParts, makeLine } from '../template/spec.js';
 import { listTemplates, getTemplate, saveTemplate, removeTemplate } from '../template/library.js';
 
 const PX = (twips) => twips / 15; // 1440 twips = 1 吋 = 96px
@@ -127,18 +128,38 @@ export function mountTemplatePage(container, app) {
   }
 
   // ---------- 步驟 2：版型調整（所見即所得） ----------
+
+  /** 要填值的位置：一顆可換欄位的膠囊。field 為 null＝還沒指定（紅字）。 */
+  function tagHtml(field) {
+    const need = field == null;
+    const title = need ? '還沒指定要填什麼' : `這裡會填「${FIELDS[field] ?? ''}」，選「（留空）」可以移除`;
+    return `<span class="tp-tag" contenteditable="false" data-field="${field ?? ''}" title="${esc(title)}"
+      ><select class="tp-field ${need ? 'need' : ''}">${FIELD_OPTIONS(field)}</select></span>`;
+  }
+
+  /** 一行＝可以直接打字的一段，中間穿插欄位膠囊。field 'none' 不畫（畫面才不會到處是「（留空）」）。 */
   function lineHtml(spec, r, c, l, i) {
     const key = `${r}.${c}.${i}`;
-    const label = `<span class="tp-label" contenteditable="plaintext-only" data-lb="${key}">${esc(l.label)}</span>`;
+    const inner = lineParts(l)
+      .filter((p) => p.text != null || p.field !== 'none')
+      .map((p) => (p.text != null ? esc(p.text) : tagHtml(p.field)))
+      .join('');
     const tools = `<span class="tp-grip" draggable="true" data-grip="${key}" title="拖曳搬到別的位置">⠿</span>`;
     const del = `<button type="button" class="tp-del" data-del="${key}" title="刪掉這一行">×</button>`;
-    // 只有欄位名、值在別格的行不放下拉，畫面才不會到處都是「（留空）」
-    const select =
-      l.field === 'none' && l.label
-        ? ''
-        : `<select class="tp-field ${l.field == null ? 'need' : ''}" data-fd="${key}"
-             title="${esc(l.field == null ? '還沒指定要填什麼' : `這裡會填「${FIELDS[l.field] ?? ''}」`)}">${FIELD_OPTIONS(l.field)}</select>`;
-    return `<div class="tp-line" data-line="${key}">${tools}${label}${select}${del}</div>`;
+    const body = `<span class="tp-parts" contenteditable="true" spellcheck="false" data-parts="${key}"
+      title="可以直接打字（逗號、單位…），欄位從上面的工具列拖進來">${inner}</span>`;
+    return `<div class="tp-line" data-line="${key}">${tools}${body}${del}</div>`;
+  }
+
+  /** 把畫面上的一行讀回資料：文字節點是文字，膠囊是欄位。 */
+  function readParts(el) {
+    const out = [];
+    for (const n of el.childNodes) {
+      if (n.nodeType === Node.TEXT_NODE) out.push({ text: n.nodeValue });
+      else if (n.nodeType === Node.ELEMENT_NODE && n.classList.contains('tp-tag')) out.push({ field: n.dataset.field || null });
+      else if (n.nodeType === Node.ELEMENT_NODE) out.push({ text: n.textContent }); // 瀏覽器自己塞的 <br>、<div>
+    }
+    return out;
   }
 
   function cellHtml(spec, r, cell, c) {
@@ -223,13 +244,18 @@ export function mountTemplatePage(container, app) {
     }
     $('#tpl-name').value = name;
     $('#tpl-tools').innerHTML = toolsHtml(spec);
+    refreshErrs();
+    stage.innerHTML = pageHtml(spec);
+    fit();
+    bindPage();
+  }
+
+  /** 只更新錯誤列與「完成」鈕（打字時要用，重畫會把游標弄掉）。 */
+  function refreshErrs() {
     const errs = validateSpec(spec);
     $('#tpl-errs').hidden = errs.length === 0;
     $('#tpl-errs').innerHTML = errs.length ? `這個版型還不能用：<ul>${errs.map((e) => `<li>${esc(e)}</li>`).join('')}</ul>` : '';
     $('[data-act="use"]').disabled = errs.length > 0;
-    stage.innerHTML = pageHtml(spec);
-    fit();
-    bindPage();
   }
 
   /** 頁面比畫面寬就整頁縮小（只縮顯示，不動版型本身）。 */
@@ -255,6 +281,23 @@ export function mountTemplatePage(container, app) {
     return e.clientY > box.top + box.height / 2 ? i + 1 : i;
   }
 
+  /** 把一個欄位（或「文字」）插進某一行，位置照滑鼠落點的游標。 */
+  function insertIntoLine(partsEl, add, x, y) {
+    const [r, c, i] = at(partsEl.dataset.parts);
+    let node;
+    if (add === 'none') {
+      node = document.createTextNode('文字');
+    } else {
+      const tmp = document.createElement('span');
+      tmp.innerHTML = tagHtml(add);
+      node = tmp.firstElementChild;
+    }
+    const range = document.caretRangeFromPoint?.(x, y);
+    if (range && partsEl.contains(range.startContainer)) range.insertNode(node);
+    else partsEl.appendChild(node);
+    spec.block.rows[r].cells[c].lines[i] = makeLine(readParts(partsEl));
+  }
+
   function bindFieldDrag() {
     stage.addEventListener('dragover', (e) => {
       if (!drag) return;
@@ -275,9 +318,10 @@ export function mountTemplatePage(container, app) {
       }
       e.preventDefault();
       const [r, c] = at(cell.dataset.cell);
-      const index = dropIndex(cell, e);
-      if (drag.from) moveLine(spec, drag.from, { r, c, index });
-      else addLine(spec, r, c, drag.line, index);
+      const partsEl = drag.add ? e.target.closest('.tp-parts') : null;
+      if (partsEl) insertIntoLine(partsEl, drag.add, e.clientX, e.clientY);
+      else if (drag.from) moveLine(spec, drag.from, { r, c, index: dropIndex(cell, e) });
+      else addLine(spec, r, c, newLine(drag.add), dropIndex(cell, e));
       drag = null;
       render();
     });
@@ -291,7 +335,7 @@ export function mountTemplatePage(container, app) {
   container.addEventListener('dragstart', (e) => {
     const chip = e.target.closest('.tp-chip');
     if (!chip) return;
-    drag = { line: newLine(chip.dataset.add) };
+    drag = { add: chip.dataset.add };
     e.dataTransfer.effectAllowed = 'copy';
     e.dataTransfer.setData('text/plain', chip.dataset.add);
   });
@@ -309,19 +353,30 @@ export function mountTemplatePage(container, app) {
         spec.heading.lines[Number(el.dataset.hd)].text = el.textContent;
       }),
     );
-    $$('[data-lb]').forEach((el) =>
-      el.addEventListener('input', () => {
-        const [r, c, i] = at(el.dataset.lb);
-        spec.block.rows[r].cells[c].lines[i].label = el.textContent;
-      }),
-    );
-    $$('[data-fd]').forEach((el) =>
-      el.addEventListener('change', () => {
-        const [r, c, i] = at(el.dataset.fd);
-        spec.block.rows[r].cells[c].lines[i].field = el.value || null;
+    // 說明格：整行可以直接打字，欄位膠囊夾在字中間
+    $$('[data-parts]').forEach((el) => {
+      const [r, c, i] = at(el.dataset.parts);
+      const sync = () => {
+        spec.block.rows[r].cells[c].lines[i] = makeLine(readParts(el));
+        refreshErrs();
+      };
+      el.addEventListener('input', sync);
+      el.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') e.preventDefault(); // 一行就是一段，要多一行請拖欄位到行與行之間
+      });
+      el.addEventListener('paste', (e) => {
+        e.preventDefault(); // 只收純文字，不要把 Word 的樣式和換行貼進來
+        const text = (e.clipboardData?.getData('text/plain') ?? '').replace(/\s+/g, ' ');
+        document.execCommand('insertText', false, text);
+      });
+      el.addEventListener('change', (e) => {
+        const sel = e.target.closest('select');
+        if (!sel) return;
+        sel.closest('.tp-tag').dataset.field = sel.value; // 選「（留空）」＝這顆膠囊重畫時就不見了
+        sync();
         render();
-      }),
-    );
+      });
+    });
     $$('[data-del]').forEach((el) =>
       el.addEventListener('click', () => {
         const [r, c, i] = at(el.dataset.del);

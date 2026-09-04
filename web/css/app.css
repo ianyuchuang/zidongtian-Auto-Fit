@@ -332,12 +332,13 @@ td.conf { color: var(--muted); text-align: right; }
 .tp-del { flex: none; width: 14px; text-align: center; padding: 0; cursor: pointer; font-size: 13px; }
 .tp-line:hover .tp-grip, .tp-line:hover .tp-del { opacity: 1; }
 .tp-del:hover { color: var(--red-text); }
-.tp-label:empty { min-width: 10px; }
-.tp-label { outline: none; white-space: pre; border-radius: 2px; }
-.tp-label:hover { background: #fffbe6; }
-.tp-label:focus { background: #fff6d0; outline: 1px solid var(--yellow-line); }
+/* 說明格的一行：整段可以直接打字，欄位膠囊（.tp-tag）夾在字中間 */
+.tp-parts { flex: 1; min-width: 10px; outline: none; white-space: pre-wrap; border-radius: 2px; }
+.tp-parts:hover { background: #fffbe6; }
+.tp-parts:focus { background: #fff6d0; outline: 1px solid var(--yellow-line); }
+.tp-tag { display: inline-block; vertical-align: baseline; max-width: 100%; }
 .tp-field {
-  flex: 1; min-width: 0; font: inherit; font-family: var(--font); color: var(--accent);
+  max-width: 100%; font: inherit; font-family: var(--font); color: var(--accent);
   border: 0; border-bottom: 1px dotted var(--accent); background: transparent; padding: 0; cursor: pointer;
 }
 .tp-field.need { color: var(--red-text); border-bottom-color: var(--red-text); background: var(--red-bg); }

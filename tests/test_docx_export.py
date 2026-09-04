@@ -220,3 +220,18 @@ def test_header_heading_stays_one_table(tmp_path):
     z, doc, media = _build(tmp_path, _photos(tmp_path))
     assert doc.count("<w:tbl>") == 1
     assert "<w:pageBreakBefore" not in doc
+def test_multi_field_line_joins_with_typed_text(tmp_path):
+    """同一行放多個欄位、中間用打的字隔開（有些自檢表是逗號分隔）：
+    要串成同一個段落，值是空的也照原樣印，分隔的逗號不會自己消失。"""
+    import copy
+
+    spec = copy.deepcopy(BODY_HEADING_SPEC)
+    spec["block"]["rows"][1]["cells"][1]["lines"] = [
+        {"parts": [{"field": "desc"}, {"text": "，"}, {"field": "design"}, {"text": "，"}, {"field": "actual"}]}
+    ]
+    z, doc, media = _build(tmp_path, _photos(tmp_path), spec=spec, name="multifield.docx")
+
+    assert "說明1，設計1，實際1" in doc          # 一行三個欄位串成同一段落
+    assert "說明3，設計3，實際3" in doc
+    assert doc.count("說明：") == 3            # 左邊的欄位名照舊每張一次
+    assert "，，" not in doc                    # 三個值都有，不該出現空值連著的逗號

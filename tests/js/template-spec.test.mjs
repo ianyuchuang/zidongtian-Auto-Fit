@@ -11,6 +11,9 @@ import {
   layoutPages,
   cellText,
   validateSpec,
+  lineParts,
+  makeLine,
+  usedFields,
 } from '../../web/js/template/spec.js';
 
 test('預設版型對應 V1.0 的 EMU 值', () => {
@@ -60,6 +63,49 @@ test('cellText：照片編號與拍照日期由 ctx 帶入，未對應的欄位�
   };
   assert.deepEqual(cellText(cell, {}, { seq: 3, photoDate: '112.06.29' }), ['編號：3', '日期：112.06.29', '（略）']);
   assert.deepEqual(cellText(cell, {}, {}), ['編號：', '日期：', '（略）']);
+});
+
+test('lineParts：舊格式 {label, field} 等於「一段文字＋一個欄位」', () => {
+  assert.deepEqual(lineParts({ label: '說明：', field: 'desc' }), [{ text: '說明：' }, { field: 'desc' }]);
+  assert.deepEqual(lineParts({ label: '', field: 'desc' }), [{ field: 'desc' }]);
+  assert.deepEqual(lineParts({ label: '', field: null }), [{ field: null }]);
+  const parts = [{ field: 'desc' }, { text: '，' }, { field: 'design' }];
+  assert.deepEqual(lineParts({ parts }), parts);
+});
+
+test('cellText：同一行放多個欄位，用打的字隔開（空值照原樣印，逗號不會自己消失）', () => {
+  const cell = {
+    kind: 'text',
+    lines: [{ parts: [{ field: 'desc' }, { text: '，' }, { field: 'design' }, { text: '，' }, { field: 'actual' }] }],
+  };
+  assert.deepEqual(cellText(cell, { desc: '輕隔間 1107梯廳', design: '555x450cm', actual: '555x450cm' }), [
+    '輕隔間 1107梯廳，555x450cm，555x450cm',
+  ]);
+  assert.deepEqual(cellText(cell, { desc: '輕隔間 1107梯廳' }), ['輕隔間 1107梯廳，，']);
+});
+
+test('makeLine：相鄰文字併起來、空文字丟掉；簡單的一行存回舊格式', () => {
+  assert.deepEqual(makeLine([{ text: '說明：' }, { text: '' }, { field: 'desc' }]), { label: '說明：', field: 'desc' });
+  assert.deepEqual(makeLine([{ field: 'desc' }]), { label: '', field: 'desc' });
+  assert.deepEqual(makeLine([{ text: '說明：' }]), { label: '說明：', field: 'none' });
+  assert.deepEqual(makeLine([]), { label: '', field: null });
+  // 欄位膠囊選「（留空）」＝移除它，只留旁邊打的字
+  assert.deepEqual(makeLine([{ text: '說明：' }, { field: 'none' }]), { label: '說明：', field: 'none' });
+  assert.deepEqual(makeLine([{ field: 'desc' }, { text: '，' }, { field: 'none' }]), {
+    parts: [{ field: 'desc' }, { text: '，' }],
+  });
+  assert.deepEqual(makeLine([{ field: 'desc' }, { text: '，' }, { text: '' }, { field: 'design' }]), {
+    parts: [{ field: 'desc' }, { text: '，' }, { field: 'design' }],
+  });
+});
+
+test('多欄位的一行：欄位沒指定要擋下來，usedFields 也要看得到', () => {
+  const s = defaultSpec();
+  s.block.rows[1].cells[0].lines = [{ parts: [{ field: 'desc' }, { text: '，' }, { field: 'design' }] }];
+  assert.deepEqual(validateSpec(s), []);
+  assert.deepEqual([...usedFields(s)].sort(), ['desc', 'design']);
+  s.block.rows[1].cells[0].lines = [{ parts: [{ field: 'desc' }, { text: '，' }, { field: null }] }];
+  assert.match(validateSpec(s)[0], /1 個說明格還沒指定欄位/);
 });
 
 test('填入順序：由左至右 vs 由上而下', () => {
