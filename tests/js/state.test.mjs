@@ -165,3 +165,14 @@ test('moveSummary：成功 / 部分失敗 / 沒動 / 唯讀', () => {
   );
   assert.equal(moveSummary({ moved: 0, failed: [] }, '5F'), '沒有需要搬移的照片');
 });
+
+test('classifyDrop：入口頁拖進來的東西怎麼分（拖歪了也要認得出來）', async () => {
+  const { classifyDrop } = await import('../../web/js/ui/dnd.js');
+  assert.equal(classifyDrop({ isDirectory: true }), 'folder');
+  assert.equal(classifyDrop({ isDirectory: true, fileName: 'x.docx' }), 'folder'); // 資料夾優先
+  assert.equal(classifyDrop({ fileName: '版型.docx' }), 'template');
+  assert.equal(classifyDrop({ fileName: '版型.DOCX' }), 'template');
+  assert.equal(classifyDrop({ fileName: '舊的.doc' }), 'old-doc');
+  assert.equal(classifyDrop({ fileName: 'a.jpg' }), 'other-file');
+  assert.equal(classifyDrop({}), 'unsupported');
+});

@@ -6,7 +6,7 @@ import { memoryTreeFromFileList, MemoryDirectoryHandle } from '../fs/memory.js';
 import { scanTree, describeTree, treeSummaryText } from '../fs/adapter.js';
 import { saveLastRoot, loadLastRoot, clearLastRoot, ensurePermission } from '../fs/handle-store.js';
 import { esc, toast } from './dialog.js';
-import { bindFileDrop } from './dnd.js';
+import { bindFileDrop, classifyDrop } from './dnd.js';
 import { listTemplates, getTemplate, rememberFor, lastFor } from '../template/library.js';
 
 const FS_OK = typeof globalThis.showDirectoryPicker === 'function';
@@ -90,12 +90,6 @@ export function mountEntry(container, app) {
     renderTemplateBox();
   }
 
-  bindFileDrop($('#dz-template'), (dt) => {
-    const f = dt.files?.[0];
-    if (f && /\.docx$/i.test(f.name)) app.openTemplatePage(f); // 直接進調整頁解析
-    else if (f && /\.doc$/i.test(f.name)) toast('舊的 .doc 讀不了，請先用 Word 另存成 .docx', { error: true });
-    else toast('請拖入 docx 檔', { error: true });
-  });
   renderTemplateBox();
 
   // ---- 資料夾 ----
@@ -184,24 +178,37 @@ export function mountEntry(container, app) {
     setFolder(h, true, h.name);
   });
 
-  // ---- 資料夾：拖放 ----
-  bindFileDrop($('#dz-folder'), async (dt) => {
+  // ---- 拖放 ----
+  // 拖進來的東西自己判斷是「照片資料夾」還是「版型 docx」，整張入口頁都接得住，
+  // 拖歪了也不會白忙一場（頁面沒接住的話瀏覽器會去開檔案，畫面就變空白）。
+  async function handleDrop(dt) {
+    const file = dt.files?.[0]; // DataTransfer 在 await 之後會失效，先取起來
     const item = dt.items?.[0];
-    if (item && typeof item.getAsFileSystemHandle === 'function') {
-      const h = await item.getAsFileSystemHandle();
-      if (h?.kind === 'directory') {
-        if ((await h.requestPermission?.({ mode: 'readwrite' })) === 'denied') {
+    let handle = null;
+    if (item && typeof item.getAsFileSystemHandle === 'function') handle = await item.getAsFileSystemHandle();
+    switch (classifyDrop({ isDirectory: handle?.kind === 'directory', fileName: file?.name ?? null })) {
+      case 'folder':
+        if ((await handle.requestPermission?.({ mode: 'readwrite' })) === 'denied') {
           toast('沒有取得資料夾的寫入權限', { error: true });
           return;
         }
-        setFolder(h, false, h.name);
+        setFolder(handle, false, handle.name);
         return;
-      }
-      toast('請拖入資料夾，不是檔案', { error: true });
-      return;
+      case 'template':
+        app.openTemplatePage(file); // 版型：直接進調整頁解析
+        return;
+      case 'old-doc':
+        toast('舊的 .doc 讀不了，請先用 Word 另存成 .docx', { error: true });
+        return;
+      case 'other-file':
+        toast('請拖入照片資料夾，或版型的 docx 檔', { error: true });
+        return;
+      default:
+        toast('這個瀏覽器不支援拖放資料夾，請改用點選', { error: true });
     }
-    toast('這個瀏覽器不支援拖放資料夾，請改用點選', { error: true });
-  });
+  }
+
+  for (const sel of ['#dz-folder', '#dz-template', '.entry']) bindFileDrop($(sel), handleDrop);
 
   // ---- 範例（開發用，由 dev_server 的 /samples/ 提供）----
   fetch('samples/index.json', { cache: 'no-store' })

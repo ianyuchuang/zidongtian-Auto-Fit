@@ -1,4 +1,4 @@
-// 進入點：入口頁 ↔ 工作台切換。
+// 進入點：入口頁 ↔ 版型調整頁 ↔ 工作台切換。
 
 import { createApp } from './app.js';
 import { mountEntry } from './ui/entry.js';
@@ -7,6 +7,13 @@ import { mountTemplatePage } from './ui/template-page.js';
 
 const app = createApp();
 globalThis.app = app; // 除錯用
+
+// 拖檔案到頁面上沒有接住的地方，瀏覽器預設會去「開」那個檔案：從 http://localhost
+// 跳到 file:// 會被 Chrome 擋掉，畫面就變成一片空白（2026-09-04 回報：拖照片資料夾
+// 沒對準拖放框就跳空白頁）。全域擋掉預設行為，拖歪了頂多沒反應。
+for (const type of ['dragover', 'drop']) {
+  window.addEventListener(type, (e) => e.preventDefault());
+}
 
 const root = document.getElementById('app');
 mountEntry(root, app);

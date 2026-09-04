@@ -27,15 +27,20 @@ export function reportMove(app, r, dirName) {
   toast(msg, { error: r.failed.length > 0, ms: r.failed.length ? 6000 : 3500 });
 }
 
-/** 把一塊區域變成可拖放檔案的區域（入口頁選資料夾、版型調整頁拖 docx 共用）。 */
+/**
+ * 把一塊區域變成可拖放檔案的區域（入口頁選資料夾、版型調整頁拖 docx 共用）。
+ * 會擋掉冒泡，所以小區塊（例：版型框）綁的處理會蓋過外層整頁的處理。
+ */
 export function bindFileDrop(zone, onDrop) {
   zone.addEventListener('dragover', (e) => {
     e.preventDefault();
+    e.stopPropagation();
     zone.classList.add('over');
   });
   zone.addEventListener('dragleave', () => zone.classList.remove('over'));
   zone.addEventListener('drop', async (e) => {
     e.preventDefault();
+    e.stopPropagation();
     zone.classList.remove('over');
     try {
       await onDrop(e.dataTransfer);
@@ -43,4 +48,16 @@ export function bindFileDrop(zone, onDrop) {
       toast(err.message, { error: true });
     }
   });
+}
+
+/**
+ * 入口頁拖進來的東西該當成什麼（純邏輯，好測）。
+ * isDirectory：拖進來的是資料夾嗎；fileName：檔案的名字（沒有就給 null）。
+ */
+export function classifyDrop({ isDirectory = false, fileName = null } = {}) {
+  if (isDirectory) return 'folder';
+  if (fileName && /\.docx$/i.test(fileName)) return 'template';
+  if (fileName && /\.doc$/i.test(fileName)) return 'old-doc';
+  if (fileName) return 'other-file';
+  return 'unsupported';
 }
