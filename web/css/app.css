@@ -151,8 +151,10 @@ input[type="text"]:focus, input[type="password"]:focus, textarea:focus { outline
 table.photos { width: 100%; border-collapse: collapse; table-layout: fixed; }
 th.c-handle { width: 28px; }
 th.c-thumb { width: 64px; }
+/* 三個文字欄的分配：設計／實際各拿表格寬的 22%（最少 118px），剩下才給內容說明——
+   內容說明原本吃掉全部剩餘寬度，實際用不到那麼長；1920 寬螢幕下約為原本的一半（2026-09-04） */
 th.c-desc { width: auto; }
-th.c-design, th.c-actual { width: 118px; }
+th.c-design, th.c-actual { width: max(118px, 22%); }
 th.c-conf { width: 52px; text-align: right; }
 th.c-status { width: 150px; }
 table.photos th { position: sticky; top: 0; background: #f1f3f5; text-align: left; font-weight: 600; font-size: 12px; color: #444; padding: 8px 6px; z-index: 1; }

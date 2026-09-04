@@ -12,3 +12,12 @@ def test_node_tests_pass():
     assert node, "需要 Node.js 才能跑前端測試（tests/js）"
     r = subprocess.run([node, "--test", "tests/js/*.test.mjs"], cwd=ROOT, capture_output=True, text=True, encoding="utf-8")
     assert r.returncode == 0, "node --test 失敗：\n" + r.stdout + r.stderr
+
+
+def test_table_text_columns_share_width():
+    """表格「設計」「實際」欄要按比例分寬（2026-09-04 定案：內容說明不再吃掉全部剩餘寬度），不能退回固定 118px。"""
+    css = (ROOT / "web" / "css" / "app.css").read_text(encoding="utf-8")
+    import re
+    m = re.search(r"th\.c-design, th\.c-actual \{ width: ([^;]+); \}", css)
+    assert m, "找不到 th.c-design / th.c-actual 的寬度規則"
+    assert "%" in m.group(1), f"設計／實際欄應用比例分寬，目前是 {m.group(1)}"
