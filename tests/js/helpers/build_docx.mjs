@@ -1,6 +1,7 @@
 // 在 Node 裡用 docx-export.js 產一份 docx（給 tests/test_docx_export.py 用 zipfile 驗證版面）。
-// 用法：node tests/js/helpers/build_docx.mjs [--spec <spec.json>] <照片1.jpg> ... <輸出.docx>
-import { readFileSync, writeFileSync } from 'node:fs';
+// 用法：node tests/js/helpers/build_docx.mjs [--spec <spec.json> | --template <fixture 目錄>] <照片1.jpg> ... <輸出.docx>
+// --template 會用 template/parse.js 解析 fixture 的 document.xml，等於「換版型」的實際路徑。
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -16,6 +17,16 @@ let spec;
 if (args[0] === '--spec') {
   args.shift();
   spec = JSON.parse(readFileSync(args.shift(), 'utf8'));
+} else if (args[0] === '--template') {
+  args.shift();
+  const dir = args.shift();
+  const { parseTemplate } = await import('../../../web/js/template/parse.js');
+  const hdr = join(dir, 'header.xml');
+  spec = parseTemplate({
+    documentXml: readFileSync(join(dir, 'document.xml'), 'utf8'),
+    headerXml: existsSync(hdr) ? readFileSync(hdr, 'utf8') : null,
+    name: dir,
+  });
 }
 const out = args.pop();
 const photos = args.map((p, i) => ({

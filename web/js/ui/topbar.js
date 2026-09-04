@@ -15,7 +15,7 @@ export function mountTopbar(container, app) {
     container.innerHTML = `
       <div class="brand" data-act="home" title="回首頁"><span>自懂填</span> Auto-Fit</div>
       <span class="pill" title="${esc(root?.name ?? '')}">🗀 資料夾 ${esc(root?.name ?? '')}${readOnly ? '（唯讀複本）' : ''}</span>
-      <span class="pill" title="${esc(template?.name ?? '')}">📄 板型 ${template ? esc(template.name) + '（尚未套用，輸出用預設）' : '預設（每頁 3 列 × 2 張）'}</span>
+      <span class="pill" title="${esc(template?.name ?? '')}">📄 版型 ${template ? esc(template.name) : '預設（每頁 3 列 × 2 張）'}</span>
       <span class="pill clickable" data-act="date" title="點選修改">📅 檢查日期 ${d.compact}</span>
       ${eng ? `<span class="pill engine" title="${esc(eng.title)}">🤖 ${esc(eng.text)}</span>` : ''}
       <span class="spacer"></span>

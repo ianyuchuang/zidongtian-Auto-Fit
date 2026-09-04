@@ -1,4 +1,6 @@
-// 入口頁：選資料夾、板型、檢查日期 → 開始讀取。
+// 入口頁：選資料夾、版型、檢查日期 → 開始讀取。
+// 拖進來的 docx 會就地解析成 LayoutSpec 並顯示預覽（見 ui/template-preview.js），
+// 解析不完整就不讓「開始讀取」，不要等到產 Word 才發現版面是錯的。
 // 辨識方式與提示詞不在這裡，改成進工作台後按頂列的「🤖 AI 辨識」（見 ui/recognize.js）。
 
 import { todayRoc, parseRocInput } from '../rocdate.js';
@@ -6,6 +8,9 @@ import { memoryTreeFromFileList, MemoryDirectoryHandle } from '../fs/memory.js';
 import { scanTree, describeTree, treeSummaryText } from '../fs/adapter.js';
 import { saveLastRoot, loadLastRoot, clearLastRoot, ensurePermission } from '../fs/handle-store.js';
 import { esc, toast } from './dialog.js';
+import { parseTemplateDocx } from '../template/parse.js';
+import { validateSpec } from '../template/spec.js';
+import { renderTemplatePreview } from './template-preview.js';
 
 const FS_OK = typeof globalThis.showDirectoryPicker === 'function';
 
@@ -28,11 +33,12 @@ export function mountEntry(container, app) {
     </div>
 
     <div class="field">
-      <span class="label">板型</span>
+      <span class="label">版型</span>
       <div class="dropzone" id="dz-template">
-        <div id="template-text">預設＝V1.0 版面（A4，每頁 3 列 × 2 張，標楷體）。點選或拖入 docx 可換板型</div>
+        <div id="template-text">預設＝V1.0 版面（A4，每頁 3 列 × 2 張，標楷體）。點選或拖入 docx 可換版型</div>
       </div>
-      <input type="file" id="template-input" accept=".docx,.doc" hidden>
+      <input type="file" id="template-input" accept=".docx" hidden>
+      <div id="tpl-preview" class="tpl-wrap" hidden></div>
     </div>
 
     <div class="row">
@@ -57,6 +63,9 @@ export function mountEntry(container, app) {
   let rootHandle = null;
   let readOnly = false;
   let template = null;
+  const updateStart = () => {
+    $('#start').disabled = !rootHandle || (!!template && validateSpec(template.spec).length > 0);
+  };
   $('#date').value = app.dateInfo().compact; // 回首頁時把上次設的日期帶回來
 
   // 選到資料夾後，像板型一樣把名稱顯示出來，並掃一次樹列出子資料夾與張數
@@ -74,7 +83,7 @@ export function mountEntry(container, app) {
       const summary = treeSummaryText(describeTree(await scanTree(handle)));
       if (seq !== pickSeq) return; // 期間又選了別的資料夾
       $('#folder-text').innerHTML = `<span class="picked">🗀 ${esc(label)}</span>${roTag}<div class="small muted summary">${esc(summary)}</div>`;
-      $('#start').disabled = false;
+      updateStart();
     } catch (e) {
       if (seq !== pickSeq) return;
       console.error(e);
@@ -87,10 +96,7 @@ export function mountEntry(container, app) {
   // Chrome 需要使用者點一下才會給權限，所以放一顆按鈕。
   if (app.state.root) {
     setFolder(app.state.root, app.state.readOnly, app.state.root.name);
-    if (app.state.template) {
-      template = app.state.template;
-      $('#template-text').innerHTML = `<span class="picked">${esc(template.name)}</span> <span class="small muted">（目前只記錄檔名，輸出仍用預設版面）</span>`;
-    }
+    if (app.state.template) showTemplate(app.state.template);
   } else {
     loadLastRoot().then(async (h) => {
       if (!h || rootHandle) return;
@@ -160,17 +166,52 @@ export function mountEntry(container, app) {
     toast('這個瀏覽器不支援拖放資料夾，請改用點選', { error: true });
   });
 
-  // ---- 板型 ----
-  const setTemplate = (file) => {
-    template = { name: file.name, file };
-    $('#template-text').innerHTML = `<span class="picked">${esc(file.name)}</span> <span class="small muted">（目前只記錄檔名，輸出仍用預設版面）</span>`;
-  };
+  // ---- 版型 ----
+  const TPL_HINT = '預設＝V1.0 版面（A4，每頁 3 列 × 2 張，標楷體）。點選或拖入 docx 可換版型';
+  const tplBox = $('#tpl-preview');
+
+  function showTemplate(tpl, err = '') {
+    template = tpl;
+    const dz = $('#dz-template');
+    if (!tpl) {
+      dz.classList.remove('has-pick');
+      $('#template-text').innerHTML = TPL_HINT + (err ? `<div class="small tpl-bad">${err}</div>` : '');
+      tplBox.hidden = true;
+      tplBox.innerHTML = '';
+    } else {
+      dz.classList.add('has-pick');
+      $('#template-text').innerHTML =
+        `<span class="picked">${esc(tpl.name)}</span> <button type="button" class="btn tiny" id="tpl-clear">改用預設版面</button>`;
+      $('#tpl-clear').addEventListener('click', (e) => {
+        e.stopPropagation();
+        showTemplate(null);
+      });
+      tplBox.hidden = false;
+      renderTemplatePreview(tplBox, tpl.spec, updateStart);
+    }
+    updateStart();
+  }
+
+  async function setTemplate(file) {
+    $('#dz-template').classList.add('has-pick');
+    $('#template-text').innerHTML = `<span class="picked">${esc(file.name)}</span> <span class="small muted">解析中…</span>`;
+    try {
+      const spec = await parseTemplateDocx(await file.arrayBuffer(), file.name.replace(/\.docx$/i, ''));
+      showTemplate({ name: file.name, file, spec });
+    } catch (e) {
+      console.error(e);
+      showTemplate(null, `讀不懂這份版型：${esc(e.message)}`);
+      toast(`讀不懂這份版型：${e.message}`, { error: true });
+    }
+  }
+
   $('#dz-template').addEventListener('click', () => $('#template-input').click());
   $('#template-input').addEventListener('change', (e) => e.target.files[0] && setTemplate(e.target.files[0]));
   bindDrop($('#dz-template'), (dt) => {
     const f = dt.files?.[0];
-    if (f && /\.docx?$/i.test(f.name)) setTemplate(f);
-    else toast('請拖入 doc / docx 檔', { error: true });
+    if (f && /\.docx$/i.test(f.name)) setTemplate(f);
+    else if (f && /\.doc$/i.test(f.name)) toast('舊的 .doc 讀不了，請先用 Word 另存成 .docx', { error: true });
+    else toast('請拖入 docx 檔', { error: true });
   });
 
   // ---- 範例（開發用，由 dev_server 的 /samples/ 提供）----

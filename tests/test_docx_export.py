@@ -21,7 +21,7 @@ def _tiny_jpeg(path: Path, color, w=40, h=30):
     PIL.new("RGB", (w, h), color).save(path, "JPEG")
 
 
-def _build(tmp_path, photos, spec=None, name="out.docx"):
+def _build(tmp_path, photos, spec=None, template=None, name="out.docx"):
     """跑 build_docx.mjs 產一份 docx，回傳 (zipfile, document.xml, media 清單)。"""
     node = shutil.which("node")
     assert node, "需要 Node.js"
@@ -31,6 +31,8 @@ def _build(tmp_path, photos, spec=None, name="out.docx"):
         sp = tmp_path / "spec.json"
         sp.write_text(json.dumps(spec, ensure_ascii=False), encoding="utf-8")
         args += ["--spec", str(sp)]
+    elif template is not None:
+        args += ["--template", str(ROOT / "tests" / "fixtures" / "版型" / template)]
     r = subprocess.run(
         [*args, *map(str, photos), str(out)],
         cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
@@ -133,4 +135,32 @@ def test_docx_follows_custom_spec(tmp_path):
     assert "內容說明：" not in doc
     # 由上而下填：1、2 在左欄的上下兩格，3 在右欄第一格 → 文件順序是 1、3、2
     assert doc.index("說明1") < doc.index("說明3") < doc.index("說明2")
+    assert len(media) == 3
+
+
+def test_docx_from_parsed_template(tmp_path):
+    """換版型的完整路徑：解析 b 版型的 XML → 直接拿解析結果產 Word。"""
+    z, doc, media = _build(tmp_path, _photos(tmp_path), template="b-landscape-5rows", name="parsed.docx")
+
+    assert 'w:orient="landscape"' in doc and 'w:w="16840"' in doc
+    assert "範例工程" in doc and "施工查驗照片" in doc      # 抬頭在內文
+    assert not [n for n in z.namelist() if re.match(r"word/header\d*\.xml", n)]
+    assert doc.count("<w:tr>") + doc.count("<w:tr ") == 10  # 3 張 → 2 個區塊列 × 5 列
+    assert "<w:vMerge" in doc                                # 照片格跨 5 列
+    assert "照片編號" in doc and "拍照日期" in doc and "圖片說明" in doc
+    assert "內容說明：" not in doc                            # 換版型後就不該有 V1.0 的欄位名
+    assert len(media) == 3
+
+
+def test_docx_from_parsed_template_a_matches_v1_layout(tmp_path):
+    """a 版型就是 V1.0 的版面：解析出來的結果要和預設版型產出同樣的骨架。"""
+    z, doc, media = _build(tmp_path, _photos(tmp_path), template="a-portrait-3x2", name="parsed_a.docx")
+    hdr = z.read(next(n for n in z.namelist() if re.match(r"word/header\d*\.xml", n))).decode("utf-8")
+
+    assert 'w:w="11906"' in doc and 'w:h="16838"' in doc
+    assert 'w:w="4915"' in doc and 'w:val="3798"' in doc
+    assert doc.count("<w:tr>") + doc.count("<w:tr ") == 4
+    assert "內容說明：說明1" in doc and "設    計：設計3" in doc
+    assert "範例營造股份有限公司" in hdr
+    assert "施工自主檢查照片(檢查日期：115年07月25日)" in hdr
     assert len(media) == 3

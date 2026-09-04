@@ -262,3 +262,38 @@ td.conf { color: var(--muted); text-align: right; }
 
 /* 檢視器：辨識失敗原因 */
 .viewer .err { color: var(--red-text); background: var(--red-bg); border-radius: var(--radius); padding: 6px 8px; margin: 6px 0; word-break: break-all; }
+
+/* ---------- 版型預覽（入口頁） ---------- */
+.tpl-wrap { margin-top: 12px; }
+.tpl { display: flex; gap: 18px; align-items: flex-start; }
+.tpl-page {
+  flex: none; background: #fff; border: 1px solid var(--line); border-radius: 4px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.06); padding: 10px 8px; display: flex; flex-direction: column; gap: 6px; overflow: hidden;
+}
+.tpl-head { text-align: center; font-size: 10px; color: var(--muted); line-height: 1.3; }
+.tpl-grid { flex: 1; display: grid; gap: 6px; min-height: 0; }
+.tpl-slot {
+  position: relative; border: 1px solid var(--line); border-radius: 3px; background: #fbfcfd;
+  padding: 3px; cursor: grab; min-height: 0; overflow: hidden;
+}
+.tpl-block { height: 100%; display: grid; gap: 2px; }
+.tpl-cell { min-width: 0; overflow: hidden; display: flex; flex-direction: column; justify-content: center; }
+.tpl-slot.over { border-color: var(--accent); background: var(--accent-soft); }
+.tpl-no {
+  position: absolute; top: 2px; left: 2px; width: 15px; height: 15px; border-radius: 50%;
+  background: var(--accent); color: #fff; font-size: 10px; line-height: 15px; text-align: center; font-weight: 600;
+}
+.tpl-photo { background: #eef1f4; border-radius: 2px; display: grid; place-items: center; font-size: 12px; min-height: 10px; }
+.tpl-cap { font-size: 8px; color: var(--muted); line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tpl-form { flex: 1; min-width: 0; }
+.tpl-sec { display: block; font-weight: 600; margin: 12px 0 4px; }
+.tpl-sec:first-child { margin-top: 0; }
+.tpl-sub { margin-bottom: 4px; }
+.tpl-line { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
+.tpl-line input[type="text"] { flex: 1; min-width: 0; }
+.tpl-line select { flex: none; max-width: 40%; border: 1px solid var(--line); border-radius: var(--radius); padding: 4px 6px; background: #fff; }
+.tpl-num { width: 62px; border: 1px solid var(--line); border-radius: var(--radius); padding: 4px 6px; }
+.tpl-need { border-color: var(--red-text); background: var(--red-bg); }
+.tpl-errs { background: var(--red-bg); border: 1px solid #e6b8b3; color: var(--red-text); border-radius: var(--radius); padding: 8px 12px; margin-bottom: 10px; }
+.tpl-errs ul { margin: 4px 0 0; padding-left: 18px; }
+.tpl-bad { color: var(--red-text); margin-top: 6px; }

@@ -104,6 +104,17 @@ export function slotOrder(spec) {
   return out;
 }
 
+/** 交換兩個格子的填入順序（預覽頁拖曳用）。會寫進 spec.grid.seq。 */
+export function swapSlots(spec, slotA, slotB) {
+  const order = slotOrder(spec);
+  const ia = order.indexOf(slotA);
+  const ib = order.indexOf(slotB);
+  if (ia < 0 || ib < 0) return spec;
+  [order[ia], order[ib]] = [order[ib], order[ia]];
+  spec.grid.seq = order;
+  return spec;
+}
+
 /**
  * 把照片排進版面：回傳 [頁][區塊列][格] 的照片（沒排到的格是 null）。
  * 最後一頁整列都空的區塊列會去掉，不會多印空白列。
@@ -193,6 +204,44 @@ export function validateSpec(spec) {
     }
     if (cursor > (spec.block.cols?.length ?? 0)) errs.push('區塊某一列的欄數超過欄寬定義');
   }
+  const blank = cells.flatMap((c) => c.lines ?? []).filter((l) => l.field == null).length;
+  if (blank) errs.push(`有 ${blank} 個說明格還沒指定欄位`);
   if (spec.unknown?.length) errs.push(`版型有 ${spec.unknown.length} 項沒解析出來：${spec.unknown.join('、')}`);
   return errs;
+}
+
+/** 這個版型會用到哪些資料欄位（'desc'、'seq'…）。 */
+export function usedFields(spec) {
+  const out = new Set();
+  for (const row of spec?.block?.rows ?? []) {
+    for (const cell of row.cells ?? []) {
+      for (const line of cell.lines ?? []) if (line.field && line.field !== 'none') out.add(line.field);
+    }
+  }
+  return out;
+}
+
+/**
+ * 預覽頁要編輯的說明欄位清單：把「只有欄位名的行」和它後面的「值」配成一組。
+ * 回傳 [{ labelLine, valueLine }]；valueLine 是 null 代表這個欄位名沒配到值。
+ */
+export function fieldRows(spec) {
+  const out = [];
+  let pending = null;
+  for (const row of spec.block?.rows ?? []) {
+    for (const cell of row.cells ?? []) {
+      if (cell.kind === 'photo') continue;
+      for (const line of cell.lines ?? []) {
+        const labelOnly = (line.field === 'none' || line.field == null) && line.label;
+        if (labelOnly && !pending) {
+          pending = line;
+          continue;
+        }
+        out.push({ labelLine: pending ?? line, valueLine: line });
+        pending = null;
+      }
+    }
+  }
+  if (pending) out.push({ labelLine: pending, valueLine: null });
+  return out;
 }

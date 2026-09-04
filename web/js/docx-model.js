@@ -2,6 +2,7 @@
 // 版面規則在 template/spec.js（LayoutSpec），文件見 docs/版型.md。
 
 import { isTrashDir } from './state.js';
+import { usedFields } from './template/spec.js';
 
 /** 輸出檔名：「民國日期 資料夾名.docx」；suffix 用於同名檔被開啟時另存 _new。 */
 export function outputFileName(roc, folderName, suffix = '') {
@@ -37,8 +38,8 @@ export function planExport(orderedPhotos, dirs) {
   return { groups, skipped, trashed };
 }
 
-/** 輸出前的提醒（不阻擋）。 */
-export function exportWarnings(orderedPhotos) {
+/** 輸出前的提醒（不阻擋）。spec 有給就一併檢查版型要的欄位有沒有資料。 */
+export function exportWarnings(orderedPhotos, spec = null) {
   const warnings = [];
   orderedPhotos = orderedPhotos.filter((p) => !isTrashDir(p.dir));
   const unreviewed = orderedPhotos.filter((p) => p.status === 'ai' || p.status === 'low');
@@ -47,5 +48,16 @@ export function exportWarnings(orderedPhotos) {
   if (pending.length) warnings.push(`有 ${pending.length} 張尚未辨識完成。`);
   const empty = orderedPhotos.filter((p) => !(p.desc || '').trim());
   if (empty.length) warnings.push(`有 ${empty.length} 張內容說明為空，將略過不輸出。`);
+  if (spec) {
+    const used = usedFields(spec);
+    if (used.has('photoDate') && !orderedPhotos.some((p) => p.photoDate)) {
+      warnings.push('版型有「拍照日期」欄位，但目前沒有拍照日期資料，這一欄會留空。');
+    }
+    for (const [key, label] of [['design', '設計'], ['actual', '實際']]) {
+      if (!used.has(key)) continue;
+      const blank = orderedPhotos.filter((p) => (p.desc || '').trim() && !(p[key] || '').trim()).length;
+      if (blank) warnings.push(`有 ${blank} 張沒填${label}值，版型的這一欄會留空。`);
+    }
+  }
   return warnings;
 }

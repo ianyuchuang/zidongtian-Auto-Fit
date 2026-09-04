@@ -209,9 +209,7 @@ export function parseTemplate({ documentXml, headerXml = null, name = '' } = {})
       slots.find((s) => s.line.field === null && s.r > p.r);
     if (hit) hit.line.field = p.field;
   }
-  const orphan = slots.filter((s) => s.line.field === null);
-  for (const s of orphan) s.line.field = 'none';
-  if (orphan.length) unknown.push(`${orphan.length} 個說明格對不到欄位`);
+  // 認領不到的值格留 field=null，validateSpec 會擋下來，由預覽頁請使用者指定。
 
   // ---- 照片框 ----
   const photoCell = rows[start] ? kids(rows[start], 'w:tc').find(isPhotoCell) : null;

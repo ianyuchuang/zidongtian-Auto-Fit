@@ -7,6 +7,7 @@ import {
   blockWidth,
   perPage,
   slotOrder,
+  swapSlots,
   layoutPages,
   cellText,
   validateSpec,
@@ -95,6 +96,21 @@ test('layoutPages：由上而下填、跨頁', () => {
     ],
     [[7, null]],
   ]);
+});
+
+test('swapSlots：交換兩格的填入順序', () => {
+  const s = defaultSpec();
+  swapSlots(s, 0, 5);
+  assert.deepEqual(s.grid.seq, [5, 1, 2, 3, 4, 0]);
+  assert.deepEqual(layoutPages(s, ['a', 'b']), [[[null, 'b'], [null, null], [null, 'a']]]);
+  swapSlots(s, 5, 0); // 換回來
+  assert.deepEqual(s.grid.seq, [0, 1, 2, 3, 4, 5]);
+});
+
+test('validateSpec：說明格沒指定欄位要擋下來', () => {
+  const s = defaultSpec();
+  s.block.rows[1].cells[0].lines[0].field = null;
+  assert.match(validateSpec(s).join(), /還沒指定欄位/);
 });
 
 test('validateSpec：預設版型沒問題；壞掉的要講出哪裡壞', () => {

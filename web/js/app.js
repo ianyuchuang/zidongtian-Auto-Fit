@@ -42,7 +42,7 @@ export function createApp() {
     dirs: [], // flattenDirs(tree)
     photos: [],
     date: new Date(),
-    template: null, // {name, file} | null
+    template: null, // {name, file, spec} | null；spec 是解析出來的 LayoutSpec（template/spec.js）
     prompt: '',
     recognizerId: 'mock',
     api: null, // LLM API 設定 {provider, apiKey, model}（只在記憶體，不存進校對暫存）
@@ -509,7 +509,7 @@ export function createApp() {
     // ---------- 產生 Word ----------
     exportPlan() {
       const ordered = app.orderedPhotos();
-      return { ...planExport(ordered, state.dirs), warnings: exportWarnings(ordered) };
+      return { ...planExport(ordered, state.dirs), warnings: exportWarnings(ordered, state.template?.spec ?? null) };
     },
     async exportWord({ onProgress } = {}) {
       const { groups, skipped } = app.exportPlan();
@@ -520,6 +520,7 @@ export function createApp() {
         const g = groups[gi];
         for (const p of g.photos) await app.fileOf(p);
         const { blob, failures } = await buildDocxBlob(g, {
+          spec: state.template?.spec,
           rocDisplay: display,
           stamp,
           onProgress: (i, n) => onProgress?.({ group: gi + 1, groups: groups.length, i, n, folder: g.folderName }),

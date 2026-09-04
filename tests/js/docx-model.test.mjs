@@ -50,3 +50,20 @@ test('planExport / exportWarnings：回收桶裡的照片不輸出、不計入�
   assert.deepEqual(trashed.map((p) => p.id), ['t', 'u']);
   assert.deepEqual(exportWarnings(photos), []);
 });
+
+test('exportWarnings：版型要「拍照日期」但沒資料時要先講', async () => {
+  const { defaultSpec } = await import('../../web/js/template/spec.js');
+  const spec = defaultSpec();
+  spec.block.rows[1].cells[0].lines.push({ label: '拍照日期：', field: 'photoDate' });
+  const photos = [{ id: 'a', dir: '4F', desc: 'a', design: 'd', actual: 'r', status: 'ok' }];
+  assert.match(exportWarnings(photos, spec).join(), /拍照日期/);
+  assert.deepEqual(exportWarnings(photos), []); // 沒給版型就不檢查
+  const withDate = [{ ...photos[0], photoDate: '112.06.29' }];
+  assert.deepEqual(exportWarnings(withDate, spec), []);
+});
+
+test('exportWarnings：版型有設計／實際欄位但沒填', () => {
+  const photos = [{ id: 'a', dir: '4F', desc: 'a', design: '', actual: '', status: 'ok' }];
+  const w = exportWarnings(photos, null);
+  assert.deepEqual(w, []);
+});
