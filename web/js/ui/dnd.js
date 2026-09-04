@@ -37,7 +37,12 @@ export function bindFileDrop(zone, onDrop) {
     e.stopPropagation();
     zone.classList.add('over');
   });
-  zone.addEventListener('dragleave', () => zone.classList.remove('over'));
+  // 滑進子元素也會發 dragleave（接著子元素再發 dragover），只在真的離開整個區塊時才拿掉 over，
+  // 否則框線一直閃。relatedTarget 是要進去的元素，還在 zone 裡就不算離開。
+  zone.addEventListener('dragleave', (e) => {
+    if (e.relatedTarget && zone.contains(e.relatedTarget)) return;
+    zone.classList.remove('over');
+  });
   zone.addEventListener('drop', async (e) => {
     e.preventDefault();
     e.stopPropagation();
