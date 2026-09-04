@@ -4,6 +4,18 @@ import { createApp } from './app.js';
 import { mountEntry } from './ui/entry.js';
 import { mountWorkbench } from './ui/workbench.js';
 import { mountTemplatePage } from './ui/template-page.js';
+import { toast } from './ui/dialog.js';
+
+// 寧可大聲失敗：掛頁面時炸掉、或哪個 async 沒接 catch，畫面不能靜靜死掉（使用者只看到一片空白）。
+// 仍照樣 console.error，DevTools 看得到堆疊。
+window.addEventListener('error', (e) => {
+  console.error(e.error ?? e.message);
+  toast(`程式發生錯誤：${e.error?.message ?? e.message}`, { error: true, ms: 8000 });
+});
+window.addEventListener('unhandledrejection', (e) => {
+  console.error(e.reason);
+  toast(`程式發生錯誤：${e.reason?.message ?? String(e.reason)}`, { error: true, ms: 8000 });
+});
 
 const app = createApp();
 globalThis.app = app; // 除錯用
