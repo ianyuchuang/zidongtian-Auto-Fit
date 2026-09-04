@@ -72,6 +72,18 @@ function commonFont(node) {
   return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
 }
 
+/**
+ * 一個節點底下「版面上」的段落：直接子段落，加上表格（w:tbl → w:tr → w:tc）等容器裡的段落，
+ * 但不進段落內部（浮動文字方塊裡的 w:p 不算）。頁首常被排成一個表格，只看直接子段落會讀成空的。
+ */
+function layoutParas(node, out = []) {
+  for (const c of kids(node)) {
+    if (c.name === 'w:p') out.push(c);
+    else layoutParas(c, out);
+  }
+  return out;
+}
+
 function headingLines(paras) {
   return paras.map((p) => ({
     text: text(p).replace(DATE_RE, '{date}'),
@@ -228,7 +240,9 @@ export function parseTemplate({ documentXml, headerXml = null, name = '' } = {})
     heading = { place: 'body', lines: headingLines(before) };
   } else if (headerXml) {
     const hdr = kids(parseXml(headerXml))[0];
-    heading = { place: 'header', lines: headingLines(kids(find(hdr, 'w:hdr') ?? hdr, 'w:p').filter((p) => text(p).trim())) };
+    const hdrNode = find(hdr, 'w:hdr') ?? hdr;
+    heading = { place: 'header', lines: headingLines(layoutParas(hdrNode).filter((p) => text(p).trim())) };
+    if (!heading.lines.length && text(hdrNode).trim()) unknown.push('頁首文字（讀不出段落）');
   } else {
     heading = { place: 'header', lines: [] };
     if (find(sect, 'w:headerReference')) unknown.push('頁首文字');

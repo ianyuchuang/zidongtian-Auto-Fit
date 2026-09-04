@@ -109,3 +109,30 @@ test('沒有照片的表格要老實說讀不出來，不要亂猜', () => {
 test('不是 Word 的 XML 就直接丟錯', () => {
   assert.throws(() => parseTemplate({ documentXml: '<html><body/></html>' }), /不是 Word/);
 });
+
+const W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
+const DOC_MIN =
+  `<w:document ${W}><w:body>` +
+  '<w:tbl><w:tblGrid><w:gridCol w:w="4915"/></w:tblGrid><w:tr><w:tc><w:p><w:r><w:t>x</w:t></w:r></w:p></w:tc></w:tr></w:tbl>' +
+  '<w:sectPr><w:headerReference w:type="default" r:id="rId1"/><w:pgSz w:w="11906" w:h="16838"/></w:sectPr></w:body></w:document>';
+
+test('頁首排成表格時，抬頭文字也要讀得出來', () => {
+  const headerXml =
+    `<w:hdr ${W}><w:tbl><w:tr><w:tc><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:t>工程名稱：某某案</w:t></w:r></w:p></w:tc>` +
+    '<w:tc><w:p><w:r><w:t>日期：113年6月14日</w:t></w:r></w:p></w:tc></w:tr></w:tbl><w:p><w:r><w:t>自主檢查表</w:t></w:r></w:p></w:hdr>';
+  const s = parseTemplate({ documentXml: DOC_MIN, headerXml, name: 'h' });
+  assert.deepEqual(
+    s.heading.lines.map((l) => l.text),
+    ['工程名稱：某某案', '日期：{date}', '自主檢查表'],
+  );
+  assert.equal(s.heading.lines[0].align, 'center');
+  assert.ok(!s.unknown.some((u) => u.includes('頁首')));
+});
+
+test('頁首有字卻讀不出段落時要列進 unknown，不要靜靜給空抬頭', () => {
+  const headerXml = `<w:hdr ${W}><w:r><w:t>不在任何段落裡的字</w:t></w:r></w:hdr>`;
+  const s = parseTemplate({ documentXml: DOC_MIN, headerXml, name: 'h' });
+  assert.deepEqual(s.heading.lines, []);
+  assert.ok(s.unknown.some((u) => u.includes('頁首')));
+  assert.match(validateSpec(s).join(), /頁首/);
+});
