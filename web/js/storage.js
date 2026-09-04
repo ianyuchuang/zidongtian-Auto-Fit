@@ -2,7 +2,7 @@
 // key 以根資料夾名稱區分；每張照片以相對路徑對應。
 
 const PREFIX = 'autofit:v1:';
-const FIELDS = ['desc', 'design', 'actual', 'confidence', 'source', 'status', 'bbox', 'order', 'engine', 'error', 'warn'];
+const FIELDS = ['desc', 'design', 'actual', 'confidence', 'source', 'status', 'bbox', 'order', 'engine', 'error', 'warn', 'homeOrder'];
 
 /**
  * 校對暫存的 key：'autofit:v1:photos:<根資料夾名>'。

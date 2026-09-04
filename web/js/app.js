@@ -535,6 +535,7 @@ export function createApp() {
           alreadyTrashed += 1;
           continue;
         }
+        p.homeOrder = p.order; // 記住原本的位置，還原時放回去而不是排到最後（bug W17）
         const t = trashDirOf(p.dir);
         if (!byTrash.has(t)) byTrash.set(t, []);
         byTrash.get(t).push(id);
@@ -568,15 +569,29 @@ export function createApp() {
         byHome.get(home).push(id);
       }
       const result = { moved: 0, failed: [] };
+      let restoredOrder = false;
       for (const [home, list] of byHome) {
+        const names = list.map((id) => byId(id)?.name);
         try {
           const r = await app.moveManyToDir(list, home);
           result.moved += r.moved;
           result.failed.push(...r.failed);
+          // 搬回去的放回刪除前的位置（id 已隨路徑改變，用檔名找）
+          for (const name of names) {
+            const p = byId(home ? `${home}/${name}` : name);
+            if (!p || typeof p.homeOrder !== 'number') continue;
+            p.order = p.homeOrder;
+            delete p.homeOrder;
+            restoredOrder = true;
+          }
         } catch (e) {
           console.error('還原失敗', home, e);
           for (const id of list) result.failed.push({ name: byId(id)?.name ?? id, error: e.message });
         }
+      }
+      if (restoredOrder) {
+        save();
+        emit('photos');
       }
       return result;
     },

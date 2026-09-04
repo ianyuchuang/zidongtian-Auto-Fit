@@ -426,3 +426,14 @@ test('辨識失敗的照片仍算「尚未辨識」，能被再排進辨識、�
   assert.equal(app.gotoNextPending(app.state.photos[1].id), true);
   assert.equal(app.state.selectedId, p.id);
 });
+
+test('restore：搬回原本的位置，不是排到最後（回歸 W17）', async () => {
+  const { app } = await setup();
+  const ids = () => app.orderedPhotos().filter((p) => p.dir === '4F').map((p) => p.id);
+  assert.deepEqual(ids(), ['4F/a.jpg', '4F/b.jpg']);
+  await app.trash(['4F/a.jpg']);
+  assert.equal(app.photo('4F/_回收桶/a.jpg').homeOrder, 0);
+  await app.restore(['4F/_回收桶/a.jpg']);
+  assert.deepEqual(ids(), ['4F/a.jpg', '4F/b.jpg'], 'a 要回到 b 前面');
+  assert.equal(app.photo('4F/a.jpg').homeOrder, undefined);
+});
