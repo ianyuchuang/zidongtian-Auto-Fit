@@ -25,6 +25,16 @@ class FakeEl {
   count(type) {
     return this.listeners.filter((l) => l.type === type).length;
   }
+  querySelector() {
+    return null;
+  }
+  querySelectorAll() {
+    return [];
+  }
+  /** 照瀏覽器的規矩呼叫掛在這顆元素上的某種事件。 */
+  fire(type, event) {
+    return Promise.all(this.listeners.filter((l) => l.type === type).map((l) => l.fn(event)));
+  }
 }
 
 /** 共用容器：#tpl-drop 回 null（bindPick 就不會綁選檔框），其他選擇器各給一顆假元素。 */
@@ -132,4 +142,44 @@ test('partsHtml ↔ readParts：結尾換行重畫後不會掉', () => {
   assert.deepEqual(readParts(el(T('備註'), BR(), BR())), parts);
   assert.equal(partsHtml([{ text: 'a' }, { br: true }, { text: 'b' }]), 'a<br>b');
   assert.equal(partsHtml([{ field: 'none' }, { text: 'x' }]), 'x'); // 'none' 不畫
+});
+
+test('「完成，使用這個版型」會先存進版型庫，套用的 spec 帶著庫裡的 id', async () => {
+  const { saveTemplate, listTemplates, getTemplate } = await import('../../web/js/template/library.js');
+  const { defaultSpec } = await import('../../web/js/template/spec.js');
+  const store = new Map();
+  const prevLS = globalThis.localStorage;
+  const prevDoc = globalThis.document;
+  globalThis.localStorage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v), removeItem: (k) => store.delete(k) };
+  const toasts = [];
+  // toast 只用到這些：template 元素拿 innerHTML 的第一個節點、#toast-root 收下它
+  globalThis.document = {
+    createElement: () => ({ set innerHTML(h) { this.content = { firstElementChild: { html: h, remove() {} } }; } }),
+    getElementById: () => ({ appendChild: (t) => toasts.push(t.html) }),
+  };
+  try {
+    await withWindow(async () => {
+      const saved = saveTemplate(defaultSpec(), '電氣');
+      const applied = [];
+      const app = { ...fakeApp(), applyTemplate: (t) => applied.push(t) };
+      const c = new FakeContainer();
+      mountTemplatePage(c, app);
+      const btn = (act, id) => ({ target: { closest: () => ({ dataset: { act, id } }) } });
+      await c.fire('click', btn('pick-edit', saved.id)); // 從版型庫「調整」
+      // 改了每列張數（走 change 事件），沒按「存成版型」就直接按「完成」
+      await c.fire('change', { target: { dataset: { grid: 'perRow' }, value: '3', max: '6' } });
+      c.querySelector('#tpl-name').value = '電氣';
+      await c.fire('click', btn('use'));
+      assert.equal(applied.length, 1);
+      assert.equal(applied[0].spec.id, saved.id, '同名重存要沿用原本的 id');
+      assert.equal(applied[0].spec.grid.perRow, 3);
+      assert.equal(listTemplates().length, 1);
+      assert.equal(getTemplate(saved.id).spec.grid.perRow, 3, '庫裡那份也要是改過的');
+      assert.equal(toasts.length, 1, '只跳一次「已存成版型」');
+      assert.match(toasts[0], /已存成版型/);
+    });
+  } finally {
+    globalThis.localStorage = prevLS;
+    globalThis.document = prevDoc;
+  }
 });

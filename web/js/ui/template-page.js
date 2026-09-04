@@ -10,7 +10,7 @@ import { esc, toast, confirmDialog } from './dialog.js';
 import { bindFileDrop } from './dnd.js';
 import { parseTemplateDocx } from '../template/parse.js';
 import { FIELDS, slotOrder, swapSlots, validateSpec, blockWidth, addLine, removeLine, moveLine, perPage, lineParts, makeLine } from '../template/spec.js';
-import { listTemplates, getTemplate, saveTemplate, removeTemplate, differsFromLibrary } from '../template/library.js';
+import { listTemplates, getTemplate, saveTemplate, removeTemplate } from '../template/library.js';
 
 const PX = (twips) => twips / 15; // 1440 twips = 1 吋 = 96px
 const PT = (pt) => (pt * 4) / 3; // 1pt = 96/72 px
@@ -584,13 +584,10 @@ export function mountTemplatePage(container, app) {
         toast(errs[0], { error: true });
         return;
       }
-      spec.name = $('#tpl-name').value || name;
-      if (differsFromLibrary(spec)) {
-        // 帶著庫裡的 id 出去，入口頁就會替這個資料夾記住那個 id，下次讀到的卻是庫裡沒改過的那份。
-        delete spec.id;
-        toast('這份版型改過但沒存進版型庫，下次要再讀一次');
-      }
-      app.applyTemplate({ name: spec.name, file: null, spec });
+      // 「完成」＝先存進版型庫再使用：出去的 spec 一定帶著庫裡的 id，入口頁替資料夾記住的才是這一份。
+      const entry = saveTemplate(spec, $('#tpl-name').value || name);
+      toast(`已存成版型「${entry.name}」`);
+      app.applyTemplate({ name: entry.name, file: null, spec: entry.spec });
     }
   }, { signal });
 

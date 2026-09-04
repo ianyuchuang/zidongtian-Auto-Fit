@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { listTemplates, saveTemplate, getTemplate, removeTemplate, rememberFor, lastFor, differsFromLibrary, LIB_KEY } from '../../web/js/template/library.js';
+import { listTemplates, saveTemplate, getTemplate, removeTemplate, rememberFor, lastFor, LIB_KEY } from '../../web/js/template/library.js';
 import { defaultSpec } from '../../web/js/template/spec.js';
 
 const fakeStore = () => {
@@ -80,14 +80,3 @@ test('同一毫秒連存兩份不同名的版型，id 不會撞', () => {
   assert.equal(listTemplates(s).length, 50);
 });
 
-test('differsFromLibrary：改過庫裡拿出來的版型才算不同', () => {
-  const s = fakeStore();
-  const t = saveTemplate(defaultSpec(), '電氣', s);
-  const copy = structuredClone(t.spec);
-  assert.equal(differsFromLibrary(copy, s), false);
-  copy.grid.perRow = 4;
-  assert.equal(differsFromLibrary(copy, s), true);
-  assert.equal(differsFromLibrary(defaultSpec(), s), false); // 沒 id
-  removeTemplate(t.id, s);
-  assert.equal(differsFromLibrary(copy, s), false); // 庫裡已經沒這份
-});
