@@ -100,6 +100,19 @@ input[type="text"]:focus, input[type="password"]:focus, textarea:focus { outline
 .viewer .warn-note { color: var(--yellow-text); background: var(--yellow-bg); border: 1px solid var(--yellow-line); border-radius: var(--radius); padding: 5px 8px; margin-top: 4px; }
 .api-panel .remember { display: block; margin-top: 8px; }
 
+/* 「AI 辨識」對話框：本機模型（llama-server）區塊。外框與 .api-panel 同一套，
+   但頂上那條是綠的（照片不出這台電腦），不是黃色警告。 */
+.local-panel { border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; margin: 10px 0; background: #fafbfc; }
+.local-panel .safe { background: var(--accent-soft); border: 1px solid #bfe0d1; color: #14532d; padding: 8px 10px; border-radius: var(--radius); margin-bottom: 10px; }
+.local-url-row label { display: block; font-weight: 600; margin-bottom: 6px; }
+.local-url-inputs { display: flex; gap: 6px; }
+.local-url-inputs input { flex: 1; font-family: Consolas, monospace; margin-top: 0; }
+.local-url-inputs .btn { white-space: nowrap; }
+.local-panel code { font-family: Consolas, monospace; background: #eef1f4; border-radius: 3px; padding: 0 3px; }
+#local-status { margin-top: 4px; min-height: 1.4em; }
+#local-status.ok { color: var(--accent); }
+#local-status.err { color: var(--red-text); }
+
 /* ---------- 工作台 ---------- */
 .work { height: 100vh; display: grid; grid-template-rows: 52px 1fr; grid-template-columns: 200px 1fr var(--viewer-w); }
 .topbar { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; padding: 0 14px; background: var(--panel); border-bottom: 1px solid var(--line); }

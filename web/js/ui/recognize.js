@@ -1,17 +1,25 @@
-// 頂列「🤖 AI 辨識」：選辨識方式（模擬 / 本地 / LLM API＋金鑰）、提示詞與範圍，然後跑辨識。
+// 頂列「🤖 AI 辨識」：選辨識方式（模擬 / 本機 llama-server / LLM API＋金鑰）、提示詞與範圍，然後跑辨識。
 // 辨識設定從入口頁搬到這裡——沒有 AI 也能純手打三欄，要用 AI 時才需要處理金鑰。
 
 import { RECOGNIZERS, DEFAULT_PROMPT } from '../recognizer/index.js';
 import { PROVIDERS, getProvider } from '../recognizer/api/providers.js';
 import { loadApiKeys, saveApiKeys } from '../recognizer/api/keys.js';
 import { testConnection, listModels } from '../recognizer/api/call.js';
+import { listLocalModels, testLocalConnection, normalizeBaseUrl, DEFAULT_BASE_URL } from '../recognizer/local/server.js';
+import { loadLocalSettings, saveLocalSettings } from '../recognizer/local/settings.js';
 import { STATUS, isTrashed } from '../state.js';
 import { esc, showDialog, alertDialog, toast } from './dialog.js';
 
 /** 目前引擎的顯示文字（頂列 pill 用）。沒設定過回 null。 */
-export function engineLabel({ recognizerId, api }) {
+export function engineLabel({ recognizerId, api, local }) {
   if (!recognizerId) return null;
   const short = (s) => String(s).split('（')[0];
+  if (recognizerId === 'local' && local?.model) {
+    return {
+      text: `本地 ${local.model}`,
+      title: `本機模型 ${local.model}（${local.baseUrl || DEFAULT_BASE_URL}；照片不離開這台電腦）`,
+    };
+  }
   if (recognizerId === 'api' && api) {
     const p = PROVIDERS.find((x) => x.id === api.provider);
     const model = api.model ?? p?.model ?? '';
@@ -74,6 +82,31 @@ export async function probeProvider(pid, { key, extra = {}, isCurrent, setStatus
 }
 
 /**
+ * 本機模型的「測試連線」：向 llama-server 要模型清單、套進下拉、再試打一句。
+ * 與 probeProvider 同一個形狀，但不需要金鑰；isCurrent 看的是網址——
+ * 使用者等待時可能把網址改成別台，回來的清單就不能套進去。
+ * list / test 可注入（測試用）。
+ */
+export async function probeLocal({ baseUrl, isCurrent = () => true, setStatus, applyModels, list = listLocalModels, test = testLocalConnection }) {
+  try {
+    setStatus('詢問伺服器載了哪些模型…');
+    const models = await list({ baseUrl });
+    if (!isCurrent()) return 'stale';
+    const model = applyModels(models);
+    if (!model) throw new Error('伺服器沒有回報可用的模型');
+    setStatus(`找到 ${models.length} 個模型，正在用 ${model} 試打…`);
+    const reply = await test({ baseUrl, model });
+    if (!isCurrent()) return 'stale';
+    setStatus(`✅ 連線成功；${model} 回覆「${reply.trim().slice(0, 20)}」`, 'ok');
+    return 'ok';
+  } catch (e) {
+    if (!isCurrent()) return 'stale';
+    setStatus(`❌ ${e.message}`, 'err');
+    return 'error';
+  }
+}
+
+/**
  * 辨識範圍 → 這次要辨識的照片。三種範圍都遵守同一條規則：
  * 「已確認」的只有勾了「連已確認的也一起重跑」才會排進去（介面規格：另有勾選項才會連已確認的一起重跑）；
  * 之前「目前勾選的」沒套這條，勾到已確認的照片會被 AI 直接洗掉（bug W5）。
@@ -106,6 +139,7 @@ export function promptToSave(value, def = DEFAULT_PROMPT) {
  */
 async function askSettings(app) {
   const apiState = loadApiKeys(); // { provider, remember, keys }
+  const localState = loadLocalSettings(); // { baseUrl, model }
   const pending = app.pendingPhotos();
   const checked = app.checkedPhotos().filter((p) => !isTrashed(p));
   const redoAll = app.redoablePhotos();
@@ -129,6 +163,23 @@ async function askSettings(app) {
             </label>`,
           ).join('')}
         </div>
+      </div>
+
+      <div class="local-panel" id="local-panel" hidden>
+        <div class="safe small">照片只送到這台電腦上的伺服器（127.0.0.1），不會離開這台電腦，也不需要金鑰。</div>
+        <div class="local-url-row">
+          <label for="local-url">伺服器網址</label>
+          <div class="local-url-inputs">
+            <input type="text" id="local-url" autocomplete="off" spellcheck="false" placeholder="${esc(DEFAULT_BASE_URL)}">
+            <button class="btn" id="local-test" type="button">測試連線</button>
+          </div>
+          <div class="small muted">要自己先把伺服器開起來（例：<code>D:\\Qwen3.8-27B\\start.bat</code>），那個視窗要一直開著；模型要有 <code>--mmproj</code> 才看得懂照片。</div>
+        </div>
+        <div class="api-model-row">
+          <label for="local-model">型號（按「測試連線」向伺服器要，不寫死在程式裡）</label>
+          <select id="local-model" disabled><option value="">按「測試連線」取得</option></select>
+        </div>
+        <div class="small" id="local-status"></div>
       </div>
 
       <div class="api-panel" id="api-panel" hidden>
@@ -245,8 +296,67 @@ async function askSettings(app) {
         setStatus(saved ? '上次選的型號；按「測試連線」重新取得清單' : '', 'muted');
         saveApiKeys(apiState);
       };
+      // ---- 本機模型（llama-server）----
+      const setLocalStatus = (text, cls = '') => {
+        $('#local-status').textContent = text;
+        $('#local-status').className = `small ${cls}`.trim();
+      };
+      let localModels = localState.model ? [{ id: localState.model, label: localState.model, usable: true }] : [];
+      const fillLocalModels = (chosen) => {
+        const sel = $('#local-model');
+        if (!localModels.length) {
+          sel.disabled = true;
+          sel.innerHTML = '<option value="">按「測試連線」取得</option>';
+          return;
+        }
+        const pick = localModels.some((m) => m.id === chosen) ? chosen : localModels[0].id;
+        sel.disabled = false;
+        sel.innerHTML = localModels.map((m) => `<option value="${esc(m.id)}" ${m.id === pick ? 'selected' : ''}>${esc(m.label)}</option>`).join('');
+        sel.value = pick;
+        localState.model = pick;
+        saveLocalSettings(localState);
+      };
+      $('#local-url').value = localState.baseUrl || DEFAULT_BASE_URL;
+      fillLocalModels(localState.model);
+      setLocalStatus(localState.model ? '上次用的型號；換了模型或重開伺服器請再按一次「測試連線」' : '', 'muted');
+      $('#local-url').addEventListener('input', (e) => {
+        localState.baseUrl = e.target.value;
+        setLocalStatus('');
+      });
+      $('#local-model').addEventListener('change', (e) => {
+        localState.model = e.target.value;
+        saveLocalSettings(localState);
+        setLocalStatus('');
+      });
+      $('#local-test').addEventListener('click', async () => {
+        const baseUrl = normalizeBaseUrl($('#local-url').value);
+        $('#local-url').value = baseUrl;
+        localState.baseUrl = baseUrl;
+        const btn = $('#local-test');
+        btn.disabled = true;
+        $('#local-model').disabled = true;
+        try {
+          await probeLocal({
+            baseUrl,
+            isCurrent: () => normalizeBaseUrl($('#local-url').value) === baseUrl,
+            setStatus: setLocalStatus,
+            applyModels: (list) => {
+              localModels = list;
+              fillLocalModels(localState.model);
+              return $('#local-model').value;
+            },
+          });
+        } finally {
+          btn.disabled = false;
+          $('#local-model').disabled = !localModels.length;
+          saveLocalSettings(localState);
+        }
+      });
+
       const syncPanel = () => {
-        $('#api-panel').hidden = d.querySelector('input[name="rec"]:checked')?.value !== 'api';
+        const rec = d.querySelector('input[name="rec"]:checked')?.value;
+        $('#api-panel').hidden = rec !== 'api';
+        $('#local-panel').hidden = rec !== 'local';
       };
       for (const r of d.querySelectorAll('input[name="rec"]')) r.addEventListener('change', syncPanel);
       for (const r of d.querySelectorAll('input[name="api-provider"]')) r.addEventListener('change', () => r.checked && showProvider(r.value));
@@ -337,6 +447,17 @@ async function askSettings(app) {
         toast('請選辨識方式', { error: true });
         return false;
       }
+      let local = null;
+      if (recognizerId === 'local') {
+        const baseUrl = normalizeBaseUrl(d.querySelector('#local-url').value);
+        const model = (d.querySelector('#local-model').value || '').trim();
+        if (!model) {
+          toast('請先按「測試連線」，確認本機伺服器有開、再挑一個型號', { error: true });
+          return false;
+        }
+        local = { baseUrl, model };
+        saveLocalSettings(local);
+      }
       let api = null;
       if (recognizerId === 'api') {
         const pid = apiState.provider;
@@ -364,7 +485,7 @@ async function askSettings(app) {
         toast(scope === 'checked' && !includeConfirmed ? '勾選的都已確認；要重跑請勾「連已確認的也一起重跑」' : '這個範圍沒有照片可以辨識', { error: true });
         return false;
       }
-      picked = { recognizerId, api, prompt: promptToSave(d.querySelector('#rec-prompt').value), photos, includeConfirmed };
+      picked = { recognizerId, api, local, prompt: promptToSave(d.querySelector('#rec-prompt').value), photos, includeConfirmed };
       return true;
     },
   });
