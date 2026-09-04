@@ -111,3 +111,11 @@ test('各資料夾的檢查日期：存、讀、擋掉壞資料', async () => {
   store.setItem(datesKey('怪值'), JSON.stringify({ '4F': '115', '5F': 1150801, '6F': '1150801' }));
   assert.deepEqual(loadDates('怪值', store), { '6F': '1150801' }); // 只留 7 碼字串
 });
+
+test('低信心的「欄位毛病」說明（warn）重開要還在（回歸 W14）', () => {
+  const st = new FakeStorage();
+  savePhotos('root', [{ path: 'a.jpg', desc: '', design: '1', actual: '2', status: 'low', confidence: 90, source: 'ai', engine: 'mock', order: 0, warn: '內容說明是空的' }], st);
+  const fresh = [{ path: 'a.jpg', desc: '', status: 'pending', order: 0 }];
+  applySaved(fresh, loadSaved('root', st), { engine: 'mock' });
+  assert.equal(fresh[0].warn, '內容說明是空的');
+});
