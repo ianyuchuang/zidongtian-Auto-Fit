@@ -86,6 +86,21 @@ export function scopePhotos(app, scope, { includeConfirmed = false } = {}) {
 }
 
 /**
+ * 型號下拉何時要反灰：清單是空的、或「測試連線」正在跑（等清單／試打途中不能換型號，
+ * 否則試打用的型號和畫面上選的會不一樣）。checkbox「連不能看圖的型號也列出來」會重排清單，一起鎖。
+ */
+export function applyModelLock(sel, allBox, { probing, empty }) {
+  sel.disabled = probing || empty;
+  if (allBox) allBox.disabled = probing;
+}
+
+/** 提示詞要存哪個：跟預設一模一樣就存空字串，之後預設更新時才不會被舊字卡住。 */
+export function promptToSave(value, def = DEFAULT_PROMPT) {
+  const v = String(value ?? '').trim();
+  return v === def.trim() ? '' : v;
+}
+
+/**
  * 開設定對話框。回傳 { recognizerId, api, prompt, photos, includeConfirmed } 或 null（取消）。
  * photos＝這次要辨識的照片陣列。
  */
@@ -146,8 +161,8 @@ async function askSettings(app) {
         <label class="small remember"><input type="checkbox" id="api-forget"> 不要記住金鑰（關閉分頁就清掉）</label>
       </div>
 
-      <div class="opt"><label for="rec-prompt">提示詞（白板欄位位置；留空用預設）</label>
-        <textarea id="rec-prompt" rows="3" placeholder="${esc(DEFAULT_PROMPT)}"></textarea></div>
+      <div class="opt"><label for="rec-prompt">提示詞（白板欄位位置；預設已填好，可直接修改；清空則用預設）</label>
+        <textarea id="rec-prompt" rows="3">${esc(DEFAULT_PROMPT)}</textarea></div>
 
       <div class="opt"><label for="rec-scope">辨識範圍
         <select id="rec-scope">
@@ -167,6 +182,8 @@ async function askSettings(app) {
       };
       // 型號清單：只有按過「測試連線」才會有東西；上次選過的先當成單筆清單帶回來
       let modelList = [];
+      let probing = false; // 「測試連線」進行中：型號下拉與「連不能看圖的」都鎖住
+      const lockModels = (empty) => applyModelLock($('#api-model'), $('#api-model-all'), { probing, empty });
       const rememberModel = (id) => {
         if (!apiState.provider) return;
         if (id) apiState.models[apiState.provider] = id;
@@ -177,7 +194,7 @@ async function askSettings(app) {
         const sel = $('#api-model');
         const use = modelList.filter((m) => $('#api-model-all').checked || m.usable);
         if (!use.length) {
-          sel.disabled = true;
+          lockModels(true);
           sel.innerHTML = `<option value="">${modelList.length ? '這家沒有看得懂圖的型號，勾下面那格再挑' : '按「測試連線」取得可用型號'}</option>`;
           return;
         }
@@ -186,7 +203,7 @@ async function askSettings(app) {
         const p = getProvider(apiState.provider);
         const byKeyword = (p.prefer || []).map((k) => use.find((m) => m.id.toLowerCase().includes(k.toLowerCase()))?.id);
         const pick = [chosen, ...byKeyword, p.model].find((id) => id && use.some((m) => m.id === id)) || use[0].id;
-        sel.disabled = false;
+        lockModels(false);
         sel.innerHTML = use
           .map(
             (m) =>
@@ -271,6 +288,8 @@ async function askSettings(app) {
         }
         const btn = $('#api-test');
         btn.disabled = true;
+        probing = true;
+        lockModels(!$('#api-model').value);
         try {
           await probeProvider(pid, {
             key,
@@ -290,6 +309,8 @@ async function askSettings(app) {
           });
         } finally {
           btn.disabled = false;
+          probing = false;
+          lockModels(!$('#api-model').value);
         }
       });
       // 上次的設定帶回來
@@ -343,7 +364,7 @@ async function askSettings(app) {
         toast(scope === 'checked' && !includeConfirmed ? '勾選的都已確認；要重跑請勾「連已確認的也一起重跑」' : '這個範圍沒有照片可以辨識', { error: true });
         return false;
       }
-      picked = { recognizerId, api, prompt: d.querySelector('#rec-prompt').value.trim(), photos, includeConfirmed };
+      picked = { recognizerId, api, prompt: promptToSave(d.querySelector('#rec-prompt').value), photos, includeConfirmed };
       return true;
     },
   });

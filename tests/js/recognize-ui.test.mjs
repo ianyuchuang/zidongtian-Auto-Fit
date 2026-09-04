@@ -1,7 +1,8 @@
 // 頂列「AI 辨識」對話框裡不碰 DOM 的部分。
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { probeProvider, engineLabel } from '../../web/js/ui/recognize.js';
+import { probeProvider, engineLabel, applyModelLock, promptToSave } from '../../web/js/ui/recognize.js';
+import { DEFAULT_PROMPT } from '../../web/js/recognizer/index.js';
 
 const MODELS = [{ id: 'm-vision', label: 'M Vision', usable: true }];
 
@@ -72,4 +73,28 @@ test('engineLabel：沒選過回 null；LLM API 顯示公司與型號', () => {
   assert.equal(engineLabel({ recognizerId: null, api: null }), null);
   assert.match(engineLabel({ recognizerId: 'api', api: { provider: 'claude', model: 'm' } }).text, /m$/);
   assert.equal(engineLabel({ recognizerId: 'mock', api: null }).text, '模擬辨識');
+});
+
+test('型號下拉：測試連線進行中要鎖住（連「不能看圖」的勾選也鎖），結束後照清單有無決定', () => {
+  const sel = { disabled: false };
+  const box = { disabled: false };
+  applyModelLock(sel, box, { probing: true, empty: false });
+  assert.equal(sel.disabled, true);
+  assert.equal(box.disabled, true);
+  applyModelLock(sel, box, { probing: false, empty: false });
+  assert.equal(sel.disabled, false);
+  assert.equal(box.disabled, false);
+  applyModelLock(sel, box, { probing: false, empty: true });
+  assert.equal(sel.disabled, true);
+  assert.equal(box.disabled, false);
+  applyModelLock(sel, null, { probing: true, empty: true }); // 沒有 checkbox 也不能炸
+  assert.equal(sel.disabled, true);
+});
+
+test('提示詞：預設已填在欄位裡；沒改／清空就存空字串（沿用預設），改過才存', () => {
+  assert.equal(promptToSave(DEFAULT_PROMPT), '');
+  assert.equal(promptToSave(`  ${DEFAULT_PROMPT}\n`), '');
+  assert.equal(promptToSave(''), '');
+  assert.equal(promptToSave('白板在左下角'), '白板在左下角');
+  assert.equal(promptToSave('x', 'x'), '');
 });
