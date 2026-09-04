@@ -2,7 +2,7 @@
 // 不用瀏覽器的 DOMParser，是為了讓 Node 測試與瀏覽器跑同一份程式碼。
 // 節點：{ name, attrs, children }，children 的元素是節點或字串。
 
-const ATTR_RE = /([^\s=/]+)\s*=\s*"([^"]*)"/g;
+const ATTR_RE = /([^\s=/]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g; // 雙引號或單引號都算
 
 const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
 
@@ -12,6 +12,19 @@ function decode(s) {
     if (e[0] === '#') return String.fromCodePoint(parseInt(e[1] === 'x' || e[1] === 'X' ? e.slice(2) : e.slice(1), e[1] === 'x' || e[1] === 'X' ? 16 : 10));
     return ENTITIES[e] ?? m;
   });
+}
+
+/** 標籤結尾那個 '>' 的位置：引號裡的 '>'（例：w:val="a>b"）不算。找不到回 -1。 */
+function tagEnd(xml, from) {
+  let quote = null;
+  for (let i = from; i < xml.length; i++) {
+    const ch = xml[i];
+    if (quote) {
+      if (ch === quote) quote = null;
+    } else if (ch === '"' || ch === "'") quote = ch;
+    else if (ch === '>') return i;
+  }
+  return -1;
 }
 
 /** 解析成節點樹；回傳的根節點是 '#root'，真正的文件根在 children[0]。 */
@@ -30,7 +43,7 @@ export function parseXml(xml) {
       i = end;
       continue;
     }
-    const gt = xml.indexOf('>', lt);
+    const gt = tagEnd(xml, lt + 1);
     if (gt < 0) break;
     const raw = xml.slice(lt + 1, gt);
     if (c === '/') {
@@ -50,7 +63,7 @@ export function parseXml(xml) {
       if (sp >= 0) {
         ATTR_RE.lastIndex = 0;
         let m;
-        while ((m = ATTR_RE.exec(body.slice(sp)))) attrs[m[1]] = decode(m[2]);
+        while ((m = ATTR_RE.exec(body.slice(sp)))) attrs[m[1]] = decode(m[2] ?? m[3]);
       }
       const node = { name, attrs, children: [] };
       stack[stack.length - 1].children.push(node);

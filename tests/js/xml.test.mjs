@@ -41,3 +41,19 @@ test('屬性含斜線與空白不會解析錯', () => {
   assert.equal(attr(a, 'r:id'), 'rId7');
   assert.equal(attr(a, 'w:val'), 'a/b');
 });
+
+test('單引號的屬性也讀得到', () => {
+  const a = kids(parseXml(`<a w:val='x' r:id="rId1" b='say "hi"'/>`))[0];
+  assert.equal(attr(a, 'w:val'), 'x');
+  assert.equal(attr(a, 'r:id'), 'rId1');
+  assert.equal(attr(a, 'b'), 'say "hi"');
+});
+
+test('屬性值裡的 > 不會被當成標籤結尾', () => {
+  const root = parseXml('<a w:val="x>y" q=\'1>2\'><b>t</b></a>');
+  const a = kids(root)[0];
+  assert.equal(attr(a, 'w:val'), 'x>y');
+  assert.equal(attr(a, 'q'), '1>2');
+  assert.deepEqual(kids(a).map((n) => n.name), ['b']);
+  assert.equal(text(a), 't');
+});
