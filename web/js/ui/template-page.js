@@ -34,6 +34,44 @@ const FIELD_OPTIONS = (sel) =>
 
 const at = (k) => k.split('.').map(Number);
 
+/** 要填值的位置：一顆可換欄位的膠囊。field 為 null＝還沒指定（紅字）。 */
+function tagHtml(field) {
+  const need = field == null;
+  const title = need ? '還沒指定要填什麼' : `這裡會填「${FIELDS[field] ?? ''}」，選「（留空）」可以移除`;
+  return `<span class="tp-tag" contenteditable="false" data-field="${field ?? ''}" title="${esc(title)}"
+    ><select class="tp-field ${need ? 'need' : ''}">${FIELD_OPTIONS(field)}</select></span>`;
+}
+
+/**
+ * 一行的內容畫成 HTML：文字、<br>、欄位膠囊。field 'none' 不畫（畫面才不會到處是「（留空）」）。
+ * 結尾是換行時多補一顆 <br>：contenteditable 把最後一顆 <br> 當佔位符不顯示，
+ * 只畫一顆的話那個換行看不見、readParts 讀回來也會被當佔位符丟掉（和瀏覽器在結尾按 Shift+Enter 補兩顆一樣）。
+ */
+export function partsHtml(parts) {
+  const shown = parts.filter((p) => p.br || p.text != null || p.field !== 'none');
+  const html = shown.map((p) => (p.br ? '<br>' : p.text != null ? esc(p.text) : tagHtml(p.field))).join('');
+  return shown.length && shown[shown.length - 1].br ? html + '<br>' : html;
+}
+
+/**
+ * 把畫面上的一行讀回資料：文字節點是文字，膠囊是欄位，<br> 是段落內換行。
+ * 結尾連著兩顆 <br> 時最後那顆是瀏覽器補的佔位符（結尾按 Shift+Enter 會這樣），只留一顆；
+ * 單獨一顆結尾 <br> 是使用者的換行（partsHtml 畫出來就是兩顆），不能丟。
+ */
+export function readParts(el) {
+  const nodes = [...el.childNodes];
+  const n = nodes.length;
+  if (n >= 2 && nodes[n - 1].nodeName === 'BR' && nodes[n - 2].nodeName === 'BR') nodes.pop();
+  const out = [];
+  for (const node of nodes) {
+    if (node.nodeType === 3) out.push({ text: node.nodeValue }); // TEXT_NODE
+    else if (node.nodeName === 'BR') out.push({ br: true });
+    else if (node.nodeType === 1 && node.classList.contains('tp-tag')) out.push({ field: node.dataset.field || null });
+    else if (node.nodeType === 1) out.push({ text: node.textContent }); // 瀏覽器自己塞的 <div> 之類
+  }
+  return out;
+}
+
 /** 數字框讀回來：不是數字就用 fallback，四捨五入成整數再夾進 [min, max]（打 2.5、空白、0 都不會漏成 0×0）。 */
 export function clampInt(value, min, max, fallback) {
   const n = Number(value);
@@ -144,41 +182,15 @@ export function mountTemplatePage(container, app) {
 
   // ---------- 步驟 2：版型調整（所見即所得） ----------
 
-  /** 要填值的位置：一顆可換欄位的膠囊。field 為 null＝還沒指定（紅字）。 */
-  function tagHtml(field) {
-    const need = field == null;
-    const title = need ? '還沒指定要填什麼' : `這裡會填「${FIELDS[field] ?? ''}」，選「（留空）」可以移除`;
-    return `<span class="tp-tag" contenteditable="false" data-field="${field ?? ''}" title="${esc(title)}"
-      ><select class="tp-field ${need ? 'need' : ''}">${FIELD_OPTIONS(field)}</select></span>`;
-  }
-
-  /** 一行＝可以直接打字的一段，中間穿插欄位膠囊。field 'none' 不畫（畫面才不會到處是「（留空）」）。 */
+  /** 一行＝可以直接打字的一段，中間穿插欄位膠囊。 */
   function lineHtml(spec, r, c, l, i) {
     const key = `${r}.${c}.${i}`;
-    const inner = lineParts(l)
-      .filter((p) => p.br || p.text != null || p.field !== 'none')
-      .map((p) => (p.br ? '<br>' : p.text != null ? esc(p.text) : tagHtml(p.field)))
-      .join('');
+    const inner = partsHtml(lineParts(l));
     const tools = `<span class="tp-grip" draggable="true" data-grip="${key}" title="拖曳搬到別的位置">⠿</span>`;
     const del = `<button type="button" class="tp-del" data-del="${key}" title="刪掉這一行">×</button>`;
     const body = `<span class="tp-parts" contenteditable="true" spellcheck="false" data-parts="${key}"
       title="可以直接打字（逗號、單位…），欄位從上面的工具列拖進來">${inner}</span>`;
     return `<div class="tp-line" data-line="${key}">${tools}${body}${del}</div>`;
-  }
-
-  /** 把畫面上的一行讀回資料：文字節點是文字，膠囊是欄位，<br> 是段落內換行。 */
-  function readParts(el) {
-    const nodes = [...el.childNodes];
-    // contenteditable 的最後一顆 <br> 是瀏覽器補的佔位符，不是使用者按出來的換行
-    if (nodes[nodes.length - 1]?.nodeName === 'BR') nodes.pop();
-    const out = [];
-    for (const n of nodes) {
-      if (n.nodeType === Node.TEXT_NODE) out.push({ text: n.nodeValue });
-      else if (n.nodeName === 'BR') out.push({ br: true });
-      else if (n.nodeType === Node.ELEMENT_NODE && n.classList.contains('tp-tag')) out.push({ field: n.dataset.field || null });
-      else if (n.nodeType === Node.ELEMENT_NODE) out.push({ text: n.textContent }); // 瀏覽器自己塞的 <div> 之類
-    }
-    return out;
   }
 
   function cellHtml(spec, r, cell, c) {

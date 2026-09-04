@@ -2,7 +2,7 @@
 // 用最小的假 DOM：只記 addEventListener／removeEventListener，並照 { signal } 的規矩在 abort 時拆掉。
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mountTemplatePage, clampInt } from '../../web/js/ui/template-page.js';
+import { mountTemplatePage, clampInt, readParts, partsHtml } from '../../web/js/ui/template-page.js';
 
 class FakeEl {
   constructor() {
@@ -108,4 +108,28 @@ test('clampInt：數字框打 2.5／空白／超界都修成範圍內的整數',
   assert.equal(clampInt('0', 10, 2000, 300), 10);
   assert.equal(clampInt('99999', 10, 2000, 300), 2000);
   assert.equal(clampInt('300', 10, 2000, 50), 300);
+});
+
+// ---- 說明格一行的讀寫（Shift+Enter 的換行）----
+const T = (t) => ({ nodeType: 3, nodeName: '#text', nodeValue: t });
+const BR = () => ({ nodeType: 1, nodeName: 'BR' });
+const TAG = (f) => ({ nodeType: 1, nodeName: 'SPAN', classList: { contains: (c) => c === 'tp-tag' }, dataset: { field: f } });
+const el = (...childNodes) => ({ childNodes });
+
+test('readParts：結尾兩顆 <br> 只留一顆（瀏覽器補的佔位符），單獨一顆是使用者的換行要留', () => {
+  assert.deepEqual(readParts(el(T('a'), BR(), BR())), [{ text: 'a' }, { br: true }]);
+  assert.deepEqual(readParts(el(T('a'), BR())), [{ text: 'a' }, { br: true }]);
+  assert.deepEqual(readParts(el(T('a'), BR(), T('b'))), [{ text: 'a' }, { br: true }, { text: 'b' }]);
+  assert.deepEqual(readParts(el(TAG('desc'), T('，'), TAG(''))), [{ field: 'desc' }, { text: '，' }, { field: null }]);
+  assert.deepEqual(readParts(el()), []);
+});
+
+test('partsHtml ↔ readParts：結尾換行重畫後不會掉', () => {
+  const parts = [{ text: '備註' }, { br: true }];
+  const html = partsHtml(parts);
+  assert.equal(html, '備註<br><br>'); // 多補一顆，contenteditable 才看得見那個換行
+  // 模擬瀏覽器把這段 HTML 掛上去後再讀回來
+  assert.deepEqual(readParts(el(T('備註'), BR(), BR())), parts);
+  assert.equal(partsHtml([{ text: 'a' }, { br: true }, { text: 'b' }]), 'a<br>b');
+  assert.equal(partsHtml([{ field: 'none' }, { text: 'x' }]), 'x'); // 'none' 不畫
 });
