@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { serializePhotos, applySaved, savePhotos, loadSaved, storageKey } from '../../web/js/storage.js';
+import { serializePhotos, applySaved, savePhotos, loadSaved, storageKey, legacyStorageKey } from '../../web/js/storage.js';
 
 class FakeStorage {
   constructor() {
@@ -118,4 +118,26 @@ test('低信心的「欄位毛病」說明（warn）重開要還在（回歸 W14
   const fresh = [{ path: 'a.jpg', desc: '', status: 'pending', order: 0 }];
   applySaved(fresh, loadSaved('root', st), { engine: 'mock' });
   assert.equal(fresh[0].warn, '內容說明是空的');
+});
+
+test('校對暫存的 key 有 photos: 前綴，資料夾叫 api-keys / templates 也不會撞到其他設定（回歸 W15）', () => {
+  const st = new FakeStorage();
+  st.setItem('autofit:v1:api-keys', JSON.stringify({ provider: 'claude', keys: { claude: 'sk' } }));
+  assert.equal(storageKey('api-keys'), 'autofit:v1:photos:api-keys');
+  assert.deepEqual(loadSaved('api-keys', st), {}, '不能把金鑰設定當成暫存讀');
+  savePhotos('api-keys', [{ path: 'a.jpg', desc: 'x', status: 'parsed', order: 0 }], st);
+  assert.equal(st.getItem('autofit:v1:api-keys'), JSON.stringify({ provider: 'claude', keys: { claude: 'sk' } }), '金鑰設定不能被蓋掉');
+  assert.equal(legacyStorageKey('templates'), null);
+  assert.equal(legacyStorageKey('dates:4F'), null);
+  assert.equal(legacyStorageKey('帷幕骨架'), 'autofit:v1:帷幕骨架');
+});
+
+test('舊版 key 的暫存第一次讀取時搬到新 key（既有使用者不掉暫存）', () => {
+  const st = new FakeStorage();
+  const rec = { 'a.jpg': { desc: '舊', status: 'confirmed', order: 0 } };
+  st.setItem('autofit:v1:帷幕骨架', JSON.stringify(rec));
+  assert.deepEqual(loadSaved('帷幕骨架', st), rec);
+  assert.equal(st.getItem('autofit:v1:帷幕骨架'), null, '舊 key 搬走');
+  assert.equal(st.getItem(storageKey('帷幕骨架')), JSON.stringify(rec));
+  assert.deepEqual(loadSaved('帷幕骨架', st), rec, '第二次直接讀新 key');
 });

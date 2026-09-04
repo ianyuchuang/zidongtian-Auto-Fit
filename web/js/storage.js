@@ -4,13 +4,35 @@
 const PREFIX = 'autofit:v1:';
 const FIELDS = ['desc', 'design', 'actual', 'confidence', 'source', 'status', 'bbox', 'order', 'engine', 'error', 'warn'];
 
+/**
+ * 校對暫存的 key：'autofit:v1:photos:<根資料夾名>'。
+ * 舊版直接 PREFIX + 根資料夾名，資料夾叫 api-keys / templates / dates:… 就會跟其他設定撞 key（bug W15）。
+ */
 export function storageKey(rootName) {
-  return PREFIX + rootName;
+  return `${PREFIX}photos:${rootName}`;
 }
 
+/** 舊版（2026-09-04 以前）的 key；跟其他設定同名的不能當成舊暫存來讀。 */
+export function legacyStorageKey(rootName) {
+  const k = PREFIX + rootName;
+  const reserved = /^(api-keys|templates|template-by-folder)$/.test(rootName) || /^(dates|photos):/.test(rootName);
+  return reserved ? null : k;
+}
+
+/**
+ * 讀校對暫存。新 key 沒有、舊 key 有 → 搬到新 key（一次性遷移，既有使用者不會掉暫存）。
+ */
 export function loadSaved(rootName, store = globalThis.localStorage) {
   try {
-    const raw = store?.getItem(storageKey(rootName));
+    let raw = store?.getItem(storageKey(rootName));
+    if (raw == null) {
+      const legacy = legacyStorageKey(rootName);
+      raw = legacy ? store?.getItem(legacy) : null;
+      if (raw != null) {
+        store.setItem(storageKey(rootName), raw);
+        store.removeItem(legacy);
+      }
+    }
     return raw ? JSON.parse(raw) : {};
   } catch (e) {
     console.warn('讀取暫存失敗', e);
