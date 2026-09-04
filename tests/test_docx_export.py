@@ -164,3 +164,15 @@ def test_docx_from_parsed_template_a_matches_v1_layout(tmp_path):
     assert "範例營造股份有限公司" in hdr
     assert "施工自主檢查照片(檢查日期：115年07月25日)" in hdr
     assert len(media) == 3
+
+
+def test_docx_from_parsed_template_c_label_cell(tmp_path):
+    """c 版型：欄位名是獨立的一格，值在右邊那格。"""
+    z, doc, media = _build(tmp_path, _photos(tmp_path), template="c-portrait-label-cell", name="parsed_c.docx")
+
+    assert 'w:w="11906"' in doc and 'w:orient="portrait"' in doc   # 直式
+    assert 'w:w="988"' in doc and 'w:w="4392"' in doc              # 欄寬照版型
+    assert doc.count("<w:tr>") + doc.count("<w:tr ") == 4          # 3 張 → 2 個區塊列 × 2 列
+    assert "說明：" in doc and "說明1" in doc                       # 欄位名照印、值填進右邊那格
+    assert "內容說明：" not in doc
+    assert len(media) == 3
