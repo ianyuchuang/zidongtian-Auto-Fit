@@ -29,7 +29,7 @@
 - 可留用程式：`需求及資訊來源\自懂填Auto-Fit_V1.0_安裝包\app\self_check_core.py`（docx 排版、日期戳）。
 - 三個 .bat 放在上一層，原始檔在 `tools/bat/`（改完要複製過去）；**內容只能是 ASCII**，中文訊息一律由 Python 印，原因與用法見 `docs/bat.md`。備份 → `tools/backup_to_drive.py`；推送 → `tools/push_to_github.py`（pytest → commit → push，remote `ianyuchuang/zidongtian-Auto-Fit`）；開網頁 → `tools/dev_server.py`。
 - 網頁（純前端，照片只在瀏覽器本地處理，可直接放 GitHub Pages）：`web/`，無建置步驟。
-  - `js/app.js` 狀態與動作；`js/ui/` 入口頁 / 頂列 / 左樹 / 表格 / 檢視器 / 燈箱（`dnd.js` 為表格與左樹共用的拖曳格式與提示；`recognize.js` 為頂列「AI 辨識」的設定對話框與進度）；`js/fs/` 資料夾存取（File System Access API，`memory.js` 為唯讀複本，`handle-store.js` 用 IndexedDB 記住上次的資料夾）；`js/recognizer/` 辨識模組（`mock`；`api.js` + `api/` 為 LLM API 直打，四家定義與申請方式見 `docs/LLM-API.md`；本地模型待實驗）；`js/docx-export.js` + `docx-model.js` 依 V1.0 版面產 Word（`vendor/docx-*.iife.js`）。
+  - `js/app.js` 狀態與動作；`js/ui/` 入口頁 / 頂列 / 左樹 / 表格 / 檢視器 / 燈箱（`dnd.js` 為表格與左樹共用的拖曳格式與提示；`recognize.js` 為頂列「AI 辨識」的設定對話框與進度）；`js/fs/` 資料夾存取（File System Access API，`memory.js` 為唯讀複本，`handle-store.js` 用 IndexedDB 記住上次的資料夾）；`js/recognizer/` 辨識模組（`mock`；`api.js` + `api/` 為 LLM API 直打，四家定義與申請方式見 `docs/LLM-API.md`；本地模型待實驗）；`js/template/` 版型（`spec.js` LayoutSpec 與純邏輯、`parse.js` 解析 docx、`xml.js`、`unzip.js`、`library.js` 版型庫），見 `docs/版型.md`；`js/docx-export.js` 照 LayoutSpec 產 Word、`docx-model.js` 管分組與輸出前檢查（`vendor/docx-*.iife.js`）。
   - 開本機測試：上一層 `3_開啟網頁(localhost).bat` → `tools/dev_server.py`（port 8765；範例資料夾預設值寫在 `dev_server.py` 的 `DEFAULT_SAMPLES`，掛成「載入範例」）。需 Chrome / Edge 才能讀寫資料夾。
   - 辨識不在入口頁決定：讀取後照片是「待辨識」，由頂列「🤖 AI 辨識」選方式／提示詞／範圍才開跑（辨識期間**停在工作台**，只把欄位與篩選反灰鎖住並顯示進度，不換頁）。
   - LLM API 的型號不寫死：按「測試連線」時向該公司要清單（`api/call.js` 的 `listModels`）再讓使用者挑；預設挑哪個由 `providers.js` 的 `prefer` 關鍵字決定（Claude＝sonnet），Claude 公司帳號的識別碼型金鑰要填 Workspace ID（`extraFields`），見 `docs/LLM-API.md`。
@@ -39,4 +39,5 @@
   - 「刪除」＝搬進**該照片所在資料夾**自己的 `_回收桶`（網頁無法用 Windows 資源回收桶）；表格把它留在原位反灰、按「↩ 還原」搬回同一層，統計不含它、產生 Word 時略過。瀏覽器拿不到完整磁碟路徑，入口頁只顯示資料夾名與子資料夾摘要。
 - 測試：`python -m pytest`（tests/；會一併跑 `node --test tests/js/*.test.mjs`，需 Node.js）。
 - 工具套件清單 `tools/requirements-tools.txt`（pytest、pillow、Google API）；缺的時候 `tools/deps.py` 會問要不要現在裝。
-- 待定：板型 docx 目前只記錄檔名、輸出仍用預設版面；每個資料夾各出一份 docx（同 V1.0）；**兩階段辨識（定位白板→裁切→再辨識）尚未實作**。
+  - 版型：入口頁拖進 docx 會**就地解析成 LayoutSpec** 並顯示預覽，可校正抬頭／每頁幾張／欄位對應／填入順序／日期戳，解析不完整就停用「開始讀取」；校正好可存進版型庫（localStorage `autofit:v1:templates`），並記住每個資料夾上次用哪一份。一次讀取只用一種版型。細節與三份樣本的差異見 `docs/版型.md`。
+- 待定：「拍照日期」欄位還沒有資料來源（沒讀 EXIF），版型有這欄會留空（輸出前會提醒）；每個資料夾各出一份 docx（同 V1.0）；**兩階段辨識（定位白板→裁切→再辨識）尚未實作**。

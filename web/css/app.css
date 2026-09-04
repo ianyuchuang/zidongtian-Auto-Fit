@@ -297,3 +297,7 @@ td.conf { color: var(--muted); text-align: right; }
 .tpl-errs { background: var(--red-bg); border: 1px solid #e6b8b3; color: var(--red-text); border-radius: var(--radius); padding: 8px 12px; margin-bottom: 10px; }
 .tpl-errs ul { margin: 4px 0 0; padding-left: 18px; }
 .tpl-bad { color: var(--red-text); margin-top: 6px; }
+.tpl-lib { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.tpl-lib select { border: 1px solid var(--line); border-radius: var(--radius); padding: 4px 8px; background: #fff; max-width: 260px; }
+.tpl-save { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.tpl-save input[type="text"] { width: 200px; }

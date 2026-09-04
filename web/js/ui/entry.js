@@ -10,6 +10,7 @@ import { saveLastRoot, loadLastRoot, clearLastRoot, ensurePermission } from '../
 import { esc, toast } from './dialog.js';
 import { parseTemplateDocx } from '../template/parse.js';
 import { validateSpec } from '../template/spec.js';
+import { listTemplates, getTemplate, saveTemplate, removeTemplate, rememberFor, lastFor } from '../template/library.js';
 import { renderTemplatePreview } from './template-preview.js';
 
 const FS_OK = typeof globalThis.showDirectoryPicker === 'function';
@@ -38,7 +39,13 @@ export function mountEntry(container, app) {
         <div id="template-text">預設＝V1.0 版面（A4，每頁 3 列 × 2 張，標楷體）。點選或拖入 docx 可換版型</div>
       </div>
       <input type="file" id="template-input" accept=".docx" hidden>
+      <div class="tpl-lib" id="tpl-lib" hidden></div>
       <div id="tpl-preview" class="tpl-wrap" hidden></div>
+      <div class="tpl-save" id="tpl-save" hidden>
+        <input type="text" id="tpl-save-name" placeholder="版型名稱">
+        <button type="button" class="btn" id="tpl-save-btn">存成版型</button>
+        <span class="small muted">存起來下次直接選，不用再翻檔案</span>
+      </div>
     </div>
 
     <div class="row">
@@ -74,6 +81,13 @@ export function mountEntry(container, app) {
   const setFolder = async (handle, ro, label) => {
     rootHandle = handle;
     readOnly = ro;
+    if (!template) {
+      const last = lastFor(handle.name);
+      if (last) {
+        showTemplate({ name: last.name, file: null, spec: last.spec });
+        toast(`帶回上次用的版型「${last.name}」`);
+      }
+    }
     const seq = ++pickSeq;
     const roTag = ro ? ' <span class="small muted">（唯讀複本）</span>' : '';
     $('#dz-folder').classList.add('has-pick');
@@ -90,6 +104,8 @@ export function mountEntry(container, app) {
       $('#folder-text').innerHTML = `<span class="picked">🗀 ${esc(label)}</span>${roTag}<div class="small summary" style="color:var(--red-text)">讀取資料夾結構失敗：${esc(e.message)}</div>`;
     }
   };
+
+  renderLib();
 
   // ---- 帶回上次的資料夾 ----
   // 回首頁時 app.state.root 還在，直接接回去；重新整理後 handle 從 IndexedDB 撈，
@@ -173,11 +189,13 @@ export function mountEntry(container, app) {
   function showTemplate(tpl, err = '') {
     template = tpl;
     const dz = $('#dz-template');
+    const saveBar = $('#tpl-save');
     if (!tpl) {
       dz.classList.remove('has-pick');
       $('#template-text').innerHTML = TPL_HINT + (err ? `<div class="small tpl-bad">${err}</div>` : '');
       tplBox.hidden = true;
       tplBox.innerHTML = '';
+      saveBar.hidden = true;
     } else {
       dz.classList.add('has-pick');
       $('#template-text').innerHTML =
@@ -188,9 +206,50 @@ export function mountEntry(container, app) {
       });
       tplBox.hidden = false;
       renderTemplatePreview(tplBox, tpl.spec, updateStart);
+      saveBar.hidden = false;
+      $('#tpl-save-name').value = tpl.name.replace(/\.docx$/i, '');
     }
+    renderLib();
     updateStart();
   }
+
+  // ---- 版型庫 ----
+  function renderLib() {
+    const box = $('#tpl-lib');
+    const saved = listTemplates();
+    if (!saved.length) {
+      box.hidden = true;
+      box.innerHTML = '';
+      return;
+    }
+    const cur = template?.spec?.id ?? '';
+    box.hidden = false;
+    box.innerHTML = `
+      <span class="small">已存的版型</span>
+      <select id="tpl-pick">
+        <option value="">預設版面（V1.0）</option>
+        ${saved.map((t) => `<option value="${esc(t.id)}" ${t.id === cur ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}
+      </select>
+      ${cur ? '<button type="button" class="btn tiny" id="tpl-del">刪掉這份</button>' : ''}`;
+    $('#tpl-pick').addEventListener('change', (e) => {
+      const t = e.target.value ? getTemplate(e.target.value) : null;
+      showTemplate(t ? { name: t.name, file: null, spec: t.spec } : null);
+    });
+    $('#tpl-del')?.addEventListener('click', () => {
+      removeTemplate(cur);
+      showTemplate(null);
+      toast('已刪掉這份版型');
+    });
+  }
+
+  $('#tpl-save-btn').addEventListener('click', () => {
+    if (!template) return;
+    const entry = saveTemplate(template.spec, $('#tpl-save-name').value || template.name);
+    template.name = entry.name;
+    template.spec = entry.spec;
+    showTemplate(template);
+    toast(`已存成版型「${entry.name}」`);
+  });
 
   async function setTemplate(file) {
     $('#dz-template').classList.add('has-pick');
@@ -265,6 +324,7 @@ export function mountEntry(container, app) {
     $('#start').disabled = true;
     $('#status').textContent = '讀取資料夾中…';
     try {
+      rememberFor(rootHandle.name, template?.spec?.id ?? null);
       await app.open({ rootHandle, readOnly, date, template });
       if (!readOnly) saveLastRoot(rootHandle); // 下次重新整理可以一鍵接回
     } catch (e) {
