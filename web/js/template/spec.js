@@ -242,8 +242,10 @@ export function validateSpec(spec) {
   const errs = [];
   if (!spec) return ['沒有版型'];
   if (!(spec.page?.w > 0) || !(spec.page?.h > 0)) errs.push('缺頁面尺寸');
-  if (!(spec.grid?.perRow > 0)) errs.push('缺每列張數');
-  if (!(spec.grid?.blockRows > 0)) errs.push('缺每頁列數');
+  const posInt = (v) => Number.isInteger(v) && v > 0;
+  if (!posInt(spec.grid?.perRow)) errs.push('每列張數要是正整數');
+  if (!posInt(spec.grid?.blockRows)) errs.push('每頁列數要是正整數');
+  if (!(spec.photo?.maxW > 0) || !(spec.photo?.h > 0)) errs.push('照片框寬高要大於 0');
   if (!spec.block?.cols?.length) errs.push('缺欄寬');
   if (!spec.block?.rows?.length) errs.push('缺區塊列');
   const cells = (spec.block?.rows ?? []).flatMap((r) => r.cells ?? []);

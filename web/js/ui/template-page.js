@@ -34,6 +34,13 @@ const FIELD_OPTIONS = (sel) =>
 
 const at = (k) => k.split('.').map(Number);
 
+/** 數字框讀回來：不是數字就用 fallback，四捨五入成整數再夾進 [min, max]（打 2.5、空白、0 都不會漏成 0×0）。 */
+export function clampInt(value, min, max, fallback) {
+  const n = Number(value);
+  const base = value === '' || value == null || !Number.isFinite(n) ? fallback : n;
+  return Math.min(max, Math.max(min, Math.round(Number(base) || min)));
+}
+
 /**
  * 掛版型頁。回傳 unmount：拆頁時要呼叫，把掛在共用容器與 window 上的事件收掉。
  * 不收的話每進一次版型頁就多一套舊閉包（spec 是舊的）：按「存成版型」會跳好幾個
@@ -503,11 +510,11 @@ export function mountTemplatePage(container, app) {
     if (!spec) return;
     const t = e.target;
     if (t.dataset.grid) {
-      spec.grid[t.dataset.grid] = Math.max(1, Number(t.value) || 1);
+      spec.grid[t.dataset.grid] = clampInt(t.value, 1, Number(t.max) || 12, 1); // 打 2.5 或空白就修回整數
       spec.grid.seq = null; // 格數變了，之前拖出來的順序不再適用
       render();
     } else if (t.dataset.photo) {
-      spec.photo[t.dataset.photo] = Number(t.value) || 0;
+      spec.photo[t.dataset.photo] = clampInt(t.value, Number(t.min) || 1, Number(t.max) || 2000, spec.photo[t.dataset.photo]);
       render();
     } else if (t.name === 'tp-order') {
       spec.grid.order = t.value;

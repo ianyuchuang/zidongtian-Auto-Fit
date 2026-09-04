@@ -217,3 +217,18 @@ test('moveLine：同一格換位置、搬到別格、搬不進照片格就不動
   assert.deepEqual(lines(), ['design', 'desc']);
   assert.deepEqual(s.block.rows[1].cells[1].lines.map((l) => l.field), ['actual']);
 });
+
+test('validateSpec：每列張數／每頁列數要正整數、照片框不能是 0', () => {
+  const s = defaultSpec();
+  s.grid.perRow = 2.5;
+  assert.match(validateSpec(s).join(), /每列張數/);
+  s.grid.perRow = 2;
+  s.grid.blockRows = 0;
+  assert.match(validateSpec(s).join(), /每頁列數/);
+  s.grid.blockRows = 3;
+  s.photo.h = 0;
+  assert.match(validateSpec(s).join(), /照片框/);
+  s.photo.h = 100;
+  s.photo.maxW = NaN;
+  assert.match(validateSpec(s).join(), /照片框/);
+});

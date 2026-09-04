@@ -2,7 +2,7 @@
 // 用最小的假 DOM：只記 addEventListener／removeEventListener，並照 { signal } 的規矩在 abort 時拆掉。
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mountTemplatePage } from '../../web/js/ui/template-page.js';
+import { mountTemplatePage, clampInt } from '../../web/js/ui/template-page.js';
 
 class FakeEl {
   constructor() {
@@ -99,4 +99,13 @@ test('還沒讀版型時按「存成版型」不會炸（舊閉包或誤觸都�
     const btn = { dataset: { act: 'save' } };
     await click({ target: { closest: () => btn } });
   });
+});
+
+test('clampInt：數字框打 2.5／空白／超界都修成範圍內的整數', () => {
+  assert.equal(clampInt('2.5', 1, 6, 1), 3);
+  assert.equal(clampInt('', 1, 6, 4), 4); // 空白＝維持原值
+  assert.equal(clampInt('abc', 1, 6, 4), 4);
+  assert.equal(clampInt('0', 10, 2000, 300), 10);
+  assert.equal(clampInt('99999', 10, 2000, 300), 2000);
+  assert.equal(clampInt('300', 10, 2000, 50), 300);
 });
