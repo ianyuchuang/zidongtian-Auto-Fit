@@ -156,3 +156,11 @@ test('「欄位名：值」後面接的續行段落是值太長換行，不是�
   );
   assert.deepEqual(validateSpec(s), []);
 });
+
+test('解析出來的說明格一律靠左、垂直置中（不照樣本的靠上）', async () => {
+  const spec = load('b-landscape-5rows');
+  for (const row of spec.block.rows) for (const cell of row.cells) {
+    assert.equal(cell.vAlign, 'center', cell.kind);
+    assert.equal(cell.align, cell.kind === 'photo' ? 'center' : 'left');
+  }
+});

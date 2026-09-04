@@ -14,7 +14,7 @@ const fontsOf = (spec) => ({ ascii: spec.font, hAnsi: spec.font, eastAsia: spec.
 function textPara(spec, text, halfPt, { align, bold, pageBreakBefore } = {}) {
   const { Paragraph, TextRun, AlignmentType } = lib();
   return new Paragraph({
-    alignment: align === 'center' ? AlignmentType.CENTER : AlignmentType.LEFT,
+    alignment: { center: AlignmentType.CENTER, right: AlignmentType.RIGHT }[align] ?? AlignmentType.LEFT,
     spacing: { before: 0, after: 0 },
     pageBreakBefore: !!pageBreakBefore,
     // 字串裡的 \n 是段落內的換行（Word 的 Shift+Enter）：拆成多個 run，第二個起加 break
@@ -62,7 +62,8 @@ function buildCell(spec, cell, col, { photo, rendered, ctx }) {
   const opts = { width: { size: cellWidth(spec, col, span), type: WidthType.DXA }, children };
   if (span > 1) opts.columnSpan = span;
   if ((cell.rowSpan ?? 1) > 1) opts.rowSpan = cell.rowSpan;
-  if (cell.vAlign === 'center') opts.verticalAlign = VerticalAlign.CENTER;
+  // 每一格預設垂直置中（照詠郁手改的正確版：文字格也置中，不是靠上）；要靠上／靠下得在版型頁的右鍵選單指定
+  opts.verticalAlign = { top: VerticalAlign.TOP, bottom: VerticalAlign.BOTTOM }[cell.vAlign] ?? VerticalAlign.CENTER;
   return new TableCell(opts);
 }
 

@@ -130,6 +130,10 @@ def test_docx_follows_custom_spec(tmp_path):
     # 欄寬照 block.cols × perRow
     for w in ("5984", "1105", "576"):
         assert f'w:w="{w}"' in doc
+    # 每一格都垂直置中（照手改的正確版；樣本裡文字格本來是靠上）
+    # （跨列合併讓出來的續格 vMerge continue 是空的，不算）
+    real_cells = doc.count("<w:tc>") - doc.count('<w:vMerge w:val="continue"/>')
+    assert real_cells == doc.count('<w:vAlign w:val="center"/>') > 0
     # 說明欄位換成「照片編號／拍照日期／圖片說明」，V1.0 的三欄不該出現
     assert "照片編號" in doc and "圖片說明" in doc
     # 「拍照日期」不讀 EXIF，一律填該資料夾的檢查日期（點分隔、月日不補 0）

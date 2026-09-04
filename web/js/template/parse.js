@@ -183,6 +183,8 @@ export function parseTemplate({ documentXml, headerXml = null, name = '' } = {})
         blockRows[r].cells.push(cell);
         continue;
       }
+      cell.align = 'left'; // 說明格一律靠左、垂直置中；要改在版型頁按右鍵
+      cell.vAlign = 'center';
       const paras = cellParas(c.tc);
       const sz = firstSizePt(c.tc);
       if (sz) cell.sizePt = sz;
