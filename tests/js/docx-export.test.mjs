@@ -9,7 +9,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const iife = readFileSync(join(here, '../../web/vendor/docx-9.7.1.iife.js'), 'utf8');
 globalThis.docx = new Function(`${iife}; return docx;`)();
 
-const { buildDocxBlob } = await import('../../web/js/docx-export.js');
+const { buildDocxBlob, headingText } = await import('../../web/js/docx-export.js');
 const { defaultSpec } = await import('../../web/js/template/spec.js');
 
 const JPEG_1PX = Buffer.from(
@@ -57,4 +57,11 @@ test('版型不完整就大聲失敗，不產出錯的 Word', async () => {
     () => buildDocxBlob(group, { spec: bad, rocDisplay: '115年07月25日', render: fakeRender([]) }),
     /版型不完整/,
   );
+});
+
+test('抬頭裡的 {date} 每一個都要換掉，不是只換第一個', () => {
+  assert.equal(headingText('檢查日期：{date}　拍照：{date}', '115年07月25日'), '檢查日期：115年07月25日　拍照：115年07月25日');
+  assert.equal(headingText('沒有日期', '115年07月25日'), '沒有日期');
+  assert.equal(headingText(undefined, '115年07月25日'), '');
+  assert.equal(headingText('{date}', undefined), '');
 });

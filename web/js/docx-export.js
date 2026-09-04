@@ -25,6 +25,9 @@ function textPara(spec, text, halfPt, { align, bold, pageBreakBefore } = {}) {
 }
 
 /** 一個格子橫跨的欄寬總和（dxa）。col＝這個格子從區塊的第幾欄開始。 */
+/** 抬頭文字：每個 {date} 都換成檢查日期（一行裡可能出現不只一次）。 */
+export const headingText = (text, rocDisplay) => String(text ?? '').replaceAll('{date}', rocDisplay ?? '');
+
 function cellWidth(spec, col, span) {
   let w = 0;
   for (let i = col; i < col + span && i < spec.block.cols.length; i++) w += spec.block.cols[i];
@@ -121,7 +124,7 @@ export async function buildDocxBlob(group, { spec = defaultSpec(), rocDisplay, r
   // pageBreakBefore：抬頭在內文時，第 2 頁起強制分頁，抬頭才會落在每頁最上面。
   const headingParas = ({ pageBreakBefore = false } = {}) =>
     (spec.heading?.lines ?? []).map((l, i) =>
-      textPara(spec, (l.text ?? '').replace('{date}', rocDisplay ?? ''), (l.sizePt ?? 14) * 2, {
+      textPara(spec, headingText(l.text, rocDisplay), (l.sizePt ?? 14) * 2, {
         align: l.align ?? 'center',
         bold: l.bold,
         pageBreakBefore: pageBreakBefore && i === 0,
