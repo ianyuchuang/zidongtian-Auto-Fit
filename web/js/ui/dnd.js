@@ -73,3 +73,11 @@ export function dropKind({ handle = null, entry = null, fileName = null } = {}) 
   const isDirectory = handle ? handle.kind === 'directory' : entry?.isDirectory === true;
   return { isDirectory, fileName: handle?.name ?? entry?.name ?? fileName };
 }
+
+/**
+ * 一次拖進來的東西裡有幾個是資料夾（純邏輯）。entries：每個 item 的 webkitGetAsEntry() 結果。
+ * 入口頁一次只收一個資料夾，超過一個要明講，不能靜靜只拿第一個。
+ */
+export function countDroppedDirs(entries) {
+  return (entries ?? []).filter((e) => e?.isDirectory === true).length;
+}

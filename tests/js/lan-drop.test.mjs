@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { memoryTreeFromEntry } from '../../web/js/fs/memory.js';
 import { scanTree, describeTree, treeSummaryText } from '../../web/js/fs/adapter.js';
-import { classifyDrop, dropKind } from '../../web/js/ui/dnd.js';
+import { classifyDrop, dropKind, countDroppedDirs } from '../../web/js/ui/dnd.js';
 
 // 假的 FileSystemEntry 樹。readEntries 模仿 Chrome：一次只回一小批，回空陣列才算讀完。
 function fileEntry(name) {
@@ -87,4 +87,13 @@ test('memoryTreeFromEntry：遞迴讀、readEntries 分批全部讀完、空資�
 test('memoryTreeFromEntry：拖進來的不是資料夾就大聲失敗', async () => {
   await assert.rejects(memoryTreeFromEntry(fileEntry('a.jpg')), /不是資料夾/);
   await assert.rejects(memoryTreeFromEntry(null), /不是資料夾/);
+});
+
+test('countDroppedDirs：一次拖兩個資料夾要算得出來，資料夾＋檔案只算一個', () => {
+  const d = (name) => ({ isDirectory: true, isFile: false, name });
+  const f = (name) => ({ isDirectory: false, isFile: true, name });
+  assert.equal(countDroppedDirs([d('4F'), d('5F')]), 2);
+  assert.equal(countDroppedDirs([d('4F'), f('a.docx')]), 1);
+  assert.equal(countDroppedDirs([f('a.jpg'), null]), 0); // 非 Chrome 可能給 null
+  assert.equal(countDroppedDirs(undefined), 0);
 });

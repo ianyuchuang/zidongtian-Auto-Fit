@@ -6,7 +6,7 @@ import { memoryTreeFromFileList, memoryTreeFromEntry, MemoryDirectoryHandle } fr
 import { scanTree, describeTree, treeSummaryText } from '../fs/adapter.js';
 import { saveLastRoot, loadLastRoot, clearLastRoot, ensurePermission } from '../fs/handle-store.js';
 import { esc, toast } from './dialog.js';
-import { bindFileDrop, classifyDrop, dropKind } from './dnd.js';
+import { bindFileDrop, classifyDrop, dropKind, countDroppedDirs } from './dnd.js';
 import { listTemplates, getTemplate, rememberFor, lastFor } from '../template/library.js';
 
 const FS_OK = typeof globalThis.showDirectoryPicker === 'function';
@@ -207,8 +207,15 @@ export function mountEntry(container, app) {
   // 不能再像以前那樣把它當成「其他檔案」拒收（2026-09-04 同事內網回報拖資料夾沒反應／跳空白頁）。
   async function handleDrop(dt) {
     const file = dt.files?.[0]; // DataTransfer 在 await 之後會失效，先取起來
-    const item = dt.items?.[0];
-    const entry = typeof item?.webkitGetAsEntry === 'function' ? item.webkitGetAsEntry() : null; // 也要在 await 之前
+    const items = [...(dt.items ?? [])];
+    const item = items[0];
+    // webkitGetAsEntry 也要在 await 之前拿；一次拖好幾個資料夾就明講，不要靜靜只拿第一個
+    const entries = items.map((it) => (typeof it.webkitGetAsEntry === 'function' ? it.webkitGetAsEntry() : null));
+    const entry = entries[0];
+    if (countDroppedDirs(entries) > 1) {
+      toast('一次只能拖一個資料夾（要連同子資料夾就拖上一層）', { error: true });
+      return;
+    }
     let handle = null;
     if (item && typeof item.getAsFileSystemHandle === 'function') handle = await item.getAsFileSystemHandle();
     switch (classifyDrop(dropKind({ handle, entry, fileName: file?.name ?? null }))) {
