@@ -251,6 +251,10 @@ export function createApp() {
       const kept = [];
       emit('recognize-progress');
       emit('photos');
+      // 這一輪是否已被拆掉：goHome() 會把 state.progress 清成 null（或之後另起一輪）。
+      // 拆掉之後 state.photos 已經是空的，再 save() 會把這個資料夾的校對暫存整個洗成空的（bug W1），
+      // 所以還在飛的那張回來時只能丟掉，不能再碰 state。
+      const torn = () => state.progress !== progress;
       const worker = async () => {
         while (queue.length && !progress.stop) {
           const { p, before } = queue.shift();
@@ -263,6 +267,7 @@ export function createApp() {
               rootName: state.root.name,
               api: state.api,
             });
+            if (torn()) return;
             const touched = p.status !== before.status || p.desc !== before.desc || p.design !== before.design || p.actual !== before.actual;
             p.confidence = r.confidence ?? null;
             p.bbox = r.bbox ?? null;
@@ -279,6 +284,7 @@ export function createApp() {
               p.status = statusFromResult(p);
             }
           } catch (e) {
+            if (torn()) return;
             console.error('辨識失敗', p.name, e);
             p.status = STATUS.ERROR;
             p.engine = state.engine;
@@ -292,6 +298,7 @@ export function createApp() {
         }
       };
       await Promise.all([worker(), worker()]);
+      if (torn()) return { done: progress.done, failed, kept, stopped: true, total: progress.total };
       state.recognizing = false;
       state.progress = null;
       emit('recognize-progress');
@@ -431,6 +438,7 @@ export function createApp() {
      * 不必為了換個篩選重選一次資料夾；校對結果本來就在 localStorage。
      */
     goHome() {
+      app.stopRecognize(); // 瀏覽器「上一頁」也會走到這裡，辨識可能還在跑（bug W1）
       for (const p of state.photos) {
         for (const k of ['thumbUrl', 'fullUrl', 'cropUrl']) if (p[k]) URL.revokeObjectURL(p[k]);
       }

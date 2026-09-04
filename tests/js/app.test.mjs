@@ -270,3 +270,46 @@ test('goHome：資料夾留著、摘要要重掃（工作台可能搬過或刪�
   assert.equal(app.state.rootLabel, '帷幕骨架');
   assert.equal(app.state.rootSummary, null);
 });
+
+class FakeStorage {
+  constructor() {
+    this.m = new Map();
+    this.writes = 0;
+  }
+  getItem(k) {
+    return this.m.has(k) ? this.m.get(k) : null;
+  }
+  setItem(k, v) {
+    this.writes += 1;
+    this.m.set(k, String(v));
+  }
+  removeItem(k) {
+    this.m.delete(k);
+  }
+}
+
+test('goHome 在辨識中途（瀏覽器上一頁）：停掉辨識、還在飛的結果不能再 save，校對暫存不會被洗成空的（回歸 W1）', async () => {
+  const { savePhotos, loadSaved } = await import('../../web/js/storage.js');
+  const store = new FakeStorage();
+  const prev = globalThis.localStorage;
+  globalThis.localStorage = store;
+  try {
+    const { app } = await setup();
+    savePhotos(app.state.root.name, [{ path: '4F/a.jpg', desc: '手打的', design: '1', actual: '2', status: 'confirmed', order: 0 }], store);
+    app.state.page = 'work';
+    app.state.recognizerId = 'mock';
+    app.state.engine = 'mock';
+    const run = app.recognizeAll();
+    await new Promise((r) => setTimeout(r, 30)); // 模擬辨識每張 250ms，這時還沒有任何結果回來
+    app.goHome();
+    assert.equal(app.state.recognizing, false);
+    const writesAfterHome = store.writes;
+    const r = await run;
+    assert.equal(r.stopped, true);
+    assert.equal(store.writes, writesAfterHome, '離開工作台後不能再寫暫存');
+    assert.equal(loadSaved(app.state.root.name, store)['4F/a.jpg'].desc, '手打的', '暫存要原封不動');
+    assert.equal(app.state.progress, null);
+  } finally {
+    globalThis.localStorage = prev;
+  }
+});
