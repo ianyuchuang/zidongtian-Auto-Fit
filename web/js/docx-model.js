@@ -51,7 +51,7 @@ export function exportWarnings(orderedPhotos, spec = null) {
   if (spec) {
     const used = usedFields(spec);
     if (used.has('photoDate') && !orderedPhotos.some((p) => p.photoDate)) {
-      warnings.push('版型有「拍照日期」欄位，但目前沒有拍照日期資料，這一欄會留空。');
+      warnings.push('版型有「拍照日期」欄位，但沒有每張照片的拍照日期（沒讀 EXIF），會一律填該資料夾的檢查日期。');
     }
     for (const [key, label] of [['design', '設計'], ['actual', '實際']]) {
       if (!used.has(key)) continue;

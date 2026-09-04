@@ -25,7 +25,7 @@ import { makeThumbUrl, makeCropUrl, usableBbox } from './imaging.js';
 import { getRecognizer } from './recognizer/index.js';
 import { planExport, exportWarnings, outputFileName } from './docx-model.js';
 import { buildDocxBlob } from './docx-export.js';
-import { rocCompact, rocDisplay, stampText, parseRocInput } from './rocdate.js';
+import { rocCompact, rocDisplay, rocDot, stampText, parseRocInput } from './rocdate.js';
 
 /** 辨識引擎識別字串：存進校對暫存，換引擎重開時用來判斷舊的 AI 結果要不要重跑。 */
 export function engineId(recognizerId, api) {
@@ -102,7 +102,7 @@ export function createApp() {
       } catch {
         date = state.date;
       }
-      return { compact: rocCompact(date), display: rocDisplay(date), stamp: stampText(date) };
+      return { compact: rocCompact(date), display: rocDisplay(date), dot: rocDot(date), stamp: stampText(date) };
     },
 
     // ---------- 開啟資料夾 ----------
@@ -572,11 +572,12 @@ export function createApp() {
       const results = [];
       for (let gi = 0; gi < groups.length; gi++) {
         const g = groups[gi];
-        const { compact, display, stamp } = app.dateInfo(g.dir); // 日期跟著資料夾走
+        const { compact, display, dot, stamp } = app.dateInfo(g.dir); // 日期跟著資料夾走
         for (const p of g.photos) await app.fileOf(p);
         const { blob, failures } = await buildDocxBlob(g, {
           spec: state.template?.spec,
           rocDisplay: display,
+          rocPhotoDate: dot,
           stamp,
           onProgress: (i, n) => onProgress?.({ group: gi + 1, groups: groups.length, i, n, folder: g.folderName }),
         });

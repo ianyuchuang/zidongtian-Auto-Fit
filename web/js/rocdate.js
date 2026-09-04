@@ -36,6 +36,11 @@ export function rocDisplay(date) {
   return `${date.getFullYear() - 1911}年${pad2(date.getMonth() + 1)}月${pad2(date.getDate())}日`;
 }
 
+/** 表格「拍照日期」欄用的寫法 '115.7.25'（月日不補 0，照樣本檔） */
+export function rocDot(date) {
+  return `${date.getFullYear() - 1911}.${date.getMonth() + 1}.${date.getDate()}`;
+}
+
 /** 照片左下角日期戳 '2026-07-25' */
 export function stampText(date) {
   return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;

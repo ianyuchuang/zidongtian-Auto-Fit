@@ -58,7 +58,7 @@ const render = async (path) => {
   return { data: new Uint8Array(buf), width, height, type: 'jpg' };
 };
 
-const { blob, failures } = await buildDocxBlob({ photos }, { spec, rocDisplay: '115年07月25日', stamp: '2026-07-25', render });
+const { blob, failures } = await buildDocxBlob({ photos }, { spec, rocDisplay: '115年07月25日', rocPhotoDate: '115.7.25', stamp: '2026-07-25', render });
 if (failures.length) throw new Error(failures.join('\n'));
 writeFileSync(out, Buffer.from(await blob.arrayBuffer()));
 console.log(`OK ${out} ${blob.size}`);

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseRocInput, rocCompact, rocDisplay, stampText, todayRoc } from '../../web/js/rocdate.js';
+import { parseRocInput, rocCompact, rocDisplay, rocDot, stampText, todayRoc } from '../../web/js/rocdate.js';
 
 test('parseRocInput：民國 7 碼', () => {
   const d = parseRocInput('1150725');
@@ -22,6 +22,8 @@ test('格式化', () => {
   const d = new Date(2026, 6, 25);
   assert.equal(rocCompact(d), '1150725');
   assert.equal(rocDisplay(d), '115年07月25日');
+  assert.equal(rocDot(d), '115.7.25'); // 拍照日期欄：月日不補 0
+  assert.equal(rocDot(new Date(2026, 5, 14)), '115.6.14');
   assert.equal(stampText(d), '2026-07-25');
   assert.equal(todayRoc(new Date(2026, 8, 2)), '1150902');
 });

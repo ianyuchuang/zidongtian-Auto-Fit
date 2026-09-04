@@ -51,7 +51,7 @@ test('planExport / exportWarnings：回收桶裡的照片不輸出、不計入�
   assert.deepEqual(exportWarnings(photos), []);
 });
 
-test('exportWarnings：版型要「拍照日期」但沒資料時要先講', async () => {
+test('exportWarnings：版型要「拍照日期」但沒資料時要先講（會改用檢查日期）', async () => {
   const { defaultSpec } = await import('../../web/js/template/spec.js');
   const spec = defaultSpec();
   spec.block.rows[1].cells[0].lines.push({ label: '拍照日期：', field: 'photoDate' });

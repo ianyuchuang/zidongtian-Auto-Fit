@@ -132,6 +132,8 @@ def test_docx_follows_custom_spec(tmp_path):
         assert f'w:w="{w}"' in doc
     # 說明欄位換成「照片編號／拍照日期／圖片說明」，V1.0 的三欄不該出現
     assert "照片編號" in doc and "圖片說明" in doc
+    # 沒有 EXIF 拍照日期時，這一欄填該資料夾的檢查日期（點分隔、月日不補 0）
+    assert doc.count("115.7.25") == 3
     assert "內容說明：" not in doc
     # 由上而下填：1、2 在左欄的上下兩格，3 在右欄第一格 → 文件順序是 1、3、2
     assert doc.index("說明1") < doc.index("說明3") < doc.index("說明2")
