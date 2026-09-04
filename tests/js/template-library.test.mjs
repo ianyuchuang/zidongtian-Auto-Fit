@@ -59,3 +59,23 @@ test('壞掉的 JSON 當作空的，不要炸掉入口頁', () => {
   assert.deepEqual(listTemplates(s), []);
   assert.equal(lastFor('x', s), null);
 });
+
+test('同名再存沿用原 id，資料夾記住的版型不會斷', () => {
+  const s = fakeStore();
+  const a = saveTemplate(defaultSpec(), '電氣', s);
+  rememberFor('帷幕骨架', a.id, s);
+  const spec = defaultSpec();
+  spec.grid.perRow = 3;
+  const b = saveTemplate(spec, '電氣', s);
+  assert.equal(b.id, a.id);
+  assert.equal(b.spec.id, a.id);
+  assert.equal(lastFor('帷幕骨架', s).spec.grid.perRow, 3);
+});
+
+test('同一毫秒連存兩份不同名的版型，id 不會撞', () => {
+  const s = fakeStore();
+  const ids = new Set();
+  for (let i = 0; i < 50; i++) ids.add(saveTemplate(defaultSpec(), `版型${i}`, s).id);
+  assert.equal(ids.size, 50);
+  assert.equal(listTemplates(s).length, 50);
+});

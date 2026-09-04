@@ -36,13 +36,19 @@ export function getTemplate(id, store = globalThis.localStorage) {
   return listTemplates(store).find((t) => t.id === id) ?? null;
 }
 
+/** 新 id：時間戳＋亂數尾巴，同一毫秒連存兩份也不會撞。 */
+export const newId = () => `tpl-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+
 /**
- * 存一份版型。同名的直接覆蓋（改完再存不會愈存愈多份）。回傳存好的那筆。
+ * 存一份版型。同名的直接覆蓋（改完再存不會愈存愈多份），而且**沿用原本的 id**：
+ * 每個資料夾記的是 id（rememberFor），換了 id 就會忘記上次用哪一份。回傳存好的那筆。
  */
 export function saveTemplate(spec, name, store = globalThis.localStorage) {
   const clean = String(name ?? '').trim() || spec.name || '未命名版型';
-  const list = listTemplates(store).filter((t) => t.name !== clean);
-  const entry = { id: `tpl-${Date.now().toString(36)}`, name: clean, savedAt: Date.now(), spec: JSON.parse(JSON.stringify(spec)) };
+  const all = listTemplates(store);
+  const same = all.find((t) => t.name === clean);
+  const list = all.filter((t) => t.name !== clean);
+  const entry = { id: same?.id ?? newId(), name: clean, savedAt: Date.now(), spec: JSON.parse(JSON.stringify(spec)) };
   entry.spec.name = clean;
   entry.spec.id = entry.id;
   write(LIB_KEY, [entry, ...list], store);
