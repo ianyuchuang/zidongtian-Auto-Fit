@@ -9,6 +9,11 @@ export function outputFileName(roc, folderName, suffix = '') {
   return `${roc} ${folderName}${suffix}.docx`;
 }
 
+/** 合併 PDF 的檔名：「根資料夾名.pdf」，放根資料夾；suffix 用於同名檔被開啟時另存 _new。 */
+export function pdfFileName(rootName, suffix = '') {
+  return `${rootName}${suffix}.pdf`;
+}
+
 /**
  * 規劃輸出：每個有照片的資料夾各產生一份 docx（與 V1.0 相同，存在該資料夾）。
  * orderedPhotos 已依表格順序排好。dirs: [{path, name}]。

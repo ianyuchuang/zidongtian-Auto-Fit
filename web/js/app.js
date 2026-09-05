@@ -21,10 +21,12 @@ import {
   pruneChecked,
 } from './state.js';
 import { loadSaved, savePhotos, applySaved, loadDates, saveDates } from './storage.js';
-import { makeThumbUrl, makeCropUrl, usableBbox } from './imaging.js';
+import { makeThumbUrl, makeCropUrl, usableBbox, renderForDocx } from './imaging.js';
 import { getRecognizer } from './recognizer/index.js';
 import { planExport, exportWarnings, outputFileName } from './docx-model.js';
 import { buildDocxBlob } from './docx-export.js';
+import { buildPdfBlob } from './pdf-export.js';
+import { pdfFileName } from './docx-model.js';
 import { rocCompact, rocDisplay, rocDot, stampText, parseRocInput } from './rocdate.js';
 
 /** 辨識引擎識別字串：存進校對暫存，換引擎重開時用來判斷舊的 AI 結果要不要重跑。 */
@@ -611,20 +613,32 @@ export function createApp() {
       const ordered = app.orderedPhotos();
       return { ...planExport(ordered, state.dirs), warnings: exportWarnings(ordered, state.template?.spec ?? null) };
     },
-    async exportWord({ onProgress } = {}) {
+    /**
+     * 產生 Word（每個資料夾一份）。pdf＝{ fontBytes } 時，再把同樣這些內容接成一份 PDF 放根資料夾。
+     * 照片重繪（縮圖 + 日期戳）很花時間，Word 與 PDF 共用同一份快取，只畫一次。
+     */
+    async exportWord({ onProgress, pdf = null } = {}) {
       const { groups, skipped } = app.exportPlan();
       if (!groups.length) throw new Error('沒有可輸出的照片（內容說明都是空的）。');
+      const spec = state.template?.spec;
+      const cache = new Map();
+      const render = async (file, opts) => {
+        if (!cache.has(file)) cache.set(file, await renderForDocx(file, opts));
+        return cache.get(file);
+      };
       const results = [];
+      const pdfGroups = [];
       for (let gi = 0; gi < groups.length; gi++) {
         const g = groups[gi];
         const { compact, display, dot, stamp } = app.dateInfo(g.dir); // 日期跟著資料夾走
         for (const p of g.photos) await app.fileOf(p);
         const { blob, failures } = await buildDocxBlob(g, {
-          spec: state.template?.spec,
+          spec,
           rocDisplay: display,
           rocPhotoDate: dot,
           stamp,
-          onProgress: (i, n) => onProgress?.({ group: gi + 1, groups: groups.length, i, n, folder: g.folderName }),
+          render,
+          onProgress: (i, n) => onProgress?.({ group: gi + 1, groups: groups.length, i, n, folder: g.folderName, phase: 'word' }),
         });
         const name = outputFileName(compact, g.folderName);
         let written;
@@ -637,8 +651,11 @@ export function createApp() {
           written = g.dir ? `${g.dir}/${written}` : written;
         }
         results.push({ folder: g.folderName, file: written, count: g.photos.length, failures });
+        pdfGroups.push({ ...g, rocDisplay: display, rocPhotoDate: dot, stamp });
       }
-      return { results, skipped };
+      let pdfResult = null;
+      if (pdf) pdfResult = await exportPdf(pdfGroups, { spec, render, fontBytes: pdf.fontBytes, onProgress });
+      return { results, skipped, pdf: pdfResult };
     },
   };
 
@@ -653,6 +670,25 @@ export function createApp() {
       }
       emit('thumb');
     }
+  }
+
+  /** 把這次輸出的所有 Word 內容接成一份 PDF，放根資料夾（唯讀模式改為下載）。 */
+  async function exportPdf(pdfGroups, { spec, render, fontBytes, onProgress }) {
+    const { blob, failures, warnings, pages } = await buildPdfBlob(pdfGroups, {
+      spec,
+      render,
+      fontBytes,
+      onProgress: (x) => onProgress?.({ ...x, phase: 'pdf' }),
+    });
+    const name = pdfFileName(state.root?.name ?? state.rootLabel ?? 'Auto-Fit');
+    let file;
+    if (state.readOnly) {
+      download(blob, name);
+      file = `${name}（已下載；唯讀模式無法寫進資料夾）`;
+    } else {
+      file = await writeFile(state.root, name, blob, pdfFileName(state.root?.name ?? 'Auto-Fit', '_new'));
+    }
+    return { file, pages, failures, warnings };
   }
 
   function download(blob, name) {

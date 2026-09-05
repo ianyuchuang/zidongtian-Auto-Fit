@@ -3,6 +3,8 @@
 
 import { esc, showDialog, alertDialog, confirmDialog, toast } from './dialog.js';
 import { runRecognize, engineLabel } from './recognize.js';
+import { loadPdfFont } from '../pdf-font.js';
+import { DEFAULT_FONT } from '../template/spec.js';
 
 export function mountTopbar(container, app) {
   container.className = 'topbar';
@@ -96,13 +98,57 @@ async function exportWord(app) {
   const list = plan.groups.map((g) => `<li>${esc(g.folderName)}：${g.photos.length} 張</li>`).join('');
   const trashed = plan.trashed?.length ? `<p class="muted">回收桶（_回收桶）裡的 ${plan.trashed.length} 張不輸出。</p>` : '';
   const warn = plan.warnings.length ? `<p style="color:var(--yellow-text)">${plan.warnings.map(esc).join('<br>')}</p>` : '';
+  const rootName = app.state.root?.name ?? 'Auto-Fit';
+  const family = app.state.template?.spec?.font ?? DEFAULT_FONT;
+
+  // 打勾時就先去要字型：queryLocalFonts() 要在使用者的點擊事件裡呼叫才跳得出授權，
+  // 等按下「產生」才要就已經不是使用者手勢了。拿不到字型直接把勾取消並說明原因。
+  let pdfFont = null;
+  let wantPdf = false;
   const go = await showDialog({
     title: '產生 Word 檔',
-    body: `<p>每個資料夾各產生一份，存在該資料夾${app.state.readOnly ? '（唯讀模式改為下載）' : ''}，檔名「該資料夾的檢查日期 + 資料夾名.docx」。</p><ul>${list}</ul>${trashed}${warn}`,
+    body: `<p>每個資料夾各產生一份，存在該資料夾${app.state.readOnly ? '（唯讀模式改為下載）' : ''}，檔名「該資料夾的檢查日期 + 資料夾名.docx」。</p><ul>${list}</ul>${trashed}${warn}
+      <div class="opt"><label><input type="checkbox" id="pdf"> 同時產出 PDF（把上面全部接成一份「${esc(rootName)}.pdf」放根資料夾）</label></div>
+      <div class="small muted" id="pdf-note" hidden></div>`,
     buttons: [
       { label: '取消', value: false },
       { label: '產生', value: true, primary: true },
     ],
+    onOpen: (d) => {
+      const box = d.querySelector('#pdf');
+      const note = d.querySelector('#pdf-note');
+      const say = (text, bad = false) => {
+        note.hidden = !text;
+        note.textContent = text;
+        note.style.color = bad ? 'var(--red-text)' : '';
+      };
+      box.addEventListener('change', async () => {
+        if (!box.checked) {
+          say('');
+          return;
+        }
+        say('正在取得中文字型…');
+        box.disabled = true;
+        try {
+          pdfFont = await loadPdfFont(family);
+          say(pdfFont.source === 'local' ? `字型：${pdfFont.label}（這台電腦）` : `字型：${pdfFont.label}（內建備用）— ${pdfFont.notes.join('；')}`);
+        } catch (e) {
+          pdfFont = null;
+          box.checked = false;
+          say(`拿不到中文字型，PDF 無法產生：${e.message}`, true);
+        } finally {
+          box.disabled = false;
+        }
+      });
+    },
+    beforeClose: (v, d) => {
+      wantPdf = d.querySelector('#pdf').checked;
+      if (v === true && wantPdf && !pdfFont) {
+        toast('中文字型還沒準備好', { error: true });
+        return false;
+      }
+      return true;
+    },
   });
   if (go !== true) return;
 
@@ -115,10 +161,12 @@ async function exportWord(app) {
   });
   const closeProgress = () => done.close();
   try {
-    const { results, skipped } = await app.exportWord({
-      onProgress: ({ group, groups, i, n, folder }) => {
+    const { results, skipped, pdf } = await app.exportWord({
+      pdf: wantPdf && pdfFont ? { fontBytes: pdfFont.bytes } : null,
+      onProgress: ({ group, groups, i, n, folder, phase }) => {
         if (!progressEl) return;
-        progressEl.querySelector('#pg').textContent = `資料夾 ${folder}（${group}/${groups}）：照片 ${i}/${n}`;
+        const what = phase === 'pdf' ? 'PDF ' : '';
+        progressEl.querySelector('#pg').textContent = `${what}資料夾 ${folder}（${group}/${groups}）：照片 ${i}/${n}`;
         progressEl.querySelector('.progress-bar > div').style.width = `${Math.round((i / n) * 100)}%`;
       },
     });
@@ -127,6 +175,12 @@ async function exportWord(app) {
       (r) =>
         `<li>${esc(r.file)}（${r.count} 張）${r.failures.length ? `<br><span style="color:var(--red-text)">${r.failures.map(esc).join('<br>')}</span>` : ''}</li>`,
     );
+    if (pdf) {
+      const bad = [...pdf.failures, ...pdf.warnings];
+      lines.push(
+        `<li>${esc(pdf.file)}（合併 ${pdf.pages} 頁）${bad.length ? `<br><span style="color:var(--red-text)">${bad.map(esc).join('<br>')}</span>` : ''}</li>`,
+      );
+    }
     const skip = skipped.length ? `<p class="muted">略過（內容說明為空）：${skipped.map((p) => esc(p.name)).join('、')}</p>` : '';
     await alertDialog('完成', `<ul>${lines.join('')}</ul>${skip}`);
   } catch (err) {
