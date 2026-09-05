@@ -49,7 +49,6 @@ export function mountViewer(container, app) {
       <div class="head">
         <span class="name" title="${esc(p.name)}">${esc(p.name)}</span>
         <span class="badge ${isTrashed(p) ? 'trashed' : p.status}">${isTrashed(p) ? '已刪除' : STATUS_LABEL[p.status]}</span>
-        <span class="nav"><button data-nav="-1" title="上一張">‹</button><button data-nav="1" title="下一張">›</button></span>
       </div>
       <div class="big"><img alt=""><span class="stamp">${esc(app.dateInfo(groupDirOf(p)).stamp)}</span></div>
       <div class="off-filter small muted" hidden>這張目前不在篩選結果中</div>
@@ -59,6 +58,7 @@ export function mountViewer(container, app) {
       <div class="crop"><span>尚無裁切</span></div>
       ${FIELDS.map(([f, label]) => `<div class="f"><label>${label}</label><input type="text" data-f="${f}" value="${esc(p[f])}"${locked(p) ? ' disabled' : ''}></div>`).join('')}
       </div>
+      <div class="navbar"><button data-nav="-1" title="上一張">‹</button><button data-nav="1" title="下一張">›</button></div>
       <div class="actions">
         ${
           isTrashed(p)

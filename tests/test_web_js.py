@@ -21,3 +21,12 @@ def test_table_text_columns_share_width():
     m = re.search(r"th\.c-design, th\.c-actual \{ width: ([^;]+); \}", css)
     assert m, "找不到 th.c-design / th.c-actual 的寬度規則"
     assert "%" in m.group(1), f"設計／實際欄應用比例分寬，目前是 {m.group(1)}"
+
+
+def test_viewer_nav_sits_above_actions():
+    """換頁箭頭在底部輸出列的上一行（2026-09-05 定案），不在標題列右上角。"""
+    js = (ROOT / "web" / "js" / "ui" / "viewer.js").read_text(encoding="utf-8")
+    assert 'class="navbar"' in js, "找不到 .navbar 換頁列"
+    assert js.index('class="navbar"') < js.index('class="actions"'), "換頁列要排在輸出列前面"
+    head = js[js.index('class="head"'):js.index('class="big"')]
+    assert "data-nav" not in head, "標題列不該再有換頁箭頭"
