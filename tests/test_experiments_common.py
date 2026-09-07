@@ -39,7 +39,7 @@ def test_score_desc_without_floor_prefix():
 
 
 def test_extract_fields_colon_lines():
-    text = "永青營造\n檢驗項目：帷幕骨架安裝間距尺寸檢查\n標準值 700mm±10\n實際值:700mm\n查驗位置 4F 東側"
+    text = "範例營造\n檢驗項目：帷幕骨架安裝間距尺寸檢查\n標準值 700mm±10\n實際值:700mm\n查驗位置 4F 東側"
     assert common.extract_fields(text) == {"desc": "帷幕骨架安裝間距尺寸檢查", "design": "700mm±10", "actual": "700mm"}
 
 

@@ -63,7 +63,7 @@ function buildCell(spec, cell, col, { photo, rendered, ctx }) {
   const opts = { width: { size: cellWidth(spec, col, span), type: WidthType.DXA }, children };
   if (span > 1) opts.columnSpan = span;
   if ((cell.rowSpan ?? 1) > 1) opts.rowSpan = cell.rowSpan;
-  // 每一格預設垂直置中（照詠郁手改的正確版：文字格也置中，不是靠上）；要靠上／靠下得在版型頁的右鍵選單指定
+  // 每一格預設垂直置中（照手改的正確版：文字格也置中，不是靠上）；要靠上／靠下得在版型頁的右鍵選單指定
   opts.verticalAlign = { top: VerticalAlign.TOP, bottom: VerticalAlign.BOTTOM }[cell.vAlign] ?? VerticalAlign.CENTER;
   return new TableCell(opts);
 }

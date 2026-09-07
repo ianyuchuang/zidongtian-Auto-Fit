@@ -15,7 +15,7 @@
 
 9. 每次改動代碼後，都必須建立一個對應的 commit（便於追蹤與回滾）。
 10. commit 依主題分，重要修復獨立一個。
-11. Claude 只 commit，push 由詠郁自己來（`2_推至GitHub.bat`）。
+11. Claude 只 commit，push 由作者自己來（`2_推至GitHub.bat`）。
 
 ## 測試與交付（全域 + 本專案）
 
@@ -24,7 +24,7 @@
 
 ## 專案脈絡
 
-- 需求：`docs/需求摘要.md`；介面定案（B+E 混合）：`docs/介面規格.md`，視覺稿 `docs/ui-BE-mockup.png`。
+- 需求：`docs/需求摘要.md`；介面定案（B+E 混合）：`docs/介面規格.md`，視覺稿已移除（含真實工地照片），版面依 `docs/介面規格.md` 文字描述。
 - 資料夾：本 repo＝`D:\自懂填-Auto-Fit\自懂填-Auto-Fit-V2.0`；需求文件、範例照片、V1.0 程式在上一層 `需求及資訊來源\`（不進 git，只進 Google 備份）。
 - 可留用程式：`需求及資訊來源\自懂填Auto-Fit_V1.0_安裝包\app\self_check_core.py`（docx 排版、日期戳）。
 - 三個 .bat 放在上一層，原始檔在 `tools/bat/`（改完要複製過去）；**內容只能是 ASCII**，中文訊息一律由 Python 印，原因與用法見 `docs/bat.md`。備份 → `tools/backup_to_drive.py`；推送 → `tools/push_to_github.py`（pytest → commit → push，remote `ianyuchuang/zidongtian-Auto-Fit`）；開網頁 → `tools/dev_server.py`。
