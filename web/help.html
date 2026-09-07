@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>使用說明 — 自懂填 Auto-Fit</title>
+  <link rel="stylesheet" href="css/app.css">
+  <style>
+    .doc { max-width: 860px; margin: 32px auto; padding: 28px 32px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+    .doc h1 { font-size: 22px; margin: 0 0 4px; }
+    .doc h2 { font-size: 17px; margin: 34px 0 10px; padding-top: 18px; border-top: 1px solid var(--line); }
+    .doc h3 { font-size: 15px; margin: 18px 0 6px; }
+    .doc p, .doc li { line-height: 1.7; }
+    .doc ol, .doc ul { padding-left: 22px; }
+    .doc a { color: var(--accent); }
+    .doc kbd, .doc code { background: var(--bg); border: 1px solid var(--line); padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+    .doc figure { margin: 12px 0 18px; }
+    .doc figure img { display: block; width: 100%; border: 1px solid var(--line); border-radius: 6px; }
+    .doc figcaption { font-size: 12px; color: var(--muted); margin-top: 6px; }
+    .toc { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 14px 0 0; padding: 0; list-style: none; }
+    .toc li a { text-decoration: none; }
+    .tip { background: var(--accent-soft); border-left: 3px solid var(--accent); padding: 8px 12px; border-radius: 4px; margin: 10px 0; }
+    .warn { background: #fff7e6; border-left: 3px solid #d9a441; padding: 8px 12px; border-radius: 4px; margin: 10px 0; }
+    .doc table { border-collapse: collapse; width: 100%; margin: 8px 0; }
+    .doc th, .doc td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; vertical-align: top; }
+    .doc th { background: var(--bg); }
+  </style>
+</head>
+<body>
+  <main class="doc">
+    <h1>使用說明</h1>
+    <p class="muted">自懂填 Auto-Fit — 把一個資料夾的工地照片排成「施工自主檢查照片」Word；白板手寫由 AI 讀出來預填，你只做校對。截圖用的是程式產生的範例照片。</p>
+    <ul class="toc">
+      <li><a href="#prep">0. 開始前</a></li>
+      <li><a href="#entry">1. 入口頁</a></li>
+      <li><a href="#template">2. 版型</a></li>
+      <li><a href="#workbench">3. 工作台</a></li>
+      <li><a href="#recognize">4. AI 辨識</a></li>
+      <li><a href="#review">5. 校對</a></li>
+      <li><a href="#organize">6. 整理照片</a></li>
+      <li><a href="#export">7. 產生 Word／PDF</a></li>
+      <li><a href="#faq">8. 常見問題</a></li>
+    </ul>
+
+    <h2 id="prep">0. 開始前</h2>
+    <ul>
+      <li>用 <b>Chrome 或 Edge</b>。讀寫資料夾靠瀏覽器的 File System Access API，其他瀏覽器只能以唯讀複本開啟（能校對、下載 Word，但不會真的搬動檔案）。</li>
+      <li>照片先放進一個根資料夾，底下依樓層或區域分子資料夾（例：<code>帷幕骨架\4F</code>、<code>帷幕骨架\5F</code>）。每個子資料夾會各出一份 Word。</li>
+      <li>已經照 <code>內容說明-設計-實際.jpg</code> 命名的照片（例：<code>4F帷幕骨架安裝間距尺寸檢查(1)-700mm±10-700mm.jpg</code>）會自動解析檔名，不必辨識；其他檔名（<code>IMG_1111.jpg</code>）才需要 AI 或手填。</li>
+      <li>照片與產出都留在你的電腦，詳見<a href="privacy.html">隱私權政策</a>。</li>
+    </ul>
+
+    <h2 id="entry">1. 入口頁：選資料夾、選版型</h2>
+    <ol>
+      <li>點「照片資料夾」區塊或把資料夾拖進去，瀏覽器會問你是否允許讀寫，按「允許」。</li>
+      <li>選到後只顯示資料夾名和子資料夾摘要（瀏覽器拿不到完整路徑）。</li>
+      <li>版型不選就用預設版面（A4、每頁 3 列 × 2 張、標楷體）；要用自己工程案的版面按「讀取版型」，見第 2 節。</li>
+      <li>按「開始讀取」進工作台。</li>
+    </ol>
+    <figure><img src="img/help/entry.png" alt="入口頁"><figcaption>入口頁：資料夾已選好，版型用預設。</figcaption></figure>
+    <div class="tip">下次打開時入口頁會出現「接回上次的資料夾」，按一下再授權一次就好，不用重選。</div>
+
+    <h2 id="template">2. 版型：用自己工程案的 Word 版面</h2>
+    <h3>選版型</h3>
+    <p>「讀取版型」進入選版型頁。上面列出這台電腦存過的版型，可以「使用」、「調整」或「刪除」；預設版面也能按「調整」改成自己的公司／工程名稱。要讀新的，把該工程案的自檢表 docx 拖進下方框框，工具會整份解析出頁面大小、抬頭、每頁幾張、說明欄位和照片日期戳。</p>
+    <figure><img src="img/help/template-pick.png" alt="選版型頁"><figcaption>選版型頁。</figcaption></figure>
+    <h3>版型調整</h3>
+    <p>所見即所得：抬頭與說明格<b>直接點著打字</b>（<kbd>Enter</kbd> 分段、<kbd>Shift</kbd>+<kbd>Enter</kbd> 段落內換行）；要填值的位置是綠色「膠囊」，可從上方工具列拖進某一行、或拖到別格；每列張數、每頁列數、照片框大小在頂列改；拖曳格子上的編號可以交換填照順序；格子上按右鍵選對齊方式。右上角取個名字按「完成，使用這個版型」，會先存進版型庫再回入口頁。</p>
+    <figure><img src="img/help/template-edit.png" alt="版型調整頁"><figcaption>版型調整頁：用預設版面按「調整」，把抬頭改成自己的名稱。</figcaption></figure>
+    <div class="warn">舊的 <code>.doc</code> 讀不了，請先用 Word 另存成 <code>.docx</code>。解析不出來的列會直接列出來，不會偷偷套預設值。</div>
+
+    <h2 id="workbench">3. 工作台</h2>
+    <p>三欄：左邊資料夾樹、中間表格（每張照片一列，三欄可直接改）、右邊大圖與白板裁切檢視器。</p>
+    <figure><img src="img/help/workbench.png" alt="工作台"><figcaption>工作台：4F 三張已照檔名解析，5F 三張待辨識。</figcaption></figure>
+    <ul>
+      <li><b>檢查日期</b>：在每個資料夾列的資料夾名旁邊填（民國，例 <code>1150907</code>），預設今天。檔名、頁首、照片日期戳、版型的「拍照日期」欄都用它。</li>
+      <li><b>篩選</b>：上方「全部／檔名解析／AI 待校對／低信心」快速切換；右邊可搜尋內容說明。</li>
+      <li><b>頂列</b>：「🤖 AI 辨識」、「批次修改設計值」（把選到的照片設計值一次改掉）、「產生 Word 檔」。</li>
+      <li>點任一列 → 右側顯示大圖；<kbd>Tab</kbd>／<kbd>Enter</kbd> 在儲存格間移動。</li>
+    </ul>
+
+    <h2 id="recognize">4. AI 辨識白板</h2>
+    <p>按頂列「🤖 AI 辨識」，選辨識方式、確認提示詞與範圍，按「開始辨識」。辨識期間留在工作台，欄位鎖住、顯示進度，可隨時停止。</p>
+    <figure><img src="img/help/recognize.png" alt="AI 辨識對話框"><figcaption>辨識對話框：方式、提示詞（白板上哪一格是什麼）、範圍。</figcaption></figure>
+    <table>
+      <tr><th>方式</th><th>照片去哪裡</th><th>需要什麼</th></tr>
+      <tr><td><b>本地模型</b></td><td>只在這台電腦（127.0.0.1）</td><td>先在本機啟動 llama.cpp 的 <code>llama-server</code>（要帶 <code>--mmproj</code> 才看得懂圖），填網址 → 測試連線 → 選型號。機密照片走這條。</td></tr>
+      <tr><td><b>LLM API</b></td><td>直接送到你選的公司（Anthropic／Google／OpenAI）</td><td>自己的 API 金鑰。選公司 → 貼金鑰 → 測試連線 → 從清單挑型號。每家旁邊有「申請教學」。</td></tr>
+    </table>
+    <figure><img src="img/help/recognize-local.png" alt="本地模型設定"><figcaption>本地模型：填 llama-server 網址，測試連線後選型號。</figcaption></figure>
+    <figure><img src="img/help/recognize-api.png" alt="LLM API 設定"><figcaption>LLM API：選公司、貼金鑰、測試連線。勾「不要記住金鑰」則關閉分頁就清掉。</figcaption></figure>
+    <div class="warn">不要用最小、最快的型號讀手寫白板（實測 Haiku 幾乎全錯、Sonnet 也有錯）。AI 的結果一律要校對。</div>
+
+    <h2 id="review">5. 校對</h2>
+    <p>辨識完每張照片的狀態變成「AI 辨識・待校對」或「AI 低信心・請確認」。點一列，右側同時顯示大圖與白板裁切，對照著改三欄；設計與實際的數字個數對不上時會提醒。</p>
+    <figure><img src="img/help/review.png" alt="校對"><figcaption>校對：右側對照白板裁切，改完按「確認，下一張」。</figcaption></figure>
+    <ul>
+      <li><b>確認，下一張</b>（<kbd>Enter</kbd>）：標成已確認並跳到下一張待校對的。</li>
+      <li><b>跳過</b>：先不處理，之後從篩選「AI 待校對」找回來。</li>
+      <li>校對結果暫存在瀏覽器，重開同一個資料夾會接回來；已確認的照片再跑辨識時預設不會被蓋掉。</li>
+    </ul>
+
+    <h2 id="organize">6. 整理照片：排序、搬資料夾、刪除</h2>
+    <ul>
+      <li><b>改順序</b>：拖列左邊的把手上下拖，表格順序就是 Word 順序。</li>
+      <li><b>搬資料夾</b>：把列拖到左側資料夾樹或另一個資料夾的群組列上；勾選多張後拖任一勾選列可整批搬，上方也會出現批次工具列。</li>
+      <li><b>新增資料夾</b>：左下角「＋ 新增資料夾」。</li>
+      <li><b>刪除</b>：檢視器左下的 🗑 或批次工具列。網頁無法用 Windows 資源回收桶，所以是搬到該照片所在資料夾的 <code>_回收桶</code>；列會留在原位反灰，按「↩ 還原」搬回來。統計與產生 Word 都不含回收桶。</li>
+    </ul>
+
+    <h2 id="export">7. 產生 Word／PDF</h2>
+    <p>頂列「產生 Word 檔」→ 對話框列出每個資料夾各幾張、還有幾張未確認 → 按「產生」。每個資料夾各存一份 <code>檢查日期 資料夾名.docx</code> 在該資料夾裡；每頁都有抬頭，照片依版型排好、左下疊日期（版型有開的話）。</p>
+    <figure><img src="img/help/export.png" alt="產生 Word 對話框"><figcaption>產生 Word：可勾「同時產出 PDF」。</figcaption></figure>
+    <ul>
+      <li><b>同時產出 PDF</b>：把這次所有 Word 的每一頁接成一份 <code>根資料夾名.pdf</code> 放根資料夾。勾選時瀏覽器會請求讀取電腦上的標楷體（按「允許」），拿不到就用內附的全字庫正楷體。PDF 是照同一份版面重畫的，行高與 Word 會有極細微差異。</li>
+      <li>唯讀模式（非 Chrome／Edge，或選了不能寫的資料夾）改為下載。</li>
+    </ul>
+
+    <h2 id="faq">8. 常見問題</h2>
+    <h3>Chrome 說「無法開啟這個資料夾」</h3>
+    <p>Chrome 不讓網頁碰磁碟根目錄、使用者資料夾本身等位置。請改選照片所在的子資料夾，或按入口頁的「改用唯讀方式開啟」。</p>
+    <h3>拖曳照片或 docx 到頁面後變成一片空白</h3>
+    <p>那是拖到了頁面上沒有接住的地方，瀏覽器去開那個檔案了。按上一頁回來，把檔案拖到虛線框內。</p>
+    <h3>辨識全部失敗</h3>
+    <p>本地模型：確認 llama-server 視窗還開著、啟動時有帶 <code>--mmproj</code>（沒有會印 <code>TEXT-ONLY mode</code>，這種狀態看不懂照片）。LLM API：按「測試連線」看錯誤訊息，通常是金鑰沒儲值或公司帳號要填 Workspace ID。</p>
+    <h3>想清掉暫存的校對結果或金鑰</h3>
+    <p>瀏覽器設定 → 網站資料 → 清除本網站；金鑰也可在辨識對話框按「清除」。</p>
+    <h3>網址版與本機版有什麼差別？</h3>
+    <p>功能相同。本機版（<code>3_開啟網頁(localhost).bat</code>）多一個「載入範例」；若本機模型在網址版被瀏覽器擋住，改用本機版跑。</p>
+
+    <p style="margin-top: 28px"><a href="./">← 回到自懂填 Auto-Fit</a>・<a href="privacy.html">隱私權政策</a></p>
+  </main>
+</body>
+</html>
