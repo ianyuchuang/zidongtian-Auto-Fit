@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>隱私權政策 — 自懂填 Auto-Fit</title>
+  <link rel="stylesheet" href="css/app.css">
+  <style>
+    .doc { max-width: 760px; margin: 32px auto; padding: 28px 32px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+    .doc h1 { font-size: 22px; margin: 0 0 4px; }
+    .doc h2 { font-size: 16px; margin: 26px 0 8px; }
+    .doc p, .doc li { line-height: 1.7; }
+    .doc table { border-collapse: collapse; width: 100%; margin: 8px 0; }
+    .doc th, .doc td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; vertical-align: top; }
+    .doc th { background: var(--bg); }
+    .doc a { color: var(--accent); }
+    .doc code { background: var(--bg); padding: 1px 4px; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <main class="doc">
+    <h1>隱私權政策</h1>
+    <p class="muted">自懂填 Auto-Fit（以下稱「本工具」）・最後更新：2026-09-07</p>
+
+    <p>本工具是一個純前端的靜態網頁，<b>沒有自己的伺服器、沒有帳號、沒有資料庫</b>。你選的照片、校對的內容與產出的 Word／PDF，全部在你自己電腦的瀏覽器裡處理，不會傳給本工具的作者。以下逐項說明資料會留在哪裡、什麼情況下會離開你的電腦。</p>
+
+    <h2>1. 照片與產出的檔案</h2>
+    <p>本工具透過瀏覽器的 File System Access API 直接讀取你選擇的資料夾，並把產出的 docx／PDF 寫回同一個資料夾。這些資料<b>不會上傳到任何伺服器</b>；唯一的例外是第 3 節所述、由你主動選擇的 LLM API 辨識。</p>
+
+    <h2>2. 存在你瀏覽器裡的資料</h2>
+    <p>為了讓你下次打開時不必重來，本工具會把以下資料存在<b>你這台電腦的瀏覽器</b>（localStorage／sessionStorage／IndexedDB）。這些資料只有這台電腦、這個瀏覽器讀得到，本工具的作者無法取得。</p>
+    <table>
+      <tr><th>資料</th><th>用途</th><th>存在哪裡</th></tr>
+      <tr><td>校對結果（內容說明／設計／實際、AI 辨識的信心值與所用引擎）</td><td>重開同一個資料夾時帶回來</td><td>localStorage，依根資料夾名分開</td></tr>
+      <tr><td>版型庫、各資料夾上次用的版型</td><td>不必每次重讀 docx</td><td>localStorage</td></tr>
+      <tr><td>上次開啟的資料夾的存取權杖</td><td>下次一鍵重開（仍需你按一次授權）</td><td>IndexedDB</td></tr>
+      <tr><td>本地模型伺服器的網址與型號</td><td>下次直接帶回</td><td>localStorage</td></tr>
+      <tr><td>LLM API 金鑰</td><td>辨識時呼叫該公司 API</td><td>勾「記住」時存 localStorage；沒勾則只存 sessionStorage，關閉分頁即消失</td></tr>
+    </table>
+    <p>清除方式：在瀏覽器設定中清除本網站的網站資料，或在辨識設定裡把金鑰清空。</p>
+
+    <h2>3. 什麼情況下資料會離開你的電腦</h2>
+    <p>只有在你於「AI 辨識」中選擇 <b>LLM API</b>、填入自己的金鑰並按下開始時，本工具才會把<b>照片（縮至長邊 1500px）與提示詞</b>直接從你的瀏覽器送到你所選公司的 API 端點（Anthropic／Google／OpenAI），<b>不經過本工具作者的任何伺服器</b>。送出後的資料如何處理，依該公司的隱私權政策與 API 使用條款：</p>
+    <ul>
+      <li>Anthropic（Claude）：<a href="https://www.anthropic.com/privacy" target="_blank" rel="noopener">隱私權政策</a></li>
+      <li>Google（Gemini）：<a href="https://policies.google.com/privacy" target="_blank" rel="noopener">隱私權政策</a></li>
+      <li>OpenAI（GPT）：<a href="https://openai.com/policies/privacy-policy" target="_blank" rel="noopener">隱私權政策</a></li>
+    </ul>
+    <p>機密照片請改用「本地模型」：照片只在 <code>127.0.0.1</code> 之間流動，不會離開這台電腦；或選「不辨識」手動填寫。</p>
+
+    <h2>4. 電腦字型</h2>
+    <p>勾選「同時產出 PDF」時，本工具會請求讀取你電腦上的「標楷體」字型檔以嵌入 PDF（瀏覽器會跳出授權）。字型只用來產生 PDF，不會上傳。拒絕授權時改用內附的全字庫正楷體。</p>
+
+    <h2>5. 主機與存取紀錄</h2>
+    <p>本網站由 GitHub Pages 代管。如同所有網站，GitHub 可能會記錄你的 IP 位址等連線資訊，詳見 <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement" target="_blank" rel="noopener">GitHub 隱私權聲明</a>。本工具作者<b>不會</b>收到這些紀錄。</p>
+
+    <h2>6. Cookie、分析與廣告</h2>
+    <p>本工具<b>不使用 cookie、不裝任何流量分析工具、沒有廣告</b>。除了第 3 節你主動選擇的 LLM API 之外，本工具不會與任何第三方交換資料。若日後有變動，本頁會先更新。</p>
+
+    <h2>7. 政策變更與聯絡</h2>
+    <p>本頁內容若有變動，會更新頂端的「最後更新」日期。對隱私有任何疑問，請到 <a href="https://github.com/ianyuchuang/zidongtian-Auto-Fit/issues" target="_blank" rel="noopener">GitHub Issues</a> 提出。</p>
+
+    <p style="margin-top: 28px"><a href="./">← 回到自懂填 Auto-Fit</a></p>
+  </main>
+</body>
+</html>

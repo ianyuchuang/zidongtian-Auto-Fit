@@ -50,6 +50,8 @@ input[type="text"]:focus, input[type="password"]:focus, textarea:focus { outline
 .entry-card h1 { margin: 0 0 4px; font-size: 22px; }
 .entry-card h1 span { color: var(--accent); }
 .entry-card .lead { margin: 0 0 22px; }
+.entry-foot { margin: 22px 0 0; }
+.entry-foot a { color: var(--accent); }
 .field { margin-bottom: 18px; }
 .field > label, .field > .label { display: block; font-weight: 600; margin-bottom: 6px; }
 .dropzone {

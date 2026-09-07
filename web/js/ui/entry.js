@@ -48,6 +48,7 @@ export function mountEntry(container, app) {
       <span id="sample-slot"></span>
       <span class="muted small" id="status"></span>
     </div>
+    <p class="entry-foot muted small"><a href="privacy.html">隱私權政策</a>・照片與校對內容都留在你的電腦，詳見該頁。</p>
   </div></div>`;
 
   const $ = (s) => container.querySelector(s);
