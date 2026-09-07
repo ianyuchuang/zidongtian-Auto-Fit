@@ -11,6 +11,7 @@ import { esc, toast, confirmDialog } from './dialog.js';
 import { bindFileDrop } from './dnd.js';
 import { parseTemplateDocx } from '../template/parse.js';
 import {
+  defaultSpec,
   FIELDS,
   ALIGNS,
   VALIGNS,
@@ -171,7 +172,10 @@ export function mountTemplatePage(container, app) {
           <div class="tplcard default">
             <div class="tplcard-name">預設版面（V1.0）</div>
             <div class="small muted">直式・每頁 6 張（3 列 × 2）・標楷體</div>
-            <div class="tplcard-btns"><button class="btn" data-act="use-default">使用</button></div>
+            <div class="tplcard-btns">
+              <button class="btn" data-act="use-default">使用</button>
+              <button class="btn" data-act="edit-default">調整</button>
+            </div>
           </div>
         </div>
         <div class="tplpick-sec">或讀一份新的版型</div>
@@ -632,6 +636,13 @@ export function mountTemplatePage(container, app) {
     } else if (act === 'pick-use') {
       const t = getTemplate(btn.dataset.id);
       if (t) app.applyTemplate({ name: t.name, file: null, spec: t.spec });
+    } else if (act === 'edit-default') {
+      // 預設版面也能拿來改（換抬頭、格數…），改完「完成」會存成一份新版型，預設本身不會被動到
+      spec = defaultSpec();
+      spec.name = ''; // 名稱留給使用者取，不要存成「預設（V1.0 版面）」
+      name = '';
+      fileName = '';
+      render();
     } else if (act === 'pick-edit') {
       const t = getTemplate(btn.dataset.id);
       if (!t) return;

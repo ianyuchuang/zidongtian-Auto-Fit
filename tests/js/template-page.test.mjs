@@ -220,3 +220,39 @@ test('「完成，使用這個版型」會先存進版型庫，套用的 spec �
     globalThis.document = prevDoc;
   }
 });
+
+test('預設版面可以按「調整」改抬頭再存成新版型；預設本身與版型庫原有內容不變', async () => {
+  const { listTemplates } = await import('../../web/js/template/library.js');
+  const { defaultSpec } = await import('../../web/js/template/spec.js');
+  const prevLS = globalThis.localStorage;
+  const prevDoc = globalThis.document;
+  const store = new Map();
+  globalThis.localStorage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v), removeItem: (k) => store.delete(k) };
+  globalThis.document = {
+    createElement: () => ({ set innerHTML(h) { this.content = { firstElementChild: { html: h, remove() {} } }; } }),
+    getElementById: () => ({ appendChild: () => {} }),
+  };
+  try {
+    await withWindow(async () => {
+      const applied = [];
+      const app = { ...fakeApp(), applyTemplate: (t) => applied.push(t) };
+      const c = new FakeContainer();
+      mountTemplatePage(c, app);
+      assert.match(c.querySelector('#tpl-stage').innerHTML, /data-act="edit-default"/, '預設版面卡片要有「調整」鈕');
+      const btn = (act, id) => ({ target: { closest: () => ({ dataset: { act, id } }) } });
+      await c.fire('click', btn('edit-default'));
+      await c.fire('change', { target: { dataset: { grid: 'perRow' }, value: '3', max: '6' } });
+      c.querySelector('#tpl-name').value = '我的公司';
+      await c.fire('click', btn('use'));
+      assert.equal(applied.length, 1);
+      assert.equal(applied[0].name, '我的公司');
+      assert.equal(applied[0].spec.grid.perRow, 3);
+      assert.equal(applied[0].spec.heading.lines[0].text, '範例工程', '抬頭預設是「範例工程」');
+      assert.equal(defaultSpec().grid.perRow, 2, '預設版面本身不能被改到');
+      assert.equal(listTemplates().length, 1);
+    });
+  } finally {
+    globalThis.localStorage = prevLS;
+    globalThis.document = prevDoc;
+  }
+});

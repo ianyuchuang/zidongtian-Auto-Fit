@@ -66,7 +66,7 @@ def test_docx_layout_matches_v1(tmp_path):
     assert 'w:w="11906"' in doc and 'w:h="16838"' in doc
     assert 'w:top="709"' in doc and 'w:left="1134"' in doc and 'w:right="851"' in doc
     # 頁首
-    assert "永青營造工程股份有限公司" in hdr
+    assert "範例工程" in hdr
     assert "施工自主檢查照片(檢查日期：115年07月25日)" in hdr
     # 表格：3 張 → 2 列照片 + 2 列說明 = 4 個 w:tr；欄寬 4915；照片列高 3798
     assert doc.count("<w:tr>") + doc.count("<w:tr ") == 4

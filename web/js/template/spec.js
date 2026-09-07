@@ -37,7 +37,7 @@ export function defaultSpec() {
     heading: {
       place: 'header',
       lines: [
-        { text: '永青營造工程股份有限公司', sizePt: 14, bold: false, align: 'center' },
+        { text: '範例工程', sizePt: 14, bold: false, align: 'center' }, // 公司／工程名稱：在版型頁按「調整」改成自己的
         { text: '施工自主檢查照片(檢查日期：{date})', sizePt: 14, bold: false, align: 'center' },
       ],
     },
