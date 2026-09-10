@@ -1,10 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { outputFileName, planExport, exportWarnings } from '../../web/js/docx-model.js';
+import { outputFileName, planExport, exportWarnings, defaultFormat, FORMATS } from '../../web/js/docx-model.js';
 
 test('outputFileName', () => {
   assert.equal(outputFileName('1150725', '4F'), '1150725 4F.docx');
   assert.equal(outputFileName('1150725', '4F', '_new'), '1150725 4F_new.docx');
+  assert.equal(outputFileName('1150725', '4F', '', 'xlsx'), '1150725 4F.xlsx');
+  assert.equal(outputFileName('1150725', '4F', '_new', 'xlsx'), '1150725 4F_new.xlsx');
 });
 
 test('planExport：每資料夾一組、依 dirs 順序、空內容說明略過', () => {
@@ -63,4 +65,12 @@ test('exportWarnings：版型有設計／實際欄位但沒填', () => {
   const photos = [{ id: 'a', dir: '4F', desc: 'a', design: '', actual: '', status: 'ok' }];
   const w = exportWarnings(photos, null);
   assert.deepEqual(w, []);
+});
+
+test('defaultFormat：xlsx 版型預設產 Excel，其餘產 Word', () => {
+  assert.equal(defaultFormat({ source: 'xlsx' }), 'xlsx');
+  assert.equal(defaultFormat({ source: 'docx' }), 'docx');
+  assert.equal(defaultFormat({}), 'docx');
+  assert.equal(defaultFormat(null), 'docx');
+  assert.deepEqual(Object.keys(FORMATS), ['docx', 'xlsx']);
 });

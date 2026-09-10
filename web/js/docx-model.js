@@ -1,13 +1,22 @@
-// Word 輸出的規劃邏輯（無 DOM、不碰 docx 函式庫）：分組、檔名、輸出前檢查。
+// 輸出的規劃邏輯（無 DOM、不碰 docx／xlsx 函式庫）：分組、檔名、格式、輸出前檢查。
 // 版面規則在 template/spec.js（LayoutSpec），文件見 docs/版型.md。
 
 import { isTrashDir } from './state.js';
 import { usedFields } from './template/spec.js';
 
-/** 輸出檔名：「民國日期 資料夾名.docx」；suffix 用於同名檔被開啟時另存 _new。 */
-export function outputFileName(roc, folderName, suffix = '') {
-  return `${roc} ${folderName}${suffix}.docx`;
+/**
+ * 輸出檔名：「民國日期 資料夾名.docx」。ext 給 'xlsx' 就是 Excel 版；
+ * suffix 用於同名檔被開啟時另存 _new。
+ */
+export function outputFileName(roc, folderName, suffix = '', ext = 'docx') {
+  return `${roc} ${folderName}${suffix}.${ext}`;
 }
+
+/** 輸出格式：Word 或 Excel。版型是從哪種檔案讀來的，就預設產哪一種。 */
+export const FORMATS = { docx: 'Word（.docx）', xlsx: 'Excel（.xlsx）' };
+
+/** 這份版型預設要產哪一種檔（xlsx 版型 → Excel；其餘 → Word）。 */
+export const defaultFormat = (spec) => (spec?.source === 'xlsx' ? 'xlsx' : 'docx');
 
 /** 合併 PDF 的檔名：「根資料夾名.pdf」，放根資料夾；suffix 用於同名檔被開啟時另存 _new。 */
 export function pdfFileName(rootName, suffix = '') {
