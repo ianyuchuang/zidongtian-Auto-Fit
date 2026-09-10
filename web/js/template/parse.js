@@ -4,6 +4,7 @@
 import { parseXml, find, findAll, kids, attr, num } from './xml.js';
 import { EMU_PER_PX } from './spec.js';
 import { unzipText } from './unzip.js';
+import { DATE_RE, guessField, splitLine } from './fields.js';
 
 /** 看得見的文字：跳過 Word 的欄位指令（AUTOTEXTLIST 之類）與刪除線內容。 */
 function text(node) {
@@ -12,30 +13,6 @@ function text(node) {
   let out = '';
   for (const c of node.children ?? []) out += text(c);
   return out;
-}
-
-const DATE_RE = /\d{2,4}\s*年\s*\d{1,2}\s*月\s*\d{1,2}\s*日|\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{2,3}\.\d{1,2}\.\d{1,2}/;
-
-// 欄位名 → 資料來源。由上而下比對，先中先算。
-const FIELD_BY_LABEL = [
-  [/設\s*計|標準值/, 'design'],
-  [/實\s*際/, 'actual'],
-  [/編\s*號/, 'seq'],
-  [/日\s*期/, 'photoDate'],
-  [/說\s*明/, 'desc'],
-];
-
-// 沒有冒號、但本身就是欄位名的字（例：照片編號、拍照日期、圖片說明）
-const BARE_LABEL = /^(照片編號|編號|拍照日期|日期|圖片說明|內容說明|說明|設\s*計|標準值|實\s*際|實際值)$/;
-
-const guessField = (label) => FIELD_BY_LABEL.find(([re]) => re.test(label))?.[1] ?? null;
-
-/** 一行文字拆成「欄位名 + 值」；label 是要照印的字，rest 是這份樣本裡的值（會被丟掉）。 */
-function splitLine(t) {
-  const m = t.match(/^(\s*[^：:]{1,12}[：:])\s*([\s\S]*)$/);
-  if (m) return { label: m[1], rest: m[2].trim() };
-  if (BARE_LABEL.test(t.trim())) return { label: t, rest: '' };
-  return { label: '', rest: t };
 }
 
 const isPhotoCell = (tc) => !!find(tc, 'wp:inline');
