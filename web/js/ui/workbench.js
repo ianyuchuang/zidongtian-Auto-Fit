@@ -3,7 +3,8 @@
 import { mountTopbar } from './topbar.js';
 import { mountTree } from './tree.js';
 import { mountTable } from './table.js';
-import { mountViewer } from './viewer.js';
+import { mountViewer, confirmFeedback } from './viewer.js';
+import { toast } from './dialog.js';
 
 export function mountWorkbench(container, app) {
   container.innerHTML = '<div class="work"><div></div><div></div><div></div><div></div></div>';
@@ -20,7 +21,8 @@ export function mountWorkbench(container, app) {
     if (e.key === 'Enter' && e.target?.closest?.('button')) return;
     if (e.key === 'Enter' && !typing && app.state.selectedId) {
       e.preventDefault();
-      app.confirm(app.state.selectedId);
+      const msg = confirmFeedback(app.confirmAndNext(app.state.selectedId)); // 跟檢視器的「✓ 確認，下一張」同一套提示
+      if (msg) toast(msg);
     } else if (e.key === 'ArrowRight' && !typing) {
       app.stepSelection(1);
     } else if (e.key === 'ArrowLeft' && !typing) {

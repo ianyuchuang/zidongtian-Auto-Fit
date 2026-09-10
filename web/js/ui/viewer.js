@@ -14,6 +14,52 @@ function cropNote(p) {
   return '尚無裁切';
 }
 
+/**
+ * 大圖載入的「進行中」記錄：只記正在載哪一輪（viewSeq）。
+ * 之前是單一布林旗標，上一張的 finally 會把它清掉，patch() 看到圖還沒 src 就再叫一次 fullUrl()，
+ * 同一張大圖被建了好幾個 blob URL。改成序號比對：只有自己那一輪才能清。
+ */
+export function createLoadGate() {
+  let loading = null;
+  return {
+    /** 開始載 seq 這一輪；同一輪已經在載就回 false（別重複叫）。 */
+    begin(seq) {
+      if (loading === seq) return false;
+      loading = seq;
+      return true;
+    },
+    /** seq 那一輪結束；不是目前在載的那一輪就不動（別把新一輪的旗標清掉）。 */
+    end(seq) {
+      if (loading === seq) loading = null;
+    },
+    get loading() {
+      return loading;
+    },
+  };
+}
+
+/** 裁切失敗後畫面上顯示的是錯誤訊息：不自動重試（每次 photos 事件都重試會一直閃，同 W12），留給下次換照片。 */
+export const CROP_FAILED = Symbol('crop-failed');
+
+/**
+ * patch() 時裁切圖要不要重做：畫面上用的 URL（shown；沒有圖是 null）跟 p.cropUrl 不同就要——
+ * 重跑辨識後 app 會把 p.cropUrl 清成 null，之前只看「.crop 裡有沒有 <img>」，舊圖還在就不重裁（bug）。
+ * 沒有圖、也還沒可用的 bbox 時什麼都不做（辨識完才有裁切）。
+ */
+export function cropNeedsReload(p, shown) {
+  if (shown === CROP_FAILED) return false;
+  const want = p.cropUrl ?? null;
+  if (shown == null) return want != null || usableBbox(p.bbox);
+  return shown !== want;
+}
+
+/** 「✓ 確認，下一張」按完要不要提示：沒確認成功（已刪除）或沒有下一張都要講，別靜靜不動（跟「跳過」一致）。 */
+export function confirmFeedback({ confirmed, next }) {
+  if (!confirmed) return '已刪除的照片不能確認';
+  if (!next) return '沒有其他待校對的照片了';
+  return null;
+}
+
 const FIELDS = [
   ['desc', '內容說明'],
   ['design', '設　計'],
@@ -28,7 +74,9 @@ export function mountViewer(container, app) {
   // 每次換照片就 +1。非同步載圖回來時用它判斷有沒有過期——不能用 p.id，
   // 因為搬移資料夾時 app 會就地改掉 p.id，導致回呼永遠對不上、圖片停在沒有 src 的狀態。
   let viewSeq = 0;
-  let bigLoading = false;
+  const bigGate = createLoadGate();
+  const cropGate = createLoadGate(); // 裁切也一樣：做到一半 patch() 進來不能再叫一次 cropUrl()
+  let shownCrop = null; // 畫面上 .crop 裡那張圖用的 URL；沒有圖是 null、失敗是 CROP_FAILED
 
   function zoomTitle(p, kind) {
     return `${p ? p.name : ''}${kind === 'crop' ? '（白板裁切）' : ''}`;
@@ -79,10 +127,9 @@ export function mountViewer(container, app) {
   function loadBig(p, seq) {
     const box = container.querySelector('.big');
     const img = box?.querySelector('img');
-    if (!img || bigLoading) return;
+    if (!img || !bigGate.begin(seq)) return;
     box.querySelector('.load-err')?.remove();
     box.classList.remove('failed');
-    bigLoading = true;
     app
       .fullUrl(p)
       .then((u) => {
@@ -100,11 +147,13 @@ export function mountViewer(container, app) {
         box.appendChild(el);
       })
       .finally(() => {
-        bigLoading = false;
+        bigGate.end(seq); // 只清自己這一輪，別把下一張正在載的旗標清掉
       });
   }
 
   function loadCrop(p, seq) {
+    if (!cropGate.begin(seq)) return;
+    shownCrop = null;
     app
       .cropUrl(p)
       .then((u) => {
@@ -112,14 +161,19 @@ export function mountViewer(container, app) {
         const c = container.querySelector('.crop');
         if (!c) return;
         c.innerHTML = u ? `<img alt="白板裁切" src="${u}">` : `<span>${esc(cropNote(p))}</span>`;
+        shownCrop = u || null;
         syncLightbox(p, 'crop', u);
         if (!u && zoomKind === 'crop') closeLightbox();
       })
       .catch((e) => {
         console.error('白板裁切失敗', p.name, e);
         if (seq !== viewSeq) return;
+        shownCrop = CROP_FAILED;
         const c = container.querySelector('.crop');
         if (c) c.innerHTML = `<span>裁切失敗：${esc(e.message)}</span>`;
+      })
+      .finally(() => {
+        cropGate.end(seq);
       });
   }
 
@@ -152,13 +206,11 @@ export function mountViewer(container, app) {
       inp.disabled = lock;
     }
     for (const b of container.querySelectorAll('.actions .btn')) b.disabled = app.state.recognizing;
-    // 辨識完成後才有裁切
-    if (usableBbox(p.bbox) && !container.querySelector('.crop img')) {
-      app.cropUrl(p).then((u) => {
-        if (!u || currentId !== p.id) return;
-        container.querySelector('.crop').innerHTML = `<img alt="白板裁切" src="${u}">`;
-        syncLightbox(p, 'crop', u);
-      });
+    // 辨識完成後才有裁切；重跑辨識後 p.cropUrl 被清掉（或換了）也要重裁，不能因為舊圖還在就略過
+    if (cropGate.loading !== viewSeq && cropNeedsReload(p, shownCrop)) {
+      const c = container.querySelector('.crop');
+      if (c) c.innerHTML = '<span>裁切中…</span>';
+      loadCrop(p, viewSeq);
     }
   }
 
@@ -169,7 +221,7 @@ export function mountViewer(container, app) {
       container.innerHTML = '<div class="empty">左邊點一列，這裡會顯示大圖與白板裁切。</div>';
       currentId = null;
       viewSeq += 1;
-      bigLoading = false;
+      shownCrop = null;
       closeLightbox();
       return;
     }
@@ -179,7 +231,6 @@ export function mountViewer(container, app) {
     } else {
       currentId = p.id;
       viewSeq += 1;
-      bigLoading = false;
       renderFull(p);
     }
   }
@@ -187,10 +238,15 @@ export function mountViewer(container, app) {
   container.addEventListener('input', (e) => {
     if (e.target.dataset.f && currentId) app.setField(currentId, e.target.dataset.f, e.target.value);
   });
+  function confirmCurrent() {
+    const msg = confirmFeedback(app.confirmAndNext(currentId));
+    if (msg) toast(msg);
+  }
+
   container.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && e.target.tagName === 'INPUT' && currentId) {
       e.preventDefault();
-      app.confirm(currentId);
+      confirmCurrent();
     }
   });
   container.addEventListener('click', (e) => {
@@ -220,7 +276,7 @@ export function mountViewer(container, app) {
     const act = e.target.closest('[data-act]');
     if (!act || !currentId) return;
     const what = act.dataset.act;
-    if (what === 'confirm') app.confirm(currentId);
+    if (what === 'confirm') confirmCurrent();
     else if (what === 'trash') trashCurrent();
     else if (what === 'reload') loadBig(app.photo(currentId), viewSeq);
     else if (what === 'restore') restoreCurrent();
