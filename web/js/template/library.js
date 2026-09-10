@@ -15,13 +15,14 @@ const read = (key, store) => {
   }
 };
 
+/** 寫進 localStorage；失敗（例如 QuotaExceeded）回傳那個錯誤，成功回 null。由呼叫端決定要不要大聲失敗。 */
 const write = (key, value, store) => {
   try {
     store?.setItem(key, JSON.stringify(value));
-    return true;
+    return null;
   } catch (e) {
     console.warn('寫入版型庫失敗', e);
-    return false;
+    return e ?? new Error('setItem 失敗');
   }
 };
 
@@ -42,6 +43,7 @@ export const newId = () => `tpl-${Date.now().toString(36)}-${Math.random().toStr
 /**
  * 存一份版型。同名的直接覆蓋（改完再存不會愈存愈多份），而且**沿用原本的 id**：
  * 每個資料夾記的是 id（rememberFor），換了 id 就會忘記上次用哪一份。回傳存好的那筆。
+ * localStorage 寫不進去（空間滿了…）就丟錯，不能回一筆其實沒存進去的 entry。
  */
 export function saveTemplate(spec, name, store = globalThis.localStorage) {
   const clean = String(name ?? '').trim() || spec.name || '未命名版型';
@@ -51,7 +53,8 @@ export function saveTemplate(spec, name, store = globalThis.localStorage) {
   const entry = { id: same?.id ?? newId(), name: clean, savedAt: Date.now(), spec: JSON.parse(JSON.stringify(spec)) };
   entry.spec.name = clean;
   entry.spec.id = entry.id;
-  write(LIB_KEY, [entry, ...list], store);
+  const err = write(LIB_KEY, [entry, ...list], store);
+  if (err) throw new Error(`版型存不進瀏覽器（localStorage 寫入失敗，可能是空間已滿）：${err.message ?? err}`);
   return entry;
 }
 

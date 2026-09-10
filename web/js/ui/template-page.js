@@ -269,7 +269,7 @@ export function mountTemplatePage(container, app) {
       .map(
         (l, i) =>
           `<div class="tp-head" contenteditable="plaintext-only" data-hd="${i}"
-                style="font-size:${PT(l.sizePt)}px;font-weight:${l.bold ? 700 : 400};text-align:${l.align === 'center' ? 'center' : 'left'}">${esc(l.text)}</div>`,
+                style="font-size:${PT(l.sizePt)}px;font-weight:${l.bold ? 700 : 400};text-align:${l.align === 'center' || l.align === 'right' ? l.align : 'left'}">${esc(l.text)}</div>`,
       )
       .join('');
     return `
@@ -495,6 +495,7 @@ export function mountTemplatePage(container, app) {
       el.addEventListener('input', sync);
       el.addEventListener('keydown', (e) => {
         if (e.key !== 'Enter') return;
+        if (e.isComposing || e.keyCode === 229) return; // 輸入法選字的 Enter，不是分段
         if (e.shiftKey) return; // Shift+Enter＝段落內換行，交給瀏覽器插 <br>
         e.preventDefault(); // Enter＝分段，切成上下兩行
         splitLineAtCaret(el, r, c, i);
@@ -540,7 +541,7 @@ export function mountTemplatePage(container, app) {
         e.dataTransfer.setData('text/plain', String(from));
       });
       el.addEventListener('dragover', (e) => {
-        if (drag) return; // 正在拖說明欄位
+        if (drag || from == null) return; // 正在拖說明欄位、或拖的不是本頁的格子
         e.preventDefault();
         el.classList.add('over');
       });
@@ -551,8 +552,11 @@ export function mountTemplatePage(container, app) {
       el.addEventListener('drop', (e) => {
         el.classList.remove('over');
         if (drag) return;
+        // 只認本頁 dragstart 設過的 from：說明格裡選字「3」拖到別格、或從外面拖東西進來，
+        // dataTransfer 的 text/plain 也會是數字，不能拿來交換填照順序。
+        if (from == null) return;
         e.preventDefault();
-        const a = from ?? Number(e.dataTransfer.getData('text/plain'));
+        const a = from;
         from = null;
         const b = Number(el.dataset.slot);
         if (Number.isInteger(a) && a !== b) {
@@ -630,6 +634,25 @@ export function mountTemplatePage(container, app) {
     }
   }, { signal });
 
+  /**
+   * 驗證過才存進版型庫；驗證不過或 localStorage 寫不進去（空間滿了…）都 toast 錯誤並回 null，
+   * 呼叫端不能再拿一個其實沒存進去的 entry 去套用。
+   */
+  function saveChecked() {
+    const errs = validateSpec(spec);
+    if (errs.length) {
+      toast(`這個版型還不能用：${errs[0]}`, { error: true });
+      return null;
+    }
+    try {
+      return saveTemplate(spec, $('#tpl-name').value || name);
+    } catch (err) {
+      console.error(err);
+      toast(err.message, { error: true });
+      return null;
+    }
+  }
+
   container.addEventListener('click', async (e) => {
     const btn = e.target.closest('[data-act]');
     const act = btn?.dataset.act;
@@ -640,7 +663,18 @@ export function mountTemplatePage(container, app) {
       app.applyTemplate(null);
     } else if (act === 'pick-use') {
       const t = getTemplate(btn.dataset.id);
-      if (t) app.applyTemplate({ name: t.name, file: null, spec: t.spec });
+      if (!t) return;
+      const errs = validateSpec(t.spec);
+      if (errs.length) {
+        // 舊版存進去的、或存了之後規則變嚴的版型：不套用，改進調整頁補齊
+        toast(`版型「${t.name}」還不能用，請先調整：${errs[0]}`, { error: true });
+        spec = structuredClone(t.spec);
+        name = t.name;
+        fileName = '';
+        render();
+        return;
+      }
+      app.applyTemplate({ name: t.name, file: null, spec: t.spec });
     } else if (act === 'edit-default') {
       // 預設版面也能拿來改（換抬頭、格數…），改完「完成」會存成一份新版型，預設本身不會被動到
       spec = defaultSpec();
@@ -667,19 +701,18 @@ export function mountTemplatePage(container, app) {
       render();
     } else if (act === 'save') {
       if (!spec) return;
-      const entry = saveTemplate(spec, $('#tpl-name').value || name);
+      // 驗證不過的版型不存：存了之後入口頁選得到它，產生檔案跑到一半才失敗
+      const entry = saveChecked();
+      if (!entry) return;
       spec = entry.spec;
       name = entry.name;
       render();
       toast(`已存成版型「${entry.name}」`);
     } else if (act === 'use') {
-      const errs = validateSpec(spec);
-      if (errs.length) {
-        toast(errs[0], { error: true });
-        return;
-      }
+      if (!spec) return;
       // 「完成」＝先存進版型庫再使用：出去的 spec 一定帶著庫裡的 id，入口頁替資料夾記住的才是這一份。
-      const entry = saveTemplate(spec, $('#tpl-name').value || name);
+      const entry = saveChecked();
+      if (!entry) return;
       toast(`已存成版型「${entry.name}」`);
       app.applyTemplate({ name: entry.name, file: null, spec: entry.spec });
     }

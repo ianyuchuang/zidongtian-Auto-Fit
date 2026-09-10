@@ -13,6 +13,7 @@ class FakeEl {
     this.hidden = false;
     this.value = '';
     this.disabled = false;
+    this.focus = () => {};
   }
   addEventListener(type, fn, opts) {
     const rec = { type, fn };
@@ -255,4 +256,160 @@ test('預設版面可以按「調整」改抬頭再存成新版型；預設本�
     globalThis.localStorage = prevLS;
     globalThis.document = prevDoc;
   }
+});
+
+/** 版型頁的整合測試共用：假 localStorage、收 toast 的假 document、記下 applyTemplate。 */
+async function withPage(fn, container = null) {
+  const store = new Map();
+  const prevLS = globalThis.localStorage;
+  const prevDoc = globalThis.document;
+  const ls = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v), removeItem: (k) => store.delete(k) };
+  globalThis.localStorage = ls;
+  const toasts = [];
+  globalThis.document = {
+    createElement: () => ({ set innerHTML(h) { this.content = { firstElementChild: { html: h, remove() {} } }; } }),
+    getElementById: () => ({ appendChild: (t) => toasts.push(t.html) }),
+  };
+  try {
+    await withWindow(async () => {
+      const applied = [];
+      const app = { ...fakeApp(), applyTemplate: (t) => applied.push(t) };
+      const c = container ?? new FakeContainer();
+      mountTemplatePage(c, app);
+      const btn = (act, id) => ({ target: { closest: () => ({ dataset: { act, id } }) } });
+      await fn({ c, app, applied, toasts, ls, btn });
+    });
+  } finally {
+    globalThis.localStorage = prevLS;
+    globalThis.document = prevDoc;
+  }
+}
+
+test('localStorage 寫不進去時「存成版型」與「完成」都 toast 錯誤、不套用版型', async () => {
+  const { listTemplates } = await import('../../web/js/template/library.js');
+  await withPage(async ({ c, applied, toasts, ls, btn }) => {
+    await c.fire('click', btn('edit-default'));
+    c.querySelector('#tpl-name').value = '滿了';
+    ls.setItem = () => {
+      const e = new Error('quota');
+      e.name = 'QuotaExceededError';
+      throw e;
+    };
+    await c.fire('click', btn('save'));
+    assert.equal(toasts.length, 1);
+    assert.match(toasts[0], /寫入失敗/);
+    assert.doesNotMatch(toasts[0], /已存成版型/);
+    await c.fire('click', btn('use'));
+    assert.equal(applied.length, 0, '沒存進去就不能套用');
+    assert.equal(toasts.length, 2);
+    assert.match(toasts[1], /寫入失敗/);
+    assert.deepEqual(listTemplates(), []);
+  });
+});
+
+test('驗證不過（有說明格未指定欄位）的版型不能「存成版型」', async () => {
+  const { saveTemplate, listTemplates } = await import('../../web/js/template/library.js');
+  const { defaultSpec } = await import('../../web/js/template/spec.js');
+  await withPage(async ({ c, applied, toasts, btn }) => {
+    const spec = defaultSpec();
+    spec.block.rows[1].cells[0].lines[0].field = null;
+    const bad = saveTemplate(spec, '缺欄位'); // 庫裡直接放一份不合法的（舊版存進去的）
+    await c.fire('click', btn('pick-edit', bad.id)); // 「調整」讀進頁面
+    await c.fire('change', { target: { dataset: { grid: 'perRow' }, value: '3', max: '6' } });
+    c.querySelector('#tpl-name').value = '缺欄位';
+    await c.fire('click', btn('save'));
+    assert.equal(toasts.length, 1);
+    assert.match(toasts[0], /還沒指定欄位/);
+    assert.doesNotMatch(toasts[0], /已存成版型/);
+    assert.equal(listTemplates()[0].spec.grid.perRow, 2, '庫裡那份不能被蓋掉');
+    await c.fire('click', btn('use'));
+    assert.equal(applied.length, 0);
+  });
+});
+
+test('選版型頁按「使用」時驗證不過的版型不套用，改走「調整」', async () => {
+  const { saveTemplate } = await import('../../web/js/template/library.js');
+  const { defaultSpec } = await import('../../web/js/template/spec.js');
+  await withPage(async ({ c, applied, toasts, btn }) => {
+    const spec = defaultSpec();
+    spec.block.rows[1].cells[0].lines[0].field = null; // 舊版存進去的、少了欄位的版型
+    const bad = saveTemplate(spec, '缺欄位');
+    const good = saveTemplate(defaultSpec(), '完整');
+    await c.fire('click', btn('pick-use', bad.id));
+    assert.equal(applied.length, 0, '驗證不過就不能套用');
+    assert.equal(toasts.length, 1);
+    assert.match(toasts[0], /還不能用/);
+    assert.equal(c.querySelector('#tpl-title').textContent, '版型調整', '改走調整頁');
+    assert.equal(c.querySelector('#tpl-name').value, '缺欄位');
+    assert.equal(c.querySelector('[data-act="use"]').disabled, true);
+    await c.fire('click', btn('pick-use', good.id));
+    assert.equal(applied.length, 1);
+    assert.equal(applied[0].name, '完整');
+  });
+});
+
+/** 給 bindPage 用的假頁面：querySelectorAll 依選擇器回幾顆假元素（重畫時會再掛一次，元素沿用）。 */
+class PageContainer extends FakeContainer {
+  constructor(byQuery) {
+    super();
+    this.byQuery = byQuery;
+  }
+  querySelectorAll(sel) {
+    return this.byQuery[sel] ?? [];
+  }
+}
+
+test('格子的 drop 只在本頁 dragstart 設過來源時才交換填照順序（選字「3」拖到別格不能悄悄換）', async () => {
+  const { slotOrder } = await import('../../web/js/template/spec.js');
+  const mkSlot = (i) => Object.assign(new FakeEl(), { dataset: { slot: String(i) }, classList: { add() {}, remove() {} } });
+  const slots = [0, 1, 2].map(mkSlot);
+  await withPage(async ({ c, btn }) => {
+    await c.fire('click', btn('edit-default'));
+    assert.equal(slots[0].count('drop'), 1, 'bindPage 有掛到假的格子');
+    let prevented = 0;
+    const ev = (data) => ({ preventDefault: () => prevented++, dataTransfer: { getData: () => data, effectAllowed: '', setData() {} } });
+    // 沒有本頁的 dragstart：text/plain 是 "0" 也不能拿來交換、也不攔預設行為
+    await slots[2].fire('dragover', ev('0'));
+    await slots[2].fire('drop', ev('0'));
+    assert.equal(prevented, 0);
+    // 真的從格子 0 拖起，放到格子 2 → 交換（重畫後元素沿用，會多掛一套，所以先讀 seq 再驗）
+    await slots[0].fire('dragstart', { ...ev(''), target: slots[0] });
+    await slots[2].fire('drop', ev('junk'));
+    assert.equal(prevented, 1);
+    const html = c.querySelector('#tpl-stage').innerHTML;
+    // 格子 0 與 2 交換：畫面上第 1 格顯示的填照順序變成 3、第 3 格變成 1
+    const nos = [...html.matchAll(/class="tp-no"[^>]*>(\d+)</g)].map((m) => Number(m[1]));
+    assert.equal(nos[0], 3);
+    assert.equal(nos[2], 1);
+    void slotOrder;
+  }, new PageContainer({ '.tp-slot': slots }));
+});
+
+test('說明格按 Enter：輸入法選字中（isComposing／keyCode 229）不當成分段', async () => {
+  const parts = Object.assign(new FakeEl(), { dataset: { parts: '1.0.0' }, childNodes: [] });
+  await withPage(async ({ c, btn }) => {
+    await c.fire('click', btn('edit-default'));
+    assert.equal(parts.count('keydown'), 1);
+    let prevented = 0;
+    const ev = (extra) => ({ key: 'Enter', preventDefault: () => prevented++, ...extra });
+    await parts.fire('keydown', ev({ isComposing: true }));
+    await parts.fire('keydown', ev({ keyCode: 229 }));
+    await parts.fire('keydown', ev({ shiftKey: true }));
+    assert.equal(prevented, 0);
+    // 真正的 Enter 才分段（會動到 getSelection／document，這裡只驗它有攔下預設行為）
+    const prevSel = globalThis.getSelection;
+    const prevDoc = globalThis.document;
+    globalThis.getSelection = () => ({ rangeCount: 0, removeAllRanges() {}, addRange() {} });
+    globalThis.document = {
+      createElement: () => ({ childNodes: [], appendChild() {} }),
+      createRange: () => ({ selectNodeContents() {}, collapse() {} }),
+    };
+    try {
+      await parts.fire('keydown', ev({}));
+    } finally {
+      globalThis.getSelection = prevSel;
+      globalThis.document = prevDoc;
+    }
+    assert.equal(prevented, 1);
+  }, new PageContainer({ '[data-parts]': [parts] }));
 });

@@ -72,6 +72,18 @@ test('同名再存沿用原 id，資料夾記住的版型不會斷', () => {
   assert.equal(lastFor('帷幕骨架', s).spec.grid.perRow, 3);
 });
 
+test('localStorage 寫不進去（QuotaExceeded）時 saveTemplate 要丟錯，不能回一筆其實沒存進去的 entry', () => {
+  const s = fakeStore();
+  const before = saveTemplate(defaultSpec(), '先存好的', s);
+  s.setItem = () => {
+    const e = new Error('The quota has been exceeded.');
+    e.name = 'QuotaExceededError';
+    throw e;
+  };
+  assert.throws(() => saveTemplate(defaultSpec(), '存不進去', s), /寫入失敗/);
+  assert.deepEqual(listTemplates(s).map((t) => t.id), [before.id], '庫裡還是原本那份');
+});
+
 test('同一毫秒連存兩份不同名的版型，id 不會撞', () => {
   const s = fakeStore();
   const ids = new Set();
