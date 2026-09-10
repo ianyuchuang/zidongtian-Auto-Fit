@@ -39,7 +39,7 @@ export function mountEntry(container, app) {
       <span class="label">版型</span>
       <div class="dropzone tpl-pickbox" id="dz-template">
         <div id="template-text"></div>
-        <div class="small muted hint">拖一份 docx 進來也可以，會直接開調整頁</div>
+        <div class="small muted hint">拖一份 docx 或 xlsx 進來也可以，會直接開調整頁</div>
       </div>
     </div>
 
@@ -202,7 +202,7 @@ export function mountEntry(container, app) {
   });
 
   // ---- 拖放 ----
-  // 拖進來的東西自己判斷是「照片資料夾」還是「版型 docx」，整張入口頁都接得住，
+  // 拖進來的東西自己判斷是「照片資料夾」還是「版型檔（docx／xlsx）」，整張入口頁都接得住，
   // 拖歪了也不會白忙一場（頁面沒接住的話瀏覽器會去開檔案，畫面就變空白）。
   // 非安全來源（http 內網位址）沒有 getAsFileSystemHandle，退回 webkitGetAsEntry 讀成唯讀複本，
   // 不能再像以前那樣把它當成「其他檔案」拒收（2026-09-04 同事內網回報拖資料夾沒反應／跳空白頁）。
@@ -236,11 +236,11 @@ export function mountEntry(container, app) {
       case 'template':
         app.openTemplatePage(file); // 版型：直接進調整頁解析
         return;
-      case 'old-doc':
-        toast('舊的 .doc 讀不了，請先用 Word 另存成 .docx', { error: true });
+      case 'old-office':
+        toast('舊的 .doc／.xls 讀不了，請先用 Word 或 Excel 另存成 .docx／.xlsx', { error: true });
         return;
       case 'other-file':
-        toast('請拖入照片資料夾，或版型的 docx 檔', { error: true });
+        toast('請拖入照片資料夾，或版型的 docx／xlsx 檔', { error: true });
         return;
       default:
         toast('這個瀏覽器不支援拖放資料夾，請改用點選', { error: true });

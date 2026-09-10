@@ -1,5 +1,5 @@
 // 版型頁：兩個步驟。
-//   1. 選版型：列出這台電腦存過的版型，或點選／拖入一份 docx 來讀。
+//   1. 選版型：列出這台電腦存過的版型，或點選／拖入一份 docx（Word）或 xlsx（Excel）來讀。
 //   2. 版型調整：整頁畫出接近實際大小的版面，直接在頁面上改——抬頭與說明格點下去就能打字，
 //      要填值的位置是一顆「欄位膠囊」（下拉可換欄位、選「（留空）」就移除），
 //      從上面的工具列把欄位拖進句子裡就多一個，拖到行與行之間就多一行，也可以拖到別格或刪掉。
@@ -8,8 +8,9 @@
 // 版型的資料結構與純邏輯在 template/spec.js。
 
 import { esc, toast, confirmDialog } from './dialog.js';
-import { bindFileDrop } from './dnd.js';
+import { bindFileDrop, templateKind } from './dnd.js';
 import { parseTemplateDocx } from '../template/parse.js';
+import { parseTemplateXlsx } from '../template/parse-xlsx.js';
 import {
   defaultSpec,
   FIELDS,
@@ -168,7 +169,7 @@ export function mountTemplatePage(container, app) {
       <div class="tplpick">
         <div class="tplpick-sec">這台電腦存過的版型</div>
         <div class="tplpick-list">
-          ${cards || '<div class="small muted">還沒存過版型。讀一份 docx、調好之後按「存成版型」就會出現在這裡。</div>'}
+          ${cards || '<div class="small muted">還沒存過版型。讀一份 docx 或 xlsx、調好之後按「存成版型」就會出現在這裡。</div>'}
           <div class="tplcard default">
             <div class="tplcard-name">預設版面（V1.0）</div>
             <div class="small muted">直式・每頁 6 張（3 列 × 2）・標楷體</div>
@@ -180,9 +181,9 @@ export function mountTemplatePage(container, app) {
         </div>
         <div class="tplpick-sec">或讀一份新的版型</div>
         <div class="tpl-drop" id="tpl-drop">
-          <div><b>點選或把 docx 拖到這裡</b></div>
-          <div class="small muted">會讀出它的版面（頁面大小、抬頭、每頁幾張、說明欄位、照片日期戳），讀完就進調整頁。</div>
-          <input type="file" id="tpl-file-input" accept=".docx" hidden>
+          <div><b>點選或把 docx／xlsx 拖到這裡</b></div>
+          <div class="small muted">Word 或 Excel 的自檢表都可以：會讀出它的版面（頁面大小、抬頭、每頁幾張、說明欄位、照片日期戳），讀完就進調整頁。</div>
+          <input type="file" id="tpl-file-input" accept=".docx,.xlsx" hidden>
         </div>
       </div>`;
   }
@@ -194,17 +195,21 @@ export function mountTemplatePage(container, app) {
     $('#tpl-file-input').addEventListener('change', (e) => e.target.files[0] && load(e.target.files[0]));
     bindFileDrop(dz, (dt) => {
       const f = dt.files?.[0];
-      if (f && /\.docx$/i.test(f.name)) return load(f);
-      if (f && /\.doc$/i.test(f.name)) toast('舊的 .doc 讀不了，請先用 Word 另存成 .docx', { error: true });
-      else toast('請拖入 docx 檔', { error: true });
+      if (f && templateKind(f.name)) return load(f);
+      if (f && /\.(doc|xls)$/i.test(f.name)) toast('舊的 .doc／.xls 讀不了，請先用 Word 或 Excel 另存成 .docx／.xlsx', { error: true });
+      else toast('請拖入 docx 或 xlsx 檔', { error: true });
     });
   }
 
   async function load(file) {
     stage.innerHTML = '<div class="tpl-drop"><div class="muted">解析中…</div></div>';
     try {
-      spec = await parseTemplateDocx(await file.arrayBuffer(), file.name.replace(/\.docx$/i, ''));
-      name = spec.name || file.name.replace(/\.docx$/i, '');
+      const kind = templateKind(file.name);
+      if (!kind) throw new Error('只讀得懂 docx（Word）與 xlsx（Excel）');
+      const base = file.name.replace(/\.(docx|xlsx)$/i, '');
+      const parse = kind === 'xlsx' ? parseTemplateXlsx : parseTemplateDocx;
+      spec = await parse(await file.arrayBuffer(), base);
+      name = spec.name || base;
       fileName = file.name;
       render();
     } catch (e) {

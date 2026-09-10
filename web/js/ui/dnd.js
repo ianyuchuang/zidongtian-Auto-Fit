@@ -28,7 +28,7 @@ export function reportMove(app, r, dirName) {
 }
 
 /**
- * 把一塊區域變成可拖放檔案的區域（入口頁選資料夾、版型調整頁拖 docx 共用）。
+ * 把一塊區域變成可拖放檔案的區域（入口頁選資料夾、版型頁拖 docx／xlsx 共用）。
  * 會擋掉冒泡，所以小區塊（例：版型框）綁的處理會蓋過外層整頁的處理。
  */
 export function bindFileDrop(zone, onDrop) {
@@ -61,10 +61,16 @@ export function bindFileDrop(zone, onDrop) {
  */
 export function classifyDrop({ isDirectory = false, fileName = null } = {}) {
   if (isDirectory) return 'folder';
-  if (fileName && /\.docx$/i.test(fileName)) return 'template';
-  if (fileName && /\.doc$/i.test(fileName)) return 'old-doc';
+  if (fileName && /\.(docx|xlsx)$/i.test(fileName)) return 'template';
+  if (fileName && /\.(doc|xls)$/i.test(fileName)) return 'old-office';
   if (fileName) return 'other-file';
   return 'unsupported';
+}
+
+/** 版型檔的格式：'docx'｜'xlsx'；不是版型檔就回 null。 */
+export function templateKind(fileName) {
+  const m = /\.(docx|xlsx)$/i.exec(String(fileName ?? ''));
+  return m ? m[1].toLowerCase() : null;
 }
 
 /**

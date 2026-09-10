@@ -23,8 +23,9 @@ import {
 import { loadSaved, savePhotos, applySaved, loadDates, saveDates } from './storage.js';
 import { makeThumbUrl, makeCropUrl, usableBbox, renderForDocx } from './imaging.js';
 import { getRecognizer } from './recognizer/index.js';
-import { planExport, exportWarnings, outputFileName } from './docx-model.js';
+import { planExport, exportWarnings, outputFileName, defaultFormat } from './docx-model.js';
 import { buildDocxBlob } from './docx-export.js';
+import { buildXlsxBlob } from './xlsx-export.js';
 import { buildPdfBlob } from './pdf-export.js';
 import { pdfFileName } from './docx-model.js';
 import { rocCompact, rocDisplay, rocDot, stampText, parseRocInput } from './rocdate.js';
@@ -614,13 +615,18 @@ export function createApp() {
       return { ...planExport(ordered, state.dirs), warnings: exportWarnings(ordered, state.template?.spec ?? null) };
     },
     /**
-     * 產生 Word（每個資料夾一份）。pdf＝{ fontBytes } 時，再把同樣這些內容接成一份 PDF 放根資料夾。
-     * 照片重繪（縮圖 + 日期戳）很花時間，Word 與 PDF 共用同一份快取，只畫一次。
+     * 產生檔案（每個資料夾一份）。format＝'docx'（Word）或 'xlsx'（Excel），兩者用同一份 LayoutSpec；
+     * 沒指定就照版型的來源（xlsx 版型 → Excel）。
+     * pdf＝{ fontBytes } 時，再把同樣這些內容接成一份 PDF 放根資料夾。
+     * 照片重繪（縮圖 + 日期戳）很花時間，三種輸出共用同一份快取，只畫一次。
      */
-    async exportWord({ onProgress, pdf = null } = {}) {
+    async exportWord({ onProgress, pdf = null, format = null } = {}) {
       const { groups, skipped } = app.exportPlan();
       if (!groups.length) throw new Error('沒有可輸出的照片（內容說明都是空的）。');
       const spec = state.template?.spec;
+      const fmt = format ?? defaultFormat(spec);
+      if (!['docx', 'xlsx'].includes(fmt)) throw new Error(`不認得的輸出格式：${fmt}`);
+      const build = fmt === 'xlsx' ? buildXlsxBlob : buildDocxBlob;
       const cache = new Map();
       const render = async (file, opts) => {
         if (!cache.has(file)) cache.set(file, await renderForDocx(file, opts));
@@ -632,7 +638,7 @@ export function createApp() {
         const g = groups[gi];
         const { compact, display, dot, stamp } = app.dateInfo(g.dir); // 日期跟著資料夾走
         for (const p of g.photos) await app.fileOf(p);
-        const { blob, failures } = await buildDocxBlob(g, {
+        const { blob, failures } = await build(g, {
           spec,
           rocDisplay: display,
           rocPhotoDate: dot,
@@ -640,14 +646,14 @@ export function createApp() {
           render,
           onProgress: (i, n) => onProgress?.({ group: gi + 1, groups: groups.length, i, n, folder: g.folderName, phase: 'word' }),
         });
-        const name = outputFileName(compact, g.folderName);
+        const name = outputFileName(compact, g.folderName, '', fmt);
         let written;
         if (state.readOnly) {
           download(blob, name);
           written = `${name}（已下載；唯讀模式無法寫進資料夾）`;
         } else {
           const dir = app.dirOf(g.dir);
-          written = await writeFile(dir.handle, name, blob, outputFileName(compact, g.folderName, '_new'));
+          written = await writeFile(dir.handle, name, blob, outputFileName(compact, g.folderName, '_new', fmt));
           written = g.dir ? `${g.dir}/${written}` : written;
         }
         results.push({ folder: g.folderName, file: written, count: g.photos.length, failures });
@@ -655,7 +661,7 @@ export function createApp() {
       }
       let pdfResult = null;
       if (pdf) pdfResult = await exportPdf(pdfGroups, { spec, render, fontBytes: pdf.fontBytes, onProgress });
-      return { results, skipped, pdf: pdfResult };
+      return { results, skipped, pdf: pdfResult, format: fmt };
     },
   };
 

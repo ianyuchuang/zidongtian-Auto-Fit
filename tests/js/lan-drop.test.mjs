@@ -52,6 +52,7 @@ test('dropKind：沒有 handle 時看 entry.isDirectory，資料夾名當 fileNa
   assert.equal(classifyDrop(dropKind({ handle: { kind: 'file', name: 'a.docx' }, entry: { isDirectory: false }, fileName: 'a.docx' })), 'template');
   // 檔案走原本的規則
   assert.equal(classifyDrop(dropKind({ entry: { isFile: true, isDirectory: false, name: 'a.docx' }, fileName: 'a.docx' })), 'template');
+  assert.equal(classifyDrop(dropKind({ handle: { kind: 'file', name: 'a.xlsx' }, entry: { isDirectory: false }, fileName: 'a.xlsx' })), 'template');
   assert.equal(classifyDrop(dropKind({ entry: { isFile: true, isDirectory: false, name: 'a.txt' }, fileName: 'a.txt' })), 'other-file');
   assert.equal(classifyDrop(dropKind({})), 'unsupported');
 });

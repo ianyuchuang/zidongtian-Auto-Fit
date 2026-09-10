@@ -176,7 +176,14 @@ test('classifyDrop：入口頁拖進來的東西怎麼分（拖歪了也要認�
   assert.equal(classifyDrop({ isDirectory: true, fileName: 'x.docx' }), 'folder'); // 資料夾優先
   assert.equal(classifyDrop({ fileName: '版型.docx' }), 'template');
   assert.equal(classifyDrop({ fileName: '版型.DOCX' }), 'template');
-  assert.equal(classifyDrop({ fileName: '舊的.doc' }), 'old-doc');
+  assert.equal(classifyDrop({ fileName: '版型.xlsx' }), 'template'); // Excel 版的自檢表也是版型
+  assert.equal(classifyDrop({ fileName: '版型.XLSX' }), 'template');
+  assert.equal(classifyDrop({ fileName: '舊的.doc' }), 'old-office');
+  assert.equal(classifyDrop({ fileName: '舊的.xls' }), 'old-office');
   assert.equal(classifyDrop({ fileName: 'a.jpg' }), 'other-file');
   assert.equal(classifyDrop({}), 'unsupported');
+  const { templateKind } = await import('../../web/js/ui/dnd.js');
+  assert.equal(templateKind('a.DOCX'), 'docx');
+  assert.equal(templateKind('a.xlsx'), 'xlsx');
+  assert.equal(templateKind('a.jpg'), null);
 });

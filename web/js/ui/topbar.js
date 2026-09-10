@@ -1,10 +1,11 @@
-// 頂列：資料夾 / 版型 pill、AI 辨識、批次修改設計值、產生 Word 檔。
+// 頂列：資料夾 / 版型 pill、AI 辨識、批次修改設計值、產生檔案（Word / Excel）。
 // 檢查日期不在這裡：每個資料夾各自一個，在表格的資料夾列上填。
 
 import { esc, showDialog, alertDialog, confirmDialog, toast } from './dialog.js';
 import { runRecognize, engineLabel } from './recognize.js';
 import { loadPdfFont } from '../pdf-font.js';
 import { DEFAULT_FONT } from '../template/spec.js';
+import { FORMATS, defaultFormat } from '../docx-model.js';
 
 export function mountTopbar(container, app) {
   container.className = 'topbar';
@@ -21,7 +22,7 @@ export function mountTopbar(container, app) {
       <span class="spacer"></span>
       <button class="btn" data-act="recognize" title="選辨識方式與提示詞，讓 AI 填三欄" ${busy}>🤖 AI 辨識</button>
       <button class="btn" data-act="batch" ${busy}>批次修改設計值</button>
-      <button class="btn btn-primary" data-act="export" ${busy}>產生 Word 檔</button>`;
+      <button class="btn btn-primary" data-act="export" ${busy}>產生 ${defaultFormat(template?.spec) === 'xlsx' ? 'Excel' : 'Word'} 檔</button>`;
   }
 
   container.addEventListener('click', async (e) => {
@@ -34,7 +35,7 @@ export function mountTopbar(container, app) {
     } else if (act === 'batch') {
       await batchDesign(app);
     } else if (act === 'export') {
-      await exportWord(app);
+      await exportFiles(app);
     }
   });
 
@@ -89,7 +90,7 @@ async function batchDesign(app) {
   toast(`已把 ${n} 張的設計值改成「${value}」`);
 }
 
-async function exportWord(app) {
+async function exportFiles(app) {
   const plan = app.exportPlan();
   if (!plan.groups.length) {
     await alertDialog('無法產生', '沒有可輸出的照片（內容說明都是空的）。');
@@ -100,14 +101,23 @@ async function exportWord(app) {
   const warn = plan.warnings.length ? `<p style="color:var(--yellow-text)">${plan.warnings.map(esc).join('<br>')}</p>` : '';
   const rootName = app.state.root?.name ?? 'Auto-Fit';
   const family = app.state.template?.spec?.font ?? DEFAULT_FONT;
+  // 版型是從哪種檔案讀來的就預設產哪一種；兩種用的是同一份版型，隨時可以改
+  let format = defaultFormat(app.state.template?.spec);
+  const formatRadios = Object.entries(FORMATS)
+    .map(
+      ([k, label]) =>
+        `<label class="fmt"><input type="radio" name="fmt" value="${k}" ${k === format ? 'checked' : ''}> ${esc(label)}</label>`,
+    )
+    .join('');
 
   // 打勾時就先去要字型：queryLocalFonts() 要在使用者的點擊事件裡呼叫才跳得出授權，
   // 等按下「產生」才要就已經不是使用者手勢了。拿不到字型直接把勾取消並說明原因。
   let pdfFont = null;
   let wantPdf = false;
   const go = await showDialog({
-    title: '產生 Word 檔',
-    body: `<p>每個資料夾各產生一份，存在該資料夾${app.state.readOnly ? '（唯讀模式改為下載）' : ''}，檔名「該資料夾的檢查日期 + 資料夾名.docx」。</p><ul>${list}</ul>${trashed}${warn}
+    title: '產生檔案',
+    body: `<div class="opt">格式：${formatRadios}</div>
+      <p>每個資料夾各產生一份，存在該資料夾${app.state.readOnly ? '（唯讀模式改為下載）' : ''}，檔名「該資料夾的檢查日期 + 資料夾名」加副檔名。</p><ul>${list}</ul>${trashed}${warn}
       <div class="opt"><label><input type="checkbox" id="pdf"> 同時產出 PDF（把上面全部接成一份「${esc(rootName)}.pdf」放根資料夾）</label></div>
       <div class="small muted" id="pdf-note" hidden></div>`,
     buttons: [
@@ -142,6 +152,7 @@ async function exportWord(app) {
       });
     },
     beforeClose: (v, d) => {
+      format = d.querySelector('input[name="fmt"]:checked')?.value ?? format;
       wantPdf = d.querySelector('#pdf').checked;
       if (v === true && wantPdf && !pdfFont) {
         toast('中文字型還沒準備好', { error: true });
@@ -162,10 +173,11 @@ async function exportWord(app) {
   const closeProgress = () => done.close();
   try {
     const { results, skipped, pdf } = await app.exportWord({
+      format,
       pdf: wantPdf && pdfFont ? { fontBytes: pdfFont.bytes } : null,
       onProgress: ({ group, groups, i, n, folder, phase }) => {
         if (!progressEl) return;
-        const what = phase === 'pdf' ? 'PDF ' : '';
+        const what = phase === 'pdf' ? 'PDF ' : '';  // 'word' 這個階段名兩種格式共用
         progressEl.querySelector('#pg').textContent = `${what}資料夾 ${folder}（${group}/${groups}）：照片 ${i}/${n}`;
         progressEl.querySelector('.progress-bar > div').style.width = `${Math.round((i / n) * 100)}%`;
       },

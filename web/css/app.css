@@ -253,6 +253,7 @@ td.conf { color: var(--muted); text-align: right; }
 .dialog .btns { display: flex; justify-content: flex-end; gap: 8px; }
 .dialog input[type="text"], .dialog select { width: 100%; border: 1px solid var(--line); border-radius: var(--radius); padding: 6px 8px; margin-top: 6px; }
 .dialog .opt { margin: 8px 0; }
+.dialog .fmt { margin-right: 16px; white-space: nowrap; }
 #toast-root { position: fixed; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 60; }
 .toast { background: #1f2937; color: #fff; padding: 10px 14px; border-radius: 6px; box-shadow: 0 6px 20px rgba(0,0,0,.25); max-width: 420px; }
 .toast.error { background: var(--red-text); }
