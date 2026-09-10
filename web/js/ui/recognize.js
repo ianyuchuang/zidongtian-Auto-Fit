@@ -119,6 +119,19 @@ export function scopePhotos(app, scope, { includeConfirmed = false } = {}) {
 }
 
 /**
+ * 按「開始辨識」時依範圍算這次要辨識的照片；沒得辨識就回原因（呼叫端 toast 並留在對話框）。
+ * 三個範圍都沒照片時下拉全部反灰、值是 ''，之前直接丟進 scopePhotos 變成「沒有這種辨識範圍：」pageerror。
+ */
+export function pickScopePhotos(app, scope, { includeConfirmed = false } = {}) {
+  if (!scope) return { photos: [], error: '目前沒有可辨識的照片' };
+  const photos = scopePhotos(app, scope, { includeConfirmed });
+  if (!photos.length) {
+    return { photos, error: scope === 'checked' && !includeConfirmed ? '勾選的都已確認；要重跑請勾「連已確認的也一起重跑」' : '這個範圍沒有照片可以辨識' };
+  }
+  return { photos, error: null };
+}
+
+/**
  * 型號下拉何時要反灰：清單是空的、或「測試連線」正在跑（等清單／試打途中不能換型號，
  * 否則試打用的型號和畫面上選的會不一樣）。checkbox「連不能看圖的型號也列出來」會重排清單，一起鎖。
  */
@@ -480,9 +493,9 @@ async function askSettings(app) {
       }
       const scope = d.querySelector('#rec-scope').value;
       const includeConfirmed = d.querySelector('#rec-confirmed').checked;
-      const photos = scopePhotos(app, scope, { includeConfirmed });
-      if (!photos.length) {
-        toast(scope === 'checked' && !includeConfirmed ? '勾選的都已確認；要重跑請勾「連已確認的也一起重跑」' : '這個範圍沒有照片可以辨識', { error: true });
+      const { photos, error } = pickScopePhotos(app, scope, { includeConfirmed });
+      if (error) {
+        toast(error, { error: true });
         return false;
       }
       picked = { recognizerId, api, local, prompt: promptToSave(d.querySelector('#rec-prompt').value), photos, includeConfirmed };

@@ -161,3 +161,22 @@ test('提示詞：預設已填在欄位裡；沒改／清空就存空字串（�
   assert.equal(promptToSave('白板在左下角'), '白板在左下角');
   assert.equal(promptToSave('x', 'x'), '');
 });
+
+test('開始辨識：三個範圍都沒照片（下拉全反灰、值是空字串）→ 提示「目前沒有可辨識的照片」，不能丟「沒有這種辨識範圍」（回歸：變 pageerror）', async () => {
+  const { pickScopePhotos } = await import('../../web/js/ui/recognize.js');
+  const { createApp } = await import('../../web/js/app.js');
+  const { MemoryDirectoryHandle } = await import('../../web/js/fs/memory.js');
+  const root = new MemoryDirectoryHandle('r');
+  (await root.getDirectoryHandle('4F', { create: true })).putFile('a.jpg', new File(['a'], 'a.jpg'));
+  const app = createApp();
+  app.state.root = root;
+  await app.rescan();
+  app.confirm('4F/a.jpg'); // 全部已確認：待辨識 0、勾選 0、全部重新（不含已確認）0
+  assert.doesNotThrow(() => pickScopePhotos(app, ''));
+  assert.equal(pickScopePhotos(app, '').error, '目前沒有可辨識的照片');
+  assert.deepEqual(pickScopePhotos(app, '').photos, []);
+  assert.match(pickScopePhotos(app, 'all').error, /沒有照片可以辨識/);
+  assert.match(pickScopePhotos(app, 'checked').error, /勾選的都已確認/);
+  assert.equal(pickScopePhotos(app, 'all', { includeConfirmed: true }).error, null);
+  assert.equal(pickScopePhotos(app, 'all', { includeConfirmed: true }).photos.length, 1);
+});
