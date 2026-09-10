@@ -203,3 +203,11 @@ def test_check_drive_ready_wraps_other_errors():
     with pytest.raises(RuntimeError) as e:
         b.check_drive_ready(_ServiceWithAbout(RuntimeError("boom")))
     assert "Drive API 連線失敗" in str(e.value)
+
+
+def test_gitignore_blocks_google_credentials():
+    """憑證正常放 %USERPROFILE%\\.autofit\\，但有人複製到 repo 裡就會推上公開 repo；.gitignore 要擋住（2026-09-10）。"""
+    text = (Path(__file__).resolve().parent.parent / ".gitignore").read_text(encoding="utf-8")
+    lines = {ln.strip() for ln in text.splitlines() if ln.strip() and not ln.startswith("#")}
+    for path in (b.CREDENTIALS_PATH, b.TOKEN_PATH, b.FOLDER_ID_PATH):
+        assert path.name in lines, f".gitignore 缺 {path.name}"

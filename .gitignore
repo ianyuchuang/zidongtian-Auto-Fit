@@ -29,3 +29,8 @@ Claude outputs/
 # 全字庫的另外兩份字型（PDF 只用 TW-Kai-98_1.ttf，其餘 70MB 不進版控）
 web/vendor/fonts/TW-Kai-Plus-*.ttf
 web/vendor/fonts/TW-Kai-Ext-B-*.ttf
+
+# Google 雲端備份的憑證（正常放 %USERPROFILE%\.autofit\，這裡是保險：tools/backup_to_drive.py）
+credentials.json
+token.json
+drive_folder_id.txt
