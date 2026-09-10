@@ -449,3 +449,85 @@ test('stepSelection：目前選的不在篩選結果裡 → 下一張是第一�
   assert.equal(app.state.selectedId, '4F/b.jpg');
   assert.equal(app.stepSelection(1), false, '到尾了');
 });
+
+test('loadThumbs：縮圖做到一半回首頁 → 舊迴圈停掉、不再對舊照片做縮圖、做出來的 URL 要 revoke（回歸：回首頁後縮圖迴圈還在跑）', async () => {
+  const calls = [];
+  const revoked = [];
+  const prevURL = globalThis.URL;
+  globalThis.URL = { createObjectURL: () => 'blob:x', revokeObjectURL: (u) => revoked.push(u) };
+  try {
+    const root = new MemoryDirectoryHandle('帷幕骨架');
+    const f4 = await root.getDirectoryHandle('4F', { create: true });
+    for (const n of ['a', 'b', 'c']) f4.putFile(`${n}.jpg`, new File([n], `${n}.jpg`));
+    // 慢的假縮圖：每張要等 20ms，第一張做完前就回首頁
+    const thumb = async (file) => {
+      calls.push(file.name);
+      await new Promise((r) => setTimeout(r, 20));
+      return `blob:thumb-${file.name}`;
+    };
+    const app = createApp({ thumb });
+    const events = [];
+    app.subscribe((w) => events.push(w));
+    await app.open({ rootHandle: root });
+    assert.equal(app.state.page, 'work');
+    await new Promise((r) => setTimeout(r, 5));
+    assert.deepEqual(calls, ['a.jpg'], '第一張正在做');
+    const oldPhotos = app.state.photos;
+    app.goHome();
+    await new Promise((r) => setTimeout(r, 80)); // 足夠讓舊迴圈（如果沒停）把三張都做完
+    assert.deepEqual(calls, ['a.jpg'], '回首頁後不能再對舊照片呼叫縮圖');
+    assert.deepEqual(revoked, ['blob:thumb-a.jpg'], '已做出來但畫面已離開的縮圖要釋放');
+    assert.equal(oldPhotos[0].thumbUrl, null, '舊照片物件不該再被寫入');
+    assert.ok(!events.includes('thumb'), '離開後不該再發 thumb 事件');
+    // 再開同一個資料夾：新一輪照常跑完
+    calls.length = 0;
+    await app.open({ rootHandle: root });
+    await new Promise((r) => setTimeout(r, 120));
+    assert.deepEqual(calls, ['a.jpg', 'b.jpg', 'c.jpg']);
+    assert.ok(app.state.photos.every((p) => p.thumbUrl?.startsWith('blob:thumb-')));
+    assert.equal(revoked.length, 1, '現役的縮圖不能被 revoke');
+  } finally {
+    globalThis.URL = prevURL;
+  }
+});
+
+test('loadThumbs：照片中途被搬走（不在 state.photos 裡）→ 那張的縮圖釋放、其他張照做', async () => {
+  const revoked = [];
+  const prevURL = globalThis.URL;
+  globalThis.URL = { createObjectURL: () => 'blob:x', revokeObjectURL: (u) => revoked.push(u) };
+  try {
+    const root = new MemoryDirectoryHandle('帷幕骨架');
+    const f4 = await root.getDirectoryHandle('4F', { create: true });
+    f4.putFile('a.jpg', new File(['a'], 'a.jpg'));
+    f4.putFile('b.jpg', new File(['b'], 'b.jpg'));
+    const thumb = async (file) => {
+      await new Promise((r) => setTimeout(r, 10));
+      return `blob:thumb-${file.name}`;
+    };
+    const app = createApp({ thumb });
+    await app.open({ rootHandle: root });
+    const a = app.state.photos.find((p) => p.name === 'a.jpg');
+    app.state.photos = app.state.photos.filter((p) => p !== a); // 模擬 rescan 換了一批物件、a 不見了
+    await new Promise((r) => setTimeout(r, 60));
+    assert.deepEqual(revoked, ['blob:thumb-a.jpg']);
+    assert.equal(a.thumbUrl, null);
+    assert.equal(app.state.photos[0].thumbUrl, 'blob:thumb-b.jpg', '其他張照做');
+  } finally {
+    globalThis.URL = prevURL;
+  }
+});
+
+test('confirmAndNext：回傳 confirmed 與 next；已刪除的不能確認、最後一張確認後 next=false（跟「跳過」一致）', async () => {
+  const { app } = await setup();
+  await app.trash(['4F/a.jpg']);
+  assert.deepEqual(app.confirmAndNext('4F/_回收桶/a.jpg'), { confirmed: false, next: false });
+  assert.deepEqual(app.confirmAndNext('ghost'), { confirmed: false, next: false });
+  for (const id of ['4F/b.jpg', '5F/a.jpg', '5F/c.jpg']) app.photo(id).status = 'ai'; // 待校對＝有 AI 結果的
+  assert.deepEqual(app.confirmAndNext('4F/b.jpg'), { confirmed: true, next: true });
+  assert.equal(app.state.selectedId, '5F/a.jpg');
+  app.confirmAndNext('5F/a.jpg');
+  const last = app.confirmAndNext('5F/c.jpg');
+  assert.deepEqual(last, { confirmed: true, next: false }, '沒有其他待校對的了');
+  assert.equal(app.photo('5F/c.jpg').status, 'confirmed');
+  assert.equal(app.skip('5F/c.jpg'), false, '跳過在同樣情況也回 false');
+});

@@ -35,7 +35,8 @@ export function engineId(recognizerId, api) {
   return recognizerId === 'api' ? `api:${api?.provider ?? '?'}` : recognizerId;
 }
 
-export function createApp() {
+/** thumb：縮圖函式（測試可換掉；瀏覽器用 imaging.js 的 canvas 縮圖）。 */
+export function createApp({ thumb = makeThumbUrl } = {}) {
   const listeners = new Set();
   const state = {
     page: 'entry',
@@ -72,6 +73,7 @@ export function createApp() {
     if (state.root) savePhotos(state.root.name, state.photos);
   };
   const byId = (id) => state.photos.find((p) => p.id === id) || null;
+  let openSeq = 0; // 每開一次資料夾／回首頁 +1；loadThumbs 用它判斷自己這一輪是不是已經過期
   /** 釋放照片上的 object URL 並清成 null，之後要用時會重做（Node 測試環境沒有 blob URL，守住）。 */
   const dropUrls = (p, keys) => {
     for (const k of keys) {
@@ -154,6 +156,7 @@ export function createApp() {
       const { redo } = applySaved(state.photos, saved, { engine: state.engine });
       state.lastOpen = { redo };
       state.page = 'work';
+      openSeq += 1;
       // 預選表格上的第一列（照 order 排），不是掃描順序的第一張，否則反白的常常不是最上面那列
       state.selectedId = app.visiblePhotos()[0]?.id ?? state.photos[0]?.id ?? null;
       emit('page');
@@ -389,13 +392,16 @@ export function createApp() {
     },
     /** 確認這張並跳下一張待校對。已刪除的不能確認（欄位鎖住、統計不含它）；回傳有沒有確認成功。 */
     confirm(id) {
+      return app.confirmAndNext(id).confirmed;
+    },
+    /** 同 confirm，但把「有沒有下一張待校對」也回傳，UI 才能在沒有下一張時提示（跟「跳過」一致）。 */
+    confirmAndNext(id) {
       const p = byId(id);
-      if (!p || isTrashed(p)) return false;
+      if (!p || isTrashed(p)) return { confirmed: false, next: false };
       p.status = STATUS.CONFIRMED;
       save();
       emit('photos');
-      app.gotoNextPending(id);
-      return true;
+      return { confirmed: true, next: app.gotoNextPending(id) };
     },
     skip(id) {
       return app.gotoNextPending(id);
@@ -465,6 +471,7 @@ export function createApp() {
      */
     goHome() {
       app.stopRecognize(); // 瀏覽器「上一頁」也會走到這裡，辨識可能還在跑（bug W1）
+      openSeq += 1; // 還在跑的 loadThumbs 看到序號變了就收工
       for (const p of state.photos) dropUrls(p, ['thumbUrl', 'fullUrl', 'cropUrl']);
       // rootSummary 清掉：工作台可能搬過／刪過檔案，入口頁要重掃一次才不會顯示舊的張數
       Object.assign(state, { page: 'entry', tree: null, dirs: [], photos: [], selectedId: null, dirFilter: null, chip: 'all', query: '', recognizing: false, progress: null, rootSummary: null });
@@ -665,15 +672,27 @@ export function createApp() {
     },
   };
 
+  /**
+   * 逐張做縮圖。每次 await 回來都要確認這張還在目前的 state.photos：
+   * goHome() 會把 photos 清空、再開資料夾又是一批新物件，舊迴圈若繼續跑就會對已離開的
+   * 照片一直解圖、createObjectURL 出來的縮圖沒人 revoke，而且再開同資料夾又多一條迴圈疊著跑。
+   */
   async function loadThumbs() {
+    const seq = openSeq;
     for (const p of state.photos) {
       if (p.thumbUrl) continue;
+      let url;
       try {
-        p.thumbUrl = await makeThumbUrl(await app.fileOf(p));
+        url = await thumb(await app.fileOf(p));
       } catch (e) {
         console.error(e);
-        p.thumbUrl = '';
+        url = '';
       }
+      const gone = seq !== openSeq || !state.photos.includes(p);
+      if (gone && url && typeof URL?.revokeObjectURL === 'function') URL.revokeObjectURL(url); // 已經離開畫面，做出來的縮圖直接釋放
+      if (seq !== openSeq) return; // 回首頁／換資料夾了：這一輪整個收工，別跟新一輪疊著跑
+      if (gone) continue; // 只是這張被搬走／不見了，其他張照做
+      p.thumbUrl = url;
       emit('thumb');
     }
   }
