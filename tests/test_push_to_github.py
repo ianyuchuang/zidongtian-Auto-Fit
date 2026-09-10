@@ -108,12 +108,39 @@ def test_missing_pytest_is_reported_not_crashed(git, monkeypatch):
 
 
 def test_test_modules_are_covered_by_requirements():
-    # 測試需要的套件都要寫進 requirements，否則裝了也補不齊（PIL 的套件名是 pillow）
+    # 測試需要的套件都要寫進 requirements，否則裝了也補不齊（PIL 的套件名是 pillow、yaml 是 pyyaml）
+    # 2026-09-10：test_pages_workflow.py 用 PyYAML，兩邊都沒列 → 新電腦推送時 pytest 收集就失敗
     req = (Path(__file__).resolve().parent.parent / "tools" / "requirements-tools.txt")
     text = req.read_text(encoding="utf-8").lower()
-    assert {"pytest", "PIL"} <= set(g.TEST_MODULES)
-    for pkg in ("pytest", "pillow"):
+    assert {"pytest", "PIL", "yaml"} <= set(g.TEST_MODULES)
+    for pkg in ("pytest", "pillow", "pyyaml"):
         assert pkg in text
+
+
+def test_test_modules_cover_every_third_party_import_in_tests():
+    """tests/*.py 頂層 import 的第三方模組都要在 TEST_MODULES 裡，少一個就會在新電腦上紅掉。"""
+    import ast
+    import sys as _sys
+    stdlib = set(_sys.stdlib_module_names)
+    local = {"tests", "conftest"}
+    need = set()
+    for path in sorted(Path(__file__).resolve().parent.glob("test_*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in tree.body:
+            if isinstance(node, ast.Import):
+                names = [a.name.split(".")[0] for a in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+                names = [node.module.split(".")[0]]
+            else:
+                continue
+            for n in names:
+                if n not in stdlib and n not in local:
+                    need.add(n)
+    # tools/ 裡的模組是 sys.path.insert 進來的、repo 根目錄的套件（experiments）是本地的，都不算第三方
+    repo = Path(__file__).resolve().parent.parent
+    need -= {p.stem for p in (repo / "tools").glob("*.py")}
+    need -= {p.name for p in repo.iterdir() if p.is_dir()}
+    assert need <= set(g.TEST_MODULES), f"TEST_MODULES 漏了：{sorted(need - set(g.TEST_MODULES))}"
 
 
 def test_run_tests_checks_every_test_dependency_first(git, monkeypatch):

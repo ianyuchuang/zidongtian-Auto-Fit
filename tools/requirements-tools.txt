@@ -3,6 +3,8 @@
 
 # 測試（2_推至GitHub.bat 推之前會先跑）
 pytest>=8.0
+# tests/test_pages_workflow.py 讀 .github/workflows/*.yml
+pyyaml>=6
 
 # 照片處理：experiments/*/run.py 讀圖與縮圖，測試也用到
 pillow>=10.0

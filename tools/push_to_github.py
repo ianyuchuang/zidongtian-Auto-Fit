@@ -24,7 +24,7 @@ REPO_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_MESSAGE = "更新自懂填 Auto-Fit"
 # 跑完整個 tests/ 需要的套件（import 名稱），與 requirements-tools.txt 對應。
 # 少一個就會有測試紅掉、擋住推送，所以在跑之前先一次問完。
-TEST_MODULES = ["pytest", "PIL"]
+TEST_MODULES = ["pytest", "PIL", "yaml"]
 BRANCH = "main"
 
 PUSH_HINTS = """
