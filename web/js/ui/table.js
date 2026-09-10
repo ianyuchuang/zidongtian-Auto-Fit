@@ -99,7 +99,7 @@ export function mountTable(container, app) {
       gtr.dataset.dir = d.path;
       gtr.innerHTML = `<td colspan="7"><span class="toggle">▾</span> 🗀 ${esc(d.path || d.name)}
           <label class="dir-date" title="這個資料夾的檢查日期：docx 檔名、頁首日期、照片日期戳、版型的「拍照日期」都用它">📅 檢查日期
-            <input type="text" data-dir-date value="${esc(app.dateInfo(d.path).compact)}" maxlength="9" size="8">
+            <input type="text" data-dir-date value="${esc(app.dateInfo(d.path).compact)}" maxlength="10" size="9">
           </label><span class="n">${live} 張${gone ? `・已刪除 ${gone}` : ''}</span></td>
         <td class="chk"><input type="checkbox" data-chk-group tabindex="-1" title="全選 / 取消這個資料夾顯示中的照片"></td>`;
       tbody.appendChild(gtr);
@@ -274,7 +274,7 @@ export function mountTable(container, app) {
     if (!el.matches('[data-dir-date]')) return;
     const dir = el.closest('tr.group').dataset.dir;
     try {
-      app.setDirDate(dir, el.value.replace(/\D/g, ''));
+      app.setDirDate(dir, el.value); // 原樣交給 parseRocInput：115.6.14 這種分隔寫法要留著點，錯誤訊息也要顯示使用者打的字
       el.value = app.dateInfo(dir).compact;
     } catch (err) {
       toast(err.message, { error: true });

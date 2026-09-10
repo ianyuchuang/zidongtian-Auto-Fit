@@ -2,26 +2,40 @@
 
 const pad2 = (n) => String(n).padStart(2, '0');
 
-/** 解析 '1150725'（民國）、'115/07/25'、'2026-07-25'（西元）→ Date；看不懂就丟錯。 */
+/**
+ * 解析檢查日期 → Date；看不懂就丟錯（錯誤訊息顯示使用者原本打的字，不是清理過的）。
+ * 吃三種寫法：
+ * - 分隔寫法 `年.月.日`／`年/月/日`／`年-月-日`（也接受 115年6月14日）：民國 3 碼年或西元 4 碼年，月日可不補 0——
+ *   `115.6.14` 是文件與輸出用的格式（rocDot），使用者照著打不能被拒（之前去掉點變 115614 六碼就被丟掉）；
+ * - 純數字 7 碼（民國 1150725）；
+ * - 純數字 8 碼（西元 20260725）。
+ */
 export function parseRocInput(input) {
-  const s = String(input ?? '').replace(/\D/g, '');
+  const raw = String(input ?? '').trim();
   let y;
   let m;
   let d;
-  if (s.length === 7) {
-    y = Number(s.slice(0, 3)) + 1911;
-    m = Number(s.slice(3, 5));
-    d = Number(s.slice(5, 7));
-  } else if (s.length === 8) {
-    y = Number(s.slice(0, 4));
-    m = Number(s.slice(4, 6));
-    d = Number(s.slice(6, 8));
+  const sep = raw.match(/^(\d{3,4})\s*[./\-年]\s*(\d{1,2})\s*[./\-月]\s*(\d{1,2})\s*日?$/);
+  const digits = raw.replace(/\D/g, '');
+  const pureDigits = digits === raw.replace(/\s/g, '');
+  if (sep) {
+    y = Number(sep[1]) + (sep[1].length === 3 ? 1911 : 0);
+    m = Number(sep[2]);
+    d = Number(sep[3]);
+  } else if (pureDigits && digits.length === 7) {
+    y = Number(digits.slice(0, 3)) + 1911;
+    m = Number(digits.slice(3, 5));
+    d = Number(digits.slice(5, 7));
+  } else if (pureDigits && digits.length === 8) {
+    y = Number(digits.slice(0, 4));
+    m = Number(digits.slice(4, 6));
+    d = Number(digits.slice(6, 8));
   } else {
-    throw new Error(`看不懂的日期：${input}（請用民國格式，例如 1150725）`);
+    throw new Error(`看不懂的日期：${raw}（請用民國格式，例如 1150725 或 115.6.14）`);
   }
   const date = new Date(y, m - 1, d);
   if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) {
-    throw new Error(`日期不存在：${input}`);
+    throw new Error(`日期不存在：${raw}`);
   }
   return date;
 }
