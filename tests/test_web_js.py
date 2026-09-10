@@ -7,10 +7,26 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 
 
+def node_test_files():
+    """tests/js/*.test.mjs 的相對路徑清單（posix 分隔、排序）。
+
+    要在 Python 這邊展開：subprocess 不經 shell，星號會原封不動交給 Node，
+    只有 Node 21+ 會自己展開 glob，舊版會找不到檔案。
+    """
+    return sorted(p.relative_to(ROOT).as_posix() for p in (ROOT / "tests" / "js").glob("*.test.mjs"))
+
+
+def test_node_test_files_are_expanded_in_python():
+    files = node_test_files()
+    assert files, "tests/js 底下沒有 *.test.mjs"
+    assert all(f.startswith("tests/js/") and f.endswith(".test.mjs") for f in files)
+    assert not any("*" in f for f in files)
+
+
 def test_node_tests_pass():
     node = shutil.which("node")
     assert node, "需要 Node.js 才能跑前端測試（tests/js）"
-    r = subprocess.run([node, "--test", "tests/js/*.test.mjs"], cwd=ROOT, capture_output=True, text=True, encoding="utf-8")
+    r = subprocess.run([node, "--test", *node_test_files()], cwd=ROOT, capture_output=True, text=True, encoding="utf-8")
     assert r.returncode == 0, "node --test 失敗：\n" + r.stdout + r.stderr
 
 
