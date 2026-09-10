@@ -58,10 +58,12 @@ function jpegSize(buf) {
   throw new Error('讀不到 JPEG 尺寸');
 }
 
+// 回 ArrayBuffer——跟瀏覽器的 imaging.js renderForDocx 一模一樣。
+// 這裡若改回 Uint8Array，就測不到 zip.js 對 ArrayBuffer 的處理（2026-09-10 的 bug 就是這樣漏掉的）。
 const render = async (path) => {
   const buf = readFileSync(path);
   const { width, height } = jpegSize(buf);
-  return { data: new Uint8Array(buf), width, height, type: 'jpg' };
+  return { data: buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength), width, height, type: 'jpg' };
 };
 
 const { blob, failures } = await buildXlsxBlob(

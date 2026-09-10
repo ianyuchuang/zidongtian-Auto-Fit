@@ -4,6 +4,7 @@
 （單位換算與 ZIP 打包的純邏輯在 tests/js/xlsx-units.test.mjs、tests/js/zip.test.mjs。）"""
 import re
 import shutil
+import struct
 import subprocess
 import zipfile
 from pathlib import Path
@@ -132,3 +133,18 @@ def test_landscape_template_exports_landscape(tmp_path):
     assert 'orientation="landscape"' in sheet
     assert "<mergeCells" in sheet
     assert drawing.count("<xdr:oneCellAnchor>") == 2
+
+
+def test_media_bytes_survive_zip_packing(tmp_path):
+    """回歸（2026-09-10）：照片進 zip.js 時是 ArrayBuffer（瀏覽器 imaging.js 的回傳）。
+    ArrayBuffer 沒有 .length，當成位元組陣列用會讓長度與 CRC 靜靜變 0、位移累加變 NaN，
+    中央目錄位移寫成 0 → Excel 說「部分內容有問題」而開不起來。"""
+    z, _, _, media = _build(tmp_path, _photos(tmp_path, 2), template_xlsx="e-xlsx-3x2")
+    assert z.testzip() is None
+    for name in media:
+        info = z.getinfo(name)
+        assert info.file_size > 0 and info.CRC != 0, name
+        assert z.read(name).startswith(b"\xff\xd8\xff"), name  # 真的是 JPEG
+    raw = (tmp_path / "out.xlsx").read_bytes()
+    eocd = raw.rfind(b"PK\x05\x06")
+    assert struct.unpack("<I", raw[eocd + 16:eocd + 20])[0] > 0, "中央目錄位移是 0"
