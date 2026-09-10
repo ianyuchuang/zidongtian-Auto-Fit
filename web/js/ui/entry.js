@@ -17,6 +17,19 @@ const NO_FS_WHY = INSECURE
   ? '這個網址不是安全來源（http 內網位址），Chrome 不開放直接讀寫資料夾；請照 docs/內網測試.md 設一次 Chrome 旗標。'
   : '這個瀏覽器不支援直接讀寫資料夾（請用 Chrome 或 Edge）。';
 
+/**
+ * 資料夾結構掃完回來，這一輪要怎麼收尾：
+ * - 'stale'：期間又選了別的資料夾（seq 對不上），什麼都不做；
+ * - 'detached'：入口頁已經被拆掉（掃到一半拖 docx 進版型頁），只更新 app.state、不碰 DOM——
+ *   否則對已拆掉的元素寫 innerHTML 會變成 unhandled rejection；
+ * - 'live'：正常畫到畫面上。
+ */
+export function scanOutcome({ seq, pickSeq, el }) {
+  if (seq !== pickSeq) return 'stale';
+  if (!el || el.isConnected === false) return 'detached';
+  return 'live';
+}
+
 export function mountEntry(container, app) {
   container.innerHTML = `
   <div class="entry"><div class="entry-card">
@@ -119,7 +132,9 @@ export function mountEntry(container, app) {
     }
     const seq = ++pickSeq;
     const roTag = ro ? ' <span class="small muted">（唯讀複本）</span>' : '';
-    const show = (inner) => ($('#folder-text').innerHTML = `<span class="picked">🗀 ${esc(label)}</span>${roTag}${inner}`);
+    // 抓住現在這個元素：入口頁被拆掉重掛後，container.querySelector 會找到新頁（或 null），不能寫過去
+    const folderText = $('#folder-text');
+    const show = (inner) => (folderText.innerHTML = `<span class="picked">🗀 ${esc(label)}</span>${roTag}${inner}`);
     $('#dz-folder').classList.add('has-pick');
     if (app.state.rootSummary != null) {
       // 同一個資料夾掃過了（例如剛從版型調整頁回來），直接用上次的摘要，不重掃
@@ -131,12 +146,14 @@ export function mountEntry(container, app) {
     $('#start').disabled = true;
     try {
       const summary = treeSummaryText(describeTree(await scanTree(handle)));
-      if (seq !== pickSeq) return; // 期間又選了別的資料夾
-      app.setRootSummary(summary);
+      const outcome = scanOutcome({ seq, pickSeq, el: folderText });
+      if (outcome === 'stale') return; // 期間又選了別的資料夾
+      app.setRootSummary(summary); // 頁面拆掉了也要記住：回入口頁時直接用，不重掃
+      if (outcome === 'detached') return;
       show(`<div class="small muted summary">${esc(summary)}</div>`);
       updateStart();
     } catch (e) {
-      if (seq !== pickSeq) return;
+      if (scanOutcome({ seq, pickSeq, el: folderText }) !== 'live') return;
       console.error(e);
       show(`<div class="small summary" style="color:var(--red-text)">讀取資料夾結構失敗：${esc(e.message)}</div>`);
     }
