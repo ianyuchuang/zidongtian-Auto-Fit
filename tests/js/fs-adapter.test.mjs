@@ -47,6 +47,43 @@ test('moveFile：複製 + 刪原檔；同名檔存在時拒絕', async () => {
   assert.equal(await exists(f4, '203662_0.jpg'), true, '失敗時原檔要留著');
 });
 
+test('moveFile：原檔刪不掉時要清掉目的地的複本，之後再搬不會被「已有同名檔案」擋住', async () => {
+  const root = sampleRoot();
+  const f4 = await root.getDirectoryHandle('4F');
+  const f5 = await root.getDirectoryHandle('5F');
+  const h = await f5.getFileHandle('203662_0.jpg');
+  const orig = f5.removeEntry.bind(f5);
+  let locked = true;
+  f5.removeEntry = async (n) => {
+    if (locked) throw new Error('being used by another process');
+    return orig(n);
+  };
+  await assert.rejects(moveFile(h, f5, f4), /已複製到目的地但原檔刪不掉/);
+  assert.equal(await exists(f5, '203662_0.jpg'), true, '原檔要留著');
+  assert.equal(await exists(f4, '203662_0.jpg'), false, '目的地不能留下孤兒複本');
+  locked = false;
+  const nh = await moveFile(h, f5, f4);
+  assert.equal(nh.name, '203662_0.jpg');
+  assert.equal(await exists(f5, '203662_0.jpg'), false);
+  assert.equal(await (await nh.getFile()).text(), 'a');
+});
+
+test('moveFile：寫入目的地失敗時也要清掉空的複本並丟原本的錯', async () => {
+  const root = sampleRoot();
+  const f4 = await root.getDirectoryHandle('4F');
+  const f5 = await root.getDirectoryHandle('5F');
+  const h = await f5.getFileHandle('203662_0.jpg');
+  const origGet = f4.getFileHandle.bind(f4);
+  f4.getFileHandle = async (n, o) => {
+    const fh = await origGet(n, o);
+    if (o?.create) fh.createWritable = async () => ({ write: async () => { throw new Error('disk full'); }, close: async () => {}, abort: async () => {} });
+    return fh;
+  };
+  await assert.rejects(moveFile(h, f5, f4), /disk full/);
+  assert.equal(await exists(f5, '203662_0.jpg'), true, '原檔要留著');
+  assert.equal(await exists(f4, '203662_0.jpg'), false, '目的地不能留下空的複本');
+});
+
 test('createDir：建立、重複與不合法名稱丟錯', async () => {
   const root = sampleRoot();
   const d = await createDir(root, ' 6F ');

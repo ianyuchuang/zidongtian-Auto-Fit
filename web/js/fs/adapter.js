@@ -59,12 +59,25 @@ export async function moveFile(fileHandle, fromDir, toDir) {
       // 本機資料夾多半不支援 move()，改走複製 + 刪除
     }
   }
+  // 複製 + 刪除：任一步失敗都要把目的地的複本清掉，不然留下孤兒複本，
+  // 下次再搬同一張會永遠被「目標資料夾已有同名檔案」擋住。
   const file = await fileHandle.getFile();
   const dest = await toDir.getFileHandle(name, { create: true });
-  const w = await dest.createWritable();
-  await w.write(file);
-  await w.close();
-  await fromDir.removeEntry(name);
+  const undoCopy = () => toDir.removeEntry(name).catch(() => {});
+  try {
+    const w = await dest.createWritable();
+    await w.write(file);
+    await w.close();
+  } catch (e) {
+    await undoCopy();
+    throw e;
+  }
+  try {
+    await fromDir.removeEntry(name);
+  } catch (e) {
+    await undoCopy();
+    throw new Error(`「${name}」已複製到目的地但原檔刪不掉（可能被其他程式開著），已把複本移除：${e?.message ?? e}`);
+  }
   return dest;
 }
 
