@@ -20,6 +20,23 @@ export function escapeCloses({ buttons = [], dismissable = null } = {}) {
 }
 
 /**
+ * document 上的 Enter 要不要當成按「主要按鈕」：
+ * 在 textarea 裡是換行；焦點在任何按鈕上時瀏覽器自己會發 click，這裡不能再搶著 close(true)，
+ * 否則 Tab 到「取消」按 Enter 也會變成確定。
+ */
+export function enterTriggersPrimary(target) {
+  if (!target) return true;
+  if (target.tagName === 'TEXTAREA') return false;
+  if (typeof target.closest === 'function' && target.closest('button')) return false;
+  return true;
+}
+
+/** onOpen 已經把焦點放進對話框（例如 promptDialog 選好輸入格）就別再用預設的「第一個欄位」蓋掉。 */
+export function needsDefaultFocus(overlay, active) {
+  return !active || !overlay.contains(active);
+}
+
+/**
  * 顯示對話框。buttons: [{label, value, primary}]；resolve 按下按鈕的 value（Esc → null）。
  * onOpen(dialogEl) 可用來綁事件；beforeClose(value, dialogEl) 回傳 false 可阻止關閉。
  * dismissable：Esc 能不能關（預設：有按鈕才能）。
@@ -54,7 +71,7 @@ export function showDialog({ title, body = '', buttons = [{ label: '確定', val
         if (escapeCloses({ buttons, dismissable })) close(null);
         return;
       }
-      if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+      if (e.key === 'Enter' && enterTriggersPrimary(e.target)) {
         const p = buttons.find((b) => b.primary);
         if (p) {
           e.preventDefault();
@@ -65,7 +82,7 @@ export function showDialog({ title, body = '', buttons = [{ label: '確定', val
     document.addEventListener('keydown', onKey);
     root.appendChild(overlay);
     onOpen?.(overlay);
-    overlay.querySelector('input, select, textarea, button')?.focus();
+    if (needsDefaultFocus(overlay, document.activeElement)) overlay.querySelector('input, select, textarea, button')?.focus();
   });
   // 進度視窗這種沒有按鈕的對話框要由呼叫端關掉，否則 Promise 永遠不 resolve、
   // keydown 監聽也一直掛著（每匯出一次多一個）。
