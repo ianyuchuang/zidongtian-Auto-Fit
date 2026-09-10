@@ -4,6 +4,8 @@ import io
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
 import dev_server as ds  # noqa: E402
 
@@ -29,6 +31,20 @@ def test_list_samples_skips_junk_and_uses_posix_paths(tmp_path):
     assert idx["dirs"] == ["4F", "5F", "6F"], "空資料夾也要列出來，否則唯讀複本看不到沒照片的樓層"
 
 
+def test_list_samples_skips_everything_under_dot_folders(tmp_path):
+    """rglob 會把 .git、.回收桶 等資料夾「裡面」的檔案也列出來，只跳過資料夾本身不夠（2026-09-10）。"""
+    root = _samples(tmp_path)
+    (root / ".git" / "objects").mkdir(parents=True)
+    (root / ".git" / "HEAD").write_bytes(b"x")
+    (root / ".git" / "objects" / "ab.jpg").write_bytes(b"x")
+    (root / "4F" / ".hidden").mkdir()
+    (root / "4F" / ".hidden" / "z.jpg").write_bytes(b"x")
+    (root / "4F" / ".DS_Store").write_bytes(b"x")
+    idx = ds.list_samples(root)
+    assert [f["path"] for f in idx["files"]] == ["4F/a-1-2.jpg", "5F/203662_0.jpg"]
+    assert idx["dirs"] == ["4F", "5F", "6F"]
+
+
 def test_resolve_sample_path_blocks_traversal(tmp_path):
     root = _samples(tmp_path)
     ok = ds.resolve_sample_path(root, "/samples/4F/a-1-2.jpg")
@@ -45,7 +61,7 @@ def test_default_samples_points_at_source_folder():
 
 
 class _FakeServer:
-    """接住 main() 傳給 ThreadingHTTPServer 的位址，馬上結束 serve_forever。"""
+    """接住 main() 傳給 Server 的位址，馬上結束 serve_forever。"""
 
     seen = None
 
@@ -57,7 +73,7 @@ class _FakeServer:
 
 
 def _run(monkeypatch, argv):
-    monkeypatch.setattr(ds, "ThreadingHTTPServer", _FakeServer)
+    monkeypatch.setattr(ds, "Server", _FakeServer)
     _FakeServer.seen = None
     assert ds.main(argv) == 0
     return _FakeServer.seen
@@ -74,6 +90,31 @@ def test_lan_flag_binds_all_interfaces(monkeypatch):
 
 def test_host_option_wins_over_lan(monkeypatch):
     assert _run(monkeypatch, ["--lan", "--host", "192.168.1.23", "--port", "9000"]) == ("192.168.1.23", 9000)
+
+
+def test_server_does_not_reuse_address_on_windows():
+    """Windows 的 SO_REUSEADDR 允許綁到已在 LISTEN 的 port，port 被佔時不會丟 OSError，
+    「可能已經有一個在跑」的提示永遠印不出來（2026-09-10）。"""
+    assert issubclass(ds.Server, ds.ThreadingHTTPServer)
+    assert ds.Server.allow_reuse_address == (sys.platform != "win32")
+
+
+def test_second_server_on_same_port_fails_loudly(monkeypatch):
+    """實際綁一個 port，再用 allow_reuse_address=False 綁第二次一定要 OSError（各平台皆然）。"""
+    import socketserver
+
+    class Strict(ds.Server):
+        allow_reuse_address = False
+
+    first = ds.Server(("127.0.0.1", 0), ds.Handler)
+    try:
+        port = first.server_address[1]
+        with pytest.raises(OSError):
+            Strict(("127.0.0.1", port), ds.Handler)
+        monkeypatch.setattr(ds, "Server", Strict)
+        assert ds.main(["--port", str(port)]) == 1
+    finally:
+        first.server_close()
 
 
 def test_banner_localhost_says_nobody_else_can_connect():

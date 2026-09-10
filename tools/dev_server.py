@@ -38,14 +38,17 @@ def list_samples(samples_dir: Path):
     files = []
     dirs = []
     for p in sorted(samples_dir.rglob("*")):
-        rel = p.relative_to(samples_dir).as_posix()
+        relpath = p.relative_to(samples_dir)
+        # 路徑任一段以「.」開頭（.git、.回收桶…）整串跳過：rglob 不會因為跳過資料夾就不列其內檔案
+        if any(part.startswith(".") for part in relpath.parts):
+            continue
+        rel = relpath.as_posix()
         if p.is_dir():
-            if not p.name.startswith("."):
-                dirs.append(rel)
+            dirs.append(rel)
             continue
         if not p.is_file():
             continue
-        if p.name.startswith("~$") or p.name.startswith(".") or p.name.lower() in IGNORE_NAMES:
+        if p.name.startswith("~$") or p.name.lower() in IGNORE_NAMES:
             continue
         files.append({"path": rel, "url": "/samples/" + urllib.parse.quote(rel)})
     return {"root": samples_dir.name, "dirs": dirs, "files": files}
@@ -95,6 +98,13 @@ def banner_lines(host, port, ip=None):
     lines.append("  防火牆第一次會跳詢問：勾「私人網路」-> 允許存取。")
     lines.append("  這個視窗關掉，同事就連不到了。")
     return lines
+
+
+class Server(ThreadingHTTPServer):
+    """Windows 的 SO_REUSEADDR 語意不同：允許綁到別人已在 LISTEN 的 port，port 被佔時不會報錯，
+    第二個伺服器會靜靜搶不到連線。所以 Windows 上關掉；其他平台保留（重啟時不必等 TIME_WAIT）。"""
+
+    allow_reuse_address = sys.platform != "win32"
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -171,7 +181,7 @@ def main(argv=None):
     host = args.host or ("0.0.0.0" if args.lan else "127.0.0.1")
     url = f"http://localhost:{args.port}/"
     try:
-        httpd = ThreadingHTTPServer((host, args.port), Handler)
+        httpd = Server((host, args.port), Handler)
     except OSError as e:
         print(f"[X] 無法開啟 {host}:{args.port}：{e}（可能已經有一個在跑，直接開 {url} 試試）")
         return 1
