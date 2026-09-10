@@ -35,3 +35,13 @@ def test_no_tracking_scripts():
     """頁面宣稱沒有分析與廣告，所以自己也不能載外部腳本。"""
     assert "<script" not in HTML
     assert "issues" in HTML  # 聯絡方式：GitHub Issues
+
+
+def test_api_key_storage_matches_code():
+    """keys.js 預設 remember=true（貼上即存 localStorage）；介面是反向的「不要記住金鑰」→ sessionStorage。"""
+    keys = (WEB / "js" / "recognizer" / "api" / "keys.js").read_text(encoding="utf-8")
+    assert "remember: true" in keys  # 預設記住
+    assert "預設記住" in HTML
+    assert "不要記住金鑰" in HTML
+    assert "勾「記住」" not in HTML  # 舊寫法：介面上沒有這個勾選框
+    assert "重新開啟已關閉的分頁" in HTML

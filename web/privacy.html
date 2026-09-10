@@ -35,7 +35,7 @@
       <tr><td>版型庫、各資料夾上次用的版型</td><td>不必每次重讀 docx</td><td>localStorage</td></tr>
       <tr><td>上次開啟的資料夾的存取權杖</td><td>下次一鍵重開（仍需你按一次授權）</td><td>IndexedDB</td></tr>
       <tr><td>本地模型伺服器的網址與型號</td><td>下次直接帶回</td><td>localStorage</td></tr>
-      <tr><td>LLM API 金鑰</td><td>辨識時呼叫該公司 API</td><td>勾「記住」時存 localStorage；沒勾則只存 sessionStorage，關閉分頁即消失</td></tr>
+      <tr><td>LLM API 金鑰</td><td>辨識時呼叫該公司 API</td><td>預設記住：貼上即存 localStorage。勾「不要記住金鑰」則只放 sessionStorage，關閉分頁即清除（瀏覽器「重新開啟已關閉的分頁」時可能被還原）</td></tr>
     </table>
     <p>清除方式：在瀏覽器設定中清除本網站的網站資料，或在辨識設定裡把金鑰清空。</p>
 
