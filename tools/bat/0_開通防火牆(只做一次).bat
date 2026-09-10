@@ -14,6 +14,14 @@ net session >nul 2>&1
 if errorlevel 1 (
   echo Requesting administrator rights...
   powershell -NoProfile -Command "Start-Process -FilePath '%~f0' -Verb RunAs"
+  if errorlevel 1 (
+    echo.
+    echo [X] Administrator rights were not granted ^(UAC cancelled^).
+    echo     Run this .bat again and click "Yes" in the UAC prompt.
+    echo.
+    pause
+    exit /b 1
+  )
   exit /b 0
 )
 

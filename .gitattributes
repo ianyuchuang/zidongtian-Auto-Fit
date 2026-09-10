@@ -1,0 +1,4 @@
+# cmd.exe 對 LF 換行的批次檔行為不穩（tests/test_bat_files.py 也檢查 CRLF）
+tools/bat/* text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
