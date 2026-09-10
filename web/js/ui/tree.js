@@ -4,6 +4,15 @@ import { isTrashDir, ownerOfTrash } from '../state.js';
 import { esc, promptDialog, toast } from './dialog.js';
 import { DND_MULTI, DND_SINGLE, dropIds, reportMove } from './dnd.js';
 
+/**
+ * 點了某個節點要套哪個資料夾篩選。根節點與根層的 `_回收桶` 都是「全部」（null）：
+ * ownerOfTrash('_回收桶') 是 ''，之前直接把 '' 塞進 dirFilter，左樹沒有節點反白、子資料夾全部消失。
+ */
+export function dirFilterFor(path) {
+  const dir = isTrashDir(path) ? ownerOfTrash(path) : path;
+  return dir ? dir : null;
+}
+
 export function mountTree(container, app) {
   container.className = 'sidebar';
   container.innerHTML = `
@@ -37,10 +46,8 @@ export function mountTree(container, app) {
   treeEl.addEventListener('click', (e) => {
     const node = e.target.closest('.tree-node');
     if (!node) return;
-    const path = node.dataset.path;
     // 點回收桶＝看它所屬的那個資料夾（已刪除的照片本來就掛在原資料夾底下反灰顯示）
-    const dir = isTrashDir(path) ? ownerOfTrash(path) : path;
-    app.setDirFilter(dir === '' && path === '' ? null : dir);
+    app.setDirFilter(dirFilterFor(node.dataset.path));
   });
 
   // 拖曳搬移
