@@ -34,10 +34,38 @@ function cellParas(tc) {
     .filter((t) => t.trim() !== '');
 }
 
+/**
+ * 第一個「文字 run」的屬性（w:r/w:rPr/...）：略過 w:pPr 底下那份——那是段落標記本身的字級／粗體，
+ * 常和實際文字不一樣（例：段落標記 14pt、文字 18pt），先撞到它就會讀錯。
+ */
+function firstRunProp(node, name) {
+  for (const c of kids(node)) {
+    if (c.name === 'w:pPr') continue;
+    if (c.name === name) return c;
+    const hit = firstRunProp(c, name);
+    if (hit) return hit;
+  }
+  return null;
+}
+
 function firstSizePt(node) {
-  const sz = findAll(node, 'w:sz')[0];
-  const v = num(sz, 'w:val');
+  const v = num(firstRunProp(node, 'w:sz'), 'w:val');
   return v ? v / 2 : null;
+}
+
+/** w:b 沒有 w:val 就是粗體；w:val="0"／"false"／"off" 是明講不粗。 */
+function isBold(p) {
+  const b = firstRunProp(p, 'w:b');
+  if (!b) return false;
+  const v = attr(b, 'w:val');
+  return v == null || !/^(0|false|off)$/i.test(v);
+}
+
+function alignOf(p) {
+  const v = attr(find(p, 'w:jc'), 'w:val');
+  if (v === 'center') return 'center';
+  if (v === 'right' || v === 'end') return 'right';
+  return 'left';
 }
 
 function commonFont(node) {
@@ -65,8 +93,8 @@ function headingLines(paras) {
   return paras.map((p) => ({
     text: text(p).replace(DATE_RE, '{date}'),
     sizePt: firstSizePt(p) ?? 14,
-    bold: !!find(p, 'w:b'),
-    align: attr(find(p, 'w:jc'), 'w:val') === 'center' ? 'center' : 'left',
+    bold: isBold(p),
+    align: alignOf(p),
   }));
 }
 
@@ -112,6 +140,12 @@ export function parseTemplate({ documentXml, headerXml = null, name = '' } = {})
   const start = photoRows[0] ?? 0;
   const blockRowCount = photoRows.length > 1 ? photoRows[1] - photoRows[0] : rows.length - start;
   const perRow = kids(rows[start] ?? { children: [] }, 'w:tc').filter(isPhotoCell).length || 1;
+  // 照片區塊以外的列（第一個照片列之前、最後一個區塊之後）版型描述不了，要明講，不能靜靜丟掉。
+  if (photoRows.length) {
+    const end = start + blockRowCount * photoRows.length;
+    if (start > 0) unknown.push(`表格有 ${start} 列不在照片區塊內（第 1–${start} 列）`);
+    if (rows.length > end) unknown.push(`表格有 ${rows.length - end} 列不在照片區塊內（第 ${end + 1}–${rows.length} 列）`);
+  }
   const blockCols = gridCols.length / perRow;
   if (!Number.isInteger(blockCols) || blockCols < 1) unknown.push('欄位配置（欄數不是每列張數的倍數）');
   const cols = Number.isInteger(blockCols) ? gridCols.slice(0, blockCols) : gridCols.slice();

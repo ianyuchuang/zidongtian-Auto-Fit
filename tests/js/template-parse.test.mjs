@@ -179,3 +179,54 @@ test('d：同 a 的版面但每頁 2 列 × 2 張（2026-09-04 回歸：輸出�
   assert.equal(pages.length, 2);
   assert.equal(pages[1].length, 1);
 });
+
+test('抬頭字級取文字 run 的 w:sz，不被段落標記（w:pPr/w:rPr）的字級撞到；w:b w:val="0" 不算粗體；靠右要讀成 right', () => {
+  const p = (pPr, rPr, t) => `<w:p><w:pPr>${pPr}</w:pPr><w:r><w:rPr>${rPr}</w:rPr><w:t>${t}</w:t></w:r></w:p>`;
+  const xml =
+    `<w:document ${W}><w:body>` +
+    p('<w:jc w:val="center"/><w:rPr><w:sz w:val="28"/></w:rPr>', '<w:sz w:val="36"/><w:b/>', '範例工程') +
+    p('<w:jc w:val="right"/><w:rPr><w:b/><w:sz w:val="20"/></w:rPr>', '<w:b w:val="0"/><w:sz w:val="24"/>', '施工查驗照片') +
+    p('<w:rPr><w:b/></w:rPr>', '<w:b w:val="false"/>', '第三行') +
+    '<w:tbl><w:tblGrid><w:gridCol w:w="4915"/></w:tblGrid><w:tr><w:tc><w:p><w:r><w:t>x</w:t></w:r></w:p></w:tc></w:tr></w:tbl>' +
+    '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/></w:sectPr></w:body></w:document>';
+  const s = parseTemplate({ documentXml: xml, name: 'hd' });
+  assert.deepEqual(
+    s.heading.lines.map((l) => [l.sizePt, l.bold, l.align]),
+    [
+      [18, true, 'center'],
+      [12, false, 'right'],
+      [14, false, 'left'],
+    ],
+  );
+});
+
+test('說明格字級也取文字 run 的 w:sz，不看段落標記的字級', () => {
+  const photo = '<w:tc><w:p><w:r><w:drawing><wp:inline><wp:extent cx="1905000" cy="1428750"/></wp:inline></w:drawing></w:r></w:p></w:tc>';
+  const text = '<w:tc><w:p><w:pPr><w:rPr><w:sz w:val="24"/></w:rPr></w:pPr><w:r><w:rPr><w:sz w:val="16"/></w:rPr><w:t>內容說明：範例</w:t></w:r></w:p></w:tc>';
+  const xml =
+    `<w:document ${W} xmlns:wp="wp"><w:body><w:tbl><w:tblGrid><w:gridCol w:w="4000"/><w:gridCol w:w="4000"/></w:tblGrid>` +
+    `<w:tr>${photo}${text}</w:tr>` +
+    '</w:tbl><w:sectPr><w:pgSz w:w="11906" w:h="16838"/></w:sectPr></w:body></w:document>';
+  const s = parseTemplate({ documentXml: xml, name: 'sz' });
+  const cell = s.block.rows[0].cells.find((c) => c.kind === 'text');
+  assert.equal(cell.sizePt, 8);
+  assert.equal(s.caption.sizePt, 8);
+});
+
+test('表格裡照片區塊以外的列（第一個照片列之前、最後一個區塊之後）要列進 unknown，不能靜靜丟掉', () => {
+  const photo = '<w:tc><w:p><w:r><w:drawing><wp:inline><wp:extent cx="1905000" cy="1428750"/></wp:inline></w:drawing></w:r></w:p></w:tc>';
+  const tc = (t) => `<w:tc><w:p><w:r><w:t>${t}</w:t></w:r></w:p></w:tc>`;
+  const head = `<w:document ${W} xmlns:wp="wp"><w:body><w:tbl><w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid>`;
+  const tail = '</w:tbl><w:sectPr><w:pgSz w:w="11906" w:h="16838"/></w:sectPr></w:body></w:document>';
+  const block = `<w:tr>${photo}</w:tr><w:tr>${tc('內容說明：範例')}</w:tr>`;
+  // 剛好兩個區塊：不誤報
+  const ok = parseTemplate({ documentXml: head + block + block + tail, name: 'ok' });
+  assert.deepEqual(ok.unknown, []);
+  // 前面多一列標題列
+  const before = parseTemplate({ documentXml: head + `<w:tr>${tc('工程名稱')}</w:tr>` + block + block + tail, name: 'before' });
+  assert.deepEqual(before.unknown, ['表格有 1 列不在照片區塊內（第 1–1 列）']);
+  assert.ok(validateSpec(before).length, '要擋下來');
+  // 後面多兩列備註列
+  const after = parseTemplate({ documentXml: head + block + block + `<w:tr>${tc('備註')}</w:tr><w:tr>${tc('簽名')}</w:tr>` + tail, name: 'after' });
+  assert.deepEqual(after.unknown, ['表格有 2 列不在照片區塊內（第 5–6 列）']);
+});
