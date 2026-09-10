@@ -266,7 +266,11 @@ td.conf { color: var(--muted); text-align: right; }
   inset: 0 var(--viewer-w) 0 0;
   background: rgba(0,0,0,.82); flex-direction: column; gap: 8px; padding: 12px; z-index: 70;
 }
-.lightbox .lb-bar { display: flex; align-items: center; gap: 8px; width: 100%; color: #fff; }
+.lightbox .lb-bar {
+  display: flex; align-items: center; gap: 8px; width: 100%; color: #fff;
+  /* 要有不透明底：overlay 只有 82% 黑，頂列的 pill 文字會透出來跟檔名疊在一起 */
+  background: #1c1e22; padding: 6px 10px; border-radius: var(--radius);
+}
 .lightbox .lb-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lightbox .lb-zoom { margin-left: auto; font-size: 12px; opacity: .8; min-width: 48px; text-align: right; }
 .lightbox .lb-btn {
