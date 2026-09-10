@@ -33,6 +33,13 @@ def test_permissions_for_pages_deploy():
     assert perms == {"contents": "read", "pages": "write", "id-token": "write"}
 
 
+def test_concurrency_does_not_cancel_running_deploy():
+    """cancel-in-progress=true 會把進行中的 Pages 部署砍掉，留下半套；只能排隊、不能取消。"""
+    c = load()["concurrency"]
+    assert c["group"] == "pages"
+    assert c["cancel-in-progress"] is False
+
+
 def test_uploads_web_dir_and_deploys():
     steps = load()["jobs"]["deploy"]["steps"]
     uses = [s.get("uses", "") for s in steps]

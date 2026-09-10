@@ -13,9 +13,10 @@ permissions:
   pages: write
   id-token: write
 
+# cancel-in-progress 必須是 false：進行中的 Pages 部署被取消會留下半套，只排隊、不取消。
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   deploy:
