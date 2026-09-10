@@ -4,7 +4,7 @@
 // model 由「AI 辨識」對話框從伺服器抓回的清單選出來，extra 是各家的額外設定（Claude 的 workspaceId）。
 
 import { getProvider } from './api/providers.js';
-import { callLLM, hasAdapter } from './api/call.js';
+import { callLLM, hasAdapter, RECOGNIZE_MAX_TOKENS } from './api/call.js';
 import { buildPrompt, parseResult } from './api/prompt.js';
 import { DEFAULT_PROMPT } from './prompt-default.js';
 
@@ -31,7 +31,7 @@ export function createApiRecognizer({ encode, fetchFn } = {}) {
         extra: api.extra || {},
         text: buildPrompt(ctx.prompt, DEFAULT_PROMPT),
         image,
-        maxTokens: 2048,
+        maxTokens: RECOGNIZE_MAX_TOKENS,
         fetchFn,
       });
       const r = parseResult(text);

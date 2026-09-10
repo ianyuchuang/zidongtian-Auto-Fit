@@ -2,8 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { PROVIDERS, getProvider } from '../../web/js/recognizer/api/providers.js';
 import { loadApiKeys, saveApiKeys, clearApiKeys, KEYS_STORAGE_KEY, SESSION_KEYS_KEY } from '../../web/js/recognizer/api/keys.js';
-import { buildRequest, callLLM, listModels, testConnection, errorMessage, hasAdapter } from '../../web/js/recognizer/api/call.js';
-import { buildPrompt, parseResult } from '../../web/js/recognizer/api/prompt.js';
+import { buildRequest, callLLM, listModels, testConnection, errorMessage, hasAdapter, TEST_MAX_TOKENS, RECOGNIZE_MAX_TOKENS } from '../../web/js/recognizer/api/call.js';
+import { buildPrompt, parseResult, normConfidence } from '../../web/js/recognizer/api/prompt.js';
 import { createApiRecognizer } from '../../web/js/recognizer/api.js';
 
 class FakeStorage {
@@ -200,8 +200,45 @@ test('callLLM：fetch 丟例外（CORS／斷網）要說清楚', async () => {
 test('testConnection：純文字小請求，回模型文字', async () => {
   const f = fakeFetch(200, { content: [{ type: 'text', text: 'OK' }] });
   assert.equal(await testConnection('claude', { apiKey: 'k', model: 'm', fetchFn: f }), 'OK');
-  assert.equal(f.calls[0].body.max_tokens, 64);
+  // 推理型模型會把額度花在思考上，64 不夠正文就是空的（回歸）
+  assert.equal(f.calls[0].body.max_tokens, TEST_MAX_TOKENS);
+  assert.ok(TEST_MAX_TOKENS >= 1024);
+  assert.ok(RECOGNIZE_MAX_TOKENS >= 8192);
   assert.equal(f.calls[0].body.messages[0].content.length, 1);
+});
+
+test('callLLM：正文空但 token 用完（推理型模型），錯誤要講「輸出 token 用完」而不是「沒有文字」（回歸）', async () => {
+  const cases = [
+    ['claude', { stop_reason: 'max_tokens', content: [] }],
+    ['gemini', { candidates: [{ finishReason: 'MAX_TOKENS', content: { parts: [] } }] }],
+    ['openai', { choices: [{ finish_reason: 'length', message: { content: '' } }] }],
+  ];
+  for (const [id, body] of cases) {
+    await assert.rejects(callLLM(id, { apiKey: 'k', model: 'm', text: 'hi', fetchFn: fakeFetch(200, body) }), (e) => {
+      assert.match(e.message, /輸出 token 用完/, id);
+      assert.match(e.message, /換型號或提高上限/, id);
+      return true;
+    });
+  }
+  // 正常結束但沒有文字，維持原訊息
+  await assert.rejects(callLLM('openai', { apiKey: 'k', model: 'm', text: 'hi', fetchFn: fakeFetch(200, { choices: [{ finish_reason: 'stop', message: { content: '' } }] }) }), /沒有文字/);
+  // 不要加 reasoning_effort／thinkingConfig 之類參數，非推理型號會拒絕
+  for (const id of ['claude', 'gemini', 'openai']) {
+    const r = buildRequest(id, { apiKey: 'k', model: 'm', text: 'hi' });
+    assert.doesNotMatch(JSON.stringify(r.body), /reasoning|thinking/i, id);
+  }
+});
+
+test('callLLM：逾時要涵蓋讀 body——headers 回來後正文卡住也要斷掉（回歸）', async () => {
+  const slowBody = async (url, init) => ({
+    ok: true,
+    status: 200,
+    text: () =>
+      new Promise((_, reject) => {
+        init.signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })));
+      }),
+  });
+  await assert.rejects(callLLM('claude', { apiKey: 'k', model: 'm', text: 'hi', fetchFn: slowBody, timeoutMs: 20 }), /逾時/);
 });
 
 // ---------- listModels：型號向伺服器要，不寫死 ----------
@@ -255,6 +292,32 @@ test('parseResult：去 markdown 圍欄、夾雜文字、bbox 正規化、confid
   assert.equal(parseResult('{"desc":null,"design":123}').design, '123');
 });
 
+test('parseResult：confidence 回 0–1 小數 → ×100；"85%" 字串 → 85；夾在 0–100（回歸）', () => {
+  assert.equal(parseResult('{"desc":"a","confidence":0.85}').confidence, 85);
+  assert.equal(parseResult('{"desc":"a","confidence":"85%"}').confidence, 85);
+  assert.equal(parseResult('{"desc":"a","confidence":" 0.9 "}').confidence, 90);
+  assert.equal(parseResult('{"desc":"a","confidence":85}').confidence, 85);
+  assert.equal(parseResult('{"desc":"a","confidence":0}').confidence, 0);
+  assert.equal(parseResult('{"desc":"a","confidence":100}').confidence, 100);
+  assert.equal(parseResult('{"desc":"a","confidence":-5}').confidence, 0);
+  assert.equal(parseResult('{"desc":"a"}').confidence, 0);
+  assert.equal(normConfidence('1.5'), 2);
+  assert.equal(normConfidence(1), 1, '剛好 1 分不出尺度，維持 1 讓人校對');
+});
+
+test('parseResult：JSON 後面附的說明含大括號也解析得出來；欄位值是物件／陣列就大聲失敗（回歸）', () => {
+  const r = parseResult('{"desc":"4F","design":"700mm","actual":"700mm","confidence":80}\n說明：{bbox 找不到} 所以給 null {}');
+  assert.equal(r.desc, '4F');
+  assert.equal(r.confidence, 80);
+  // 字串裡的大括號與跳脫引號不能算進配對
+  const r2 = parseResult('{"desc":"間距 {左} \\"右\\" }","design":"1","actual":"1"} 後面 {');
+  assert.equal(r2.desc, '間距 {左} "右" }');
+  assert.throws(() => parseResult('{"desc":{"a":1},"design":"1","actual":"1"}'), /欄位 desc 不是文字/);
+  assert.throws(() => parseResult('{"desc":"a","design":["1"],"actual":"1"}'), /欄位 design 不是文字/);
+  assert.throws(() => parseResult('{"desc":"a" '), /沒有配對/);
+  assert.equal(parseResult('[{"desc":"a"}]').desc, 'a', '包在陣列裡也取第一個物件');
+});
+
 test('parseResult：沒有 JSON、壞 JSON、三欄全空 → 大聲失敗', () => {
   assert.throws(() => parseResult('我看不到白板'), /找不到 JSON/);
   assert.throws(() => parseResult('{"desc": "a",}'), /解析失敗/);
@@ -274,6 +337,7 @@ test('apiRecognizer：縮圖 → 呼叫 → 解析；沒選供應商／沒金鑰
   assert.equal(r.confidence, 90);
   assert.equal(r.bbox, null);
   assert.equal(f.calls[0].body.model, 'claude-sonnet-5', '沒指定型號用供應商的後備型號');
+  assert.equal(f.calls[0].body.max_tokens, RECOGNIZE_MAX_TOKENS, '辨識用的上限要夠推理型模型思考');
   assert.equal(f.calls[0].body.messages[0].content[0].source.data, 'QUJD');
   assert.match(f.calls[0].body.messages[0].content[1].text, /白板/);
 

@@ -36,12 +36,20 @@ async function send(baseUrl, path, { body = null, fetchFn, timeoutMs = DEFAULT_T
       signal: ctrl?.signal,
     });
   } catch (e) {
+    if (timer) clearTimeout(timer);
     if (e.name === 'AbortError') throw new Error(`本機模型逾時沒有回應（超過 ${Math.round(timeoutMs / 1000)} 秒）：模型可能還在算，或伺服器卡住了。`);
     throw new Error(offlineMessage(baseUrl, e.message));
+  }
+  // 逾時要涵蓋讀 body：llama-server 常常 headers 先回、正文要等模型算完，timer 讀完 body 才清。
+  let raw;
+  try {
+    raw = await resp.text();
+  } catch (e) {
+    if (e.name === 'AbortError') throw new Error(`本機模型逾時沒有回應（超過 ${Math.round(timeoutMs / 1000)} 秒，讀取回應內容時逾時）：模型可能還在算，或伺服器卡住了。`);
+    throw new Error(`本機模型讀取回應失敗：${e.message}`);
   } finally {
     if (timer) clearTimeout(timer);
   }
-  const raw = await resp.text();
   let json = null;
   try {
     json = raw ? JSON.parse(raw) : null;
@@ -81,7 +89,11 @@ export async function localChat({ baseUrl = DEFAULT_BASE_URL, model, text, image
   });
   const c = json.choices?.[0]?.message?.content;
   const out = typeof c === 'string' ? c : '';
-  if (!out) throw new Error(`本機模型回應裡沒有文字：${JSON.stringify(json).slice(0, 300)}`);
+  if (!out) {
+    // 思考型模型（Qwen3 thinking）把 max_tokens 花在思考上，正文會是空的
+    if (json.choices?.[0]?.finish_reason === 'length') throw new Error(`本機模型輸出 token 用完（推理型模型會把額度花在思考上），請換型號或提高上限：${JSON.stringify(json).slice(0, 300)}`);
+    throw new Error(`本機模型回應裡沒有文字：${JSON.stringify(json).slice(0, 300)}`);
+  }
   return out;
 }
 

@@ -71,6 +71,23 @@ test('HTTP 錯誤與非 JSON 回應都要大聲失敗', async () => {
   await assert.rejects(localChat({ model: 'm', text: 'x', fetchFn: fakeFetch(200, { choices: [] }) }), /沒有文字/);
 });
 
+test('逾時要涵蓋讀 body：headers 先回、正文卡住也要斷掉（回歸）', async () => {
+  const slowBody = async (url, init) => ({
+    ok: true,
+    status: 200,
+    text: () =>
+      new Promise((_, reject) => {
+        init.signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })));
+      }),
+  });
+  await assert.rejects(localChat({ model: 'm', text: 'x', fetchFn: slowBody, timeoutMs: 20 }), /逾時沒有回應/);
+});
+
+test('正文空但 finish_reason=length（思考型模型把額度花光）要講「輸出 token 用完」', async () => {
+  const body = { choices: [{ finish_reason: 'length', message: { content: '' } }] };
+  await assert.rejects(localChat({ model: 'm', text: 'x', fetchFn: fakeFetch(200, body) }), /輸出 token 用完/);
+});
+
 // ---------- 對話 ----------
 test('對話：OpenAI 相容格式，照片包成 data URL，不帶任何金鑰標頭', async () => {
   const f = fakeFetch(200, CHAT_OK);

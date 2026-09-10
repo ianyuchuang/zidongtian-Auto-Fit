@@ -3,6 +3,13 @@
 // image：{ data: base64 字串, mimeType } 或 null（純文字，測試連線用）。
 // extra：該家的額外設定（目前只有 Claude 的 workspaceId），欄位定義在 providers.js 的 extraFields。
 
+// 輸出 token 上限。推理型模型（GPT-5、Gemini Pro 有 thinking）會先把額度花在思考上，
+// 給太少（64／2048）正文就是空的，只會看到「回應裡沒有文字」——所以放寬；實際用量照模型輸出算，不會多花錢。
+// 不另外加 reasoning_effort／thinkingConfig 參數：非推理型號會拒絕整個請求。
+export const TEST_MAX_TOKENS = 1024;
+export const RECOGNIZE_MAX_TOKENS = 8192;
+export const TRUNCATED_MESSAGE = '輸出 token 用完（推理型模型會把額度花在思考上），請換型號或提高上限';
+
 const ADAPTERS = {
   // Claude：瀏覽器直打要多帶 anthropic-dangerous-direct-browser-access，否則被 CORS 擋。
   // 公司／團隊帳號的「識別碼型金鑰」還要帶 anthropic-workspace-id，否則 HTTP 400。
@@ -28,6 +35,9 @@ const ADAPTERS = {
     text(json) {
       return (json.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('');
     },
+    truncated(json) {
+      return json.stop_reason === 'max_tokens';
+    },
     modelsUrl: 'https://api.anthropic.com/v1/models?limit=1000',
     models(json) {
       // /v1/models 只列對話型號，全部都看得懂圖
@@ -50,6 +60,9 @@ const ADAPTERS = {
     },
     text(json) {
       return (json.candidates?.[0]?.content?.parts || []).map((p) => p.text || '').join('');
+    },
+    truncated(json) {
+      return json.candidates?.[0]?.finishReason === 'MAX_TOKENS';
     },
     modelsUrl: 'https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000',
     models(json) {
@@ -81,6 +94,9 @@ const ADAPTERS = {
     text(json) {
       const c = json.choices?.[0]?.message?.content;
       return typeof c === 'string' ? c : '';
+    },
+    truncated(json) {
+      return json.choices?.[0]?.finish_reason === 'length';
     },
     modelsUrl: 'https://api.openai.com/v1/models',
     models(json) {
@@ -139,11 +155,18 @@ async function sendJson(providerId, { url, headers, body, fetchFn, timeoutMs }) 
       signal: ctrl?.signal,
     });
   } catch (e) {
+    if (timer) clearTimeout(timer);
     throw new Error(e.name === 'AbortError' ? `${providerId} 逾時沒有回應` : `${providerId} 連線失敗：${e.message}（網路不通或被 CORS 擋）`);
+  }
+  // 逾時要涵蓋讀 body：headers 先回來、正文卡住（推理型模型慢慢吐）時也要能斷掉，所以 timer 讀完 body 才清。
+  let raw;
+  try {
+    raw = await resp.text();
+  } catch (e) {
+    throw new Error(e.name === 'AbortError' ? `${providerId} 逾時沒有回應（讀取回應內容時逾時）` : `${providerId} 讀取回應失敗：${e.message}`);
   } finally {
     if (timer) clearTimeout(timer);
   }
-  const raw = await resp.text();
   let json = null;
   try {
     json = raw ? JSON.parse(raw) : null;
@@ -164,7 +187,10 @@ export async function callLLM(providerId, opts) {
   const req = buildRequest(providerId, opts);
   const json = await sendJson(providerId, { ...req, fetchFn: opts.fetchFn, timeoutMs: opts.timeoutMs });
   const text = a.text(json);
-  if (!text) throw new Error(`${providerId} 回應裡沒有文字：${JSON.stringify(json).slice(0, 300)}`);
+  if (!text) {
+    if (a.truncated?.(json)) throw new Error(`${providerId} ${TRUNCATED_MESSAGE}：${JSON.stringify(json).slice(0, 300)}`);
+    throw new Error(`${providerId} 回應裡沒有文字：${JSON.stringify(json).slice(0, 300)}`);
+  }
   return text;
 }
 
@@ -184,5 +210,5 @@ export async function listModels(providerId, { apiKey, extra = {}, fetchFn, time
 
 /** 測試連線：送一句話，模型回得出東西就算通。回傳模型回覆的文字。 */
 export async function testConnection(providerId, { apiKey, model, extra = {}, fetchFn, timeoutMs = 30000 }) {
-  return callLLM(providerId, { apiKey, model, extra, text: '請只回覆「OK」兩個字母。', maxTokens: 64, fetchFn, timeoutMs });
+  return callLLM(providerId, { apiKey, model, extra, text: '請只回覆「OK」兩個字母。', maxTokens: TEST_MAX_TOKENS, fetchFn, timeoutMs });
 }
