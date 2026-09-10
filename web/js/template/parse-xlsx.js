@@ -2,7 +2,7 @@
 // 獨立的解析器，只共用 unzip.js / xml.js / fields.js / xlsx.js；做不到的項目一樣列進
 // spec.unknown，由版型頁要求使用者指定——不猜、不靜靜套預設值。規格見 docs/版型.md。
 
-import { parseXml, find, findAll, kids, attr, num, text as rawText } from './xml.js';
+import { parseXml, find, findAll, kids, attr, num, text as rawText, relTargets, resolveTarget } from './xml.js';
 import { EMU_PER_PX } from './spec.js';
 import { unzipText } from './unzip.js';
 import { DATE_RE, guessField, splitLine } from './fields.js';
@@ -341,26 +341,6 @@ export function parseXlsxTemplate({ sheetXml, sharedStringsXml = null, stylesXml
   };
 }
 
-const REL_RE = /<Relationship\b[^>]*\bId="([^"]+)"[^>]*\bTarget="([^"]+)"/g;
-
-function relMap(xml) {
-  const out = new Map();
-  REL_RE.lastIndex = 0;
-  let m;
-  while ((m = REL_RE.exec(xml ?? ''))) out.set(m[1], m[2]);
-  return out;
-}
-
-/** 'xl/worksheets/sheet1.xml' + '../drawings/drawing1.xml' → 'xl/drawings/drawing1.xml' */
-function resolve(base, target) {
-  const parts = base.split('/').slice(0, -1);
-  for (const seg of String(target).split('/')) {
-    if (seg === '..') parts.pop();
-    else if (seg !== '.') parts.push(seg);
-  }
-  return parts.join('/');
-}
-
 /**
  * 直接吃一份 .xlsx（ArrayBuffer）：解壓 → 找出第一張工作表與它的繪圖層 → 解析成 LayoutSpec。
  */
@@ -379,16 +359,16 @@ export async function parseTemplateXlsx(buffer, name = '') {
   const workbook = files.get('xl/workbook.xml');
   if (!workbook) throw new Error('這份 xlsx 裡沒有 xl/workbook.xml');
 
-  const wbRels = relMap(files.get('xl/_rels/workbook.xml.rels'));
+  const wbRels = relTargets(files.get('xl/_rels/workbook.xml.rels'));
   const first = kids(find(kids(parseXml(workbook))[0], 'sheets'), 'sheet')[0];
-  const sheetPath = resolve('xl/workbook.xml', wbRels.get(attr(first, 'r:id')) ?? 'worksheets/sheet1.xml');
+  const sheetPath = resolveTarget('xl/workbook.xml', wbRels.get(attr(first, 'r:id')) ?? 'worksheets/sheet1.xml');
   const sheetXml = files.get(sheetPath);
   if (!sheetXml) throw new Error(`這份 xlsx 裡找不到工作表（${sheetPath}）`);
 
-  const sheetRels = relMap(files.get(sheetPath.replace(/([^/]+)$/, '_rels/$1.rels')));
+  const sheetRels = relTargets(files.get(sheetPath.replace(/([^/]+)$/, '_rels/$1.rels')));
   const sheet = kids(parseXml(sheetXml))[0];
   const drawingId = attr(find(sheet, 'drawing'), 'r:id');
-  const drawingXml = drawingId ? (files.get(resolve(sheetPath, sheetRels.get(drawingId) ?? '')) ?? null) : null;
+  const drawingXml = drawingId ? (files.get(resolveTarget(sheetPath, sheetRels.get(drawingId) ?? '')) ?? null) : null;
 
   return parseXlsxTemplate({
     sheetXml,

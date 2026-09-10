@@ -27,6 +27,14 @@ function tagEnd(xml, from) {
   return -1;
 }
 
+/** 文字接到節點尾端；前一個子節點也是文字就併成同一段（CDATA 與一般文字混用時 text() 才拼得回完整字串）。 */
+function pushText(node, s) {
+  if (!s) return;
+  const last = node.children.length - 1;
+  if (last >= 0 && typeof node.children[last] === 'string') node.children[last] += s;
+  else node.children.push(s);
+}
+
 /** 解析成節點樹；回傳的根節點是 '#root'，真正的文件根在 children[0]。 */
 export function parseXml(xml) {
   const root = { name: '#root', attrs: {}, children: [] };
@@ -35,8 +43,16 @@ export function parseXml(xml) {
   while (i < xml.length) {
     const lt = xml.indexOf('<', i);
     if (lt < 0) break;
-    if (lt > i) stack[stack.length - 1].children.push(decode(xml.slice(i, lt)));
+    if (lt > i) pushText(stack[stack.length - 1], decode(xml.slice(i, lt)));
     const c = xml[lt + 1];
+    if (xml.startsWith('<![CDATA[', lt)) {
+      // CDATA：到 ']]>' 為止原樣當文字（不解實體），和前後的文字接成同一段
+      const end = xml.indexOf(']]>', lt + 9);
+      if (end < 0) break;
+      pushText(stack[stack.length - 1], xml.slice(lt + 9, end));
+      i = end + 3;
+      continue;
+    }
     if (c === '?' || c === '!') {
       const end = xml.startsWith('<!--', lt) ? xml.indexOf('-->', lt) + 3 : xml.indexOf('>', lt) + 1;
       if (end <= 0) break;
@@ -116,4 +132,33 @@ export function text(node) {
   let out = '';
   for (const c of node?.children ?? []) out += isNode(c) ? text(c) : c;
   return out;
+}
+
+/**
+ * OPC 的 .rels：Relationship 的 Id → Target（屬性順序不拘）。
+ */
+export function relTargets(relsXml) {
+  const out = new Map();
+  if (!relsXml) return out;
+  for (const r of findAll(parseXml(relsXml), 'Relationship')) {
+    const id = attr(r, 'Id');
+    const target = attr(r, 'Target');
+    if (id && target) out.set(id, target);
+  }
+  return out;
+}
+
+/**
+ * 把 .rels 的 Target 換算成 ZIP 內的路徑：相對路徑以 base 所在資料夾為準，
+ * 以 '/' 開頭的絕對路徑從封裝根算起（'/word/header1.xml' → 'word/header1.xml'）。
+ * 例：resolveTarget('xl/worksheets/sheet1.xml', '../drawings/drawing1.xml') → 'xl/drawings/drawing1.xml'
+ */
+export function resolveTarget(base, target) {
+  const t = String(target ?? '');
+  const parts = t.startsWith('/') ? [] : base.split('/').slice(0, -1);
+  for (const seg of t.split('/')) {
+    if (seg === '..') parts.pop();
+    else if (seg && seg !== '.') parts.push(seg);
+  }
+  return parts.join('/');
 }

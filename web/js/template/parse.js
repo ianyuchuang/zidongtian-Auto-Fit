@@ -1,7 +1,7 @@
 // 從 Word 檔的 XML 推出 LayoutSpec（版面描述）。做不到的項目會列進 spec.unknown，
 // 由預覽頁要求使用者指定——不猜、不靜靜套預設值。規格見 docs/版型.md。
 
-import { parseXml, find, findAll, kids, attr, num } from './xml.js';
+import { parseXml, find, findAll, kids, attr, num, relTargets, resolveTarget } from './xml.js';
 import { EMU_PER_PX } from './spec.js';
 import { unzipText } from './unzip.js';
 import { DATE_RE, guessField, splitLine } from './fields.js';
@@ -284,8 +284,6 @@ export function parseTemplate({ documentXml, headerXml = null, name = '' } = {})
   };
 }
 
-const REL_RE = /<Relationship\b[^>]*\bId="([^"]+)"[^>]*\bTarget="([^"]+)"/g;
-
 /**
  * 直接吃一份 .docx（ArrayBuffer）：解壓 → 找出預設頁首 → 解析成 LayoutSpec。
  */
@@ -294,17 +292,13 @@ export async function parseTemplateDocx(buffer, name = '') {
   const documentXml = files.get('word/document.xml');
   if (!documentXml) throw new Error('這份 docx 裡沒有 word/document.xml');
 
-  const rels = files.get('word/_rels/document.xml.rels') ?? '';
-  const target = new Map();
-  REL_RE.lastIndex = 0;
-  let m;
-  while ((m = REL_RE.exec(rels))) target.set(m[1], m[2]);
+  const target = relTargets(files.get('word/_rels/document.xml.rels'));
 
   const doc = kids(parseXml(documentXml))[0];
   const sect = findAll(find(doc, 'w:body'), 'w:sectPr').pop();
   let headerXml = null;
   for (const h of kids(sect, 'w:headerReference')) {
-    if (attr(h, 'w:type') === 'default') headerXml = files.get('word/' + target.get(attr(h, 'r:id'))) ?? null;
+    if (attr(h, 'w:type') === 'default') headerXml = files.get(resolveTarget('word/document.xml', target.get(attr(h, 'r:id')))) ?? null;
   }
   return parseTemplate({ documentXml, headerXml, name });
 }

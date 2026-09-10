@@ -99,3 +99,42 @@ test('橫式工作表的長寬要對調', () => {
   assert.equal(s.page.w, 16838);
   assert.equal(s.page.h, 11906);
 });
+
+// 整份 xlsx（ZIP）：.rels 的 Target 在 Id 前面、或是絕對路徑（/xl/drawings/drawing1.xml），繪圖層都要找得到
+const e = (name) => readFileSync(join(FIX, 'e-xlsx-3x2', name), 'utf8');
+const REL_NS = 'xmlns="http://schemas.openxmlformats.org/package/2006/relationships"';
+const T = (kind) => `Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/${kind}"`;
+async function xlsxWithRels(wbRels, sheetRels) {
+  const { zipBlob } = await import('../../web/js/zip.js');
+  const { parseTemplateXlsx } = await import('../../web/js/template/parse-xlsx.js');
+  const blob = await zipBlob([
+    { name: 'xl/workbook.xml', data: '<?xml version="1.0"?><workbook xmlns="x" xmlns:r="r"><sheets><sheet name="6F" sheetId="1" r:id="rId1"/></sheets></workbook>' },
+    { name: 'xl/_rels/workbook.xml.rels', data: `<?xml version="1.0"?><Relationships ${REL_NS}>${wbRels}</Relationships>` },
+    { name: 'xl/worksheets/sheet1.xml', data: e('sheet.xml') },
+    { name: 'xl/worksheets/_rels/sheet1.xml.rels', data: `<?xml version="1.0"?><Relationships ${REL_NS}>${sheetRels}</Relationships>` },
+    { name: 'xl/drawings/drawing1.xml', data: e('drawing.xml') },
+    { name: 'xl/sharedStrings.xml', data: e('sharedStrings.xml') },
+    { name: 'xl/styles.xml', data: e('styles.xml') },
+  ]);
+  return parseTemplateXlsx(await blob.arrayBuffer(), 'e');
+}
+
+test('parseTemplateXlsx：.rels 的 Target 屬性排在 Id 前面也找得到工作表與繪圖層', async () => {
+  const s = await xlsxWithRels(
+    `<Relationship Target="worksheets/sheet1.xml" ${T('worksheet')} Id="rId1"/>`,
+    `<Relationship Target="../drawings/drawing1.xml" ${T('drawing')} Id="rId2"/>`,
+  );
+  assert.deepEqual(s.unknown, []);
+  assert.equal(s.grid.perRow, 2);
+  assert.equal(s.stamp.on, true);
+});
+
+test('parseTemplateXlsx：.rels 的 Target 是絕對路徑（/xl/...）也找得到工作表與繪圖層', async () => {
+  const s = await xlsxWithRels(
+    `<Relationship Id="rId1" ${T('worksheet')} Target="/xl/worksheets/sheet1.xml"/>`,
+    `<Relationship Id="rId2" ${T('drawing')} Target="/xl/drawings/drawing1.xml"/>`,
+  );
+  assert.deepEqual(s.unknown, []);
+  assert.equal(s.grid.perRow, 2);
+  assert.equal(s.stamp.on, true);
+});

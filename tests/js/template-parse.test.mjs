@@ -230,3 +230,32 @@ test('表格裡照片區塊以外的列（第一個照片列之前、最後一�
   const after = parseTemplate({ documentXml: head + block + block + `<w:tr>${tc('備註')}</w:tr><w:tr>${tc('簽名')}</w:tr>` + tail, name: 'after' });
   assert.deepEqual(after.unknown, ['表格有 2 列不在照片區塊內（第 5–6 列）']);
 });
+
+// 整份 docx（ZIP）：.rels 的 Target 在 Id 前面、或是絕對路徑（/word/header1.xml），頁首都要找得到
+const a = (name) => readFileSync(join(FIX, 'a-portrait-3x2', name), 'utf8');
+async function docxWithRels(relsXml) {
+  const { zipBlob } = await import('../../web/js/zip.js');
+  const { parseTemplateDocx } = await import('../../web/js/template/parse.js');
+  const blob = await zipBlob([
+    { name: 'word/document.xml', data: a('document.xml') },
+    { name: 'word/_rels/document.xml.rels', data: relsXml },
+    { name: 'word/header1.xml', data: a('header.xml') },
+  ]);
+  return parseTemplateDocx(await blob.arrayBuffer(), 'a');
+}
+const REL_NS = 'xmlns="http://schemas.openxmlformats.org/package/2006/relationships"';
+const HDR = 'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header"';
+
+test('parseTemplateDocx：.rels 的 Target 屬性排在 Id 前面也對得到頁首', async () => {
+  const s = await docxWithRels(`<?xml version="1.0"?><Relationships ${REL_NS}><Relationship Target="header1.xml" ${HDR} Id="rId14"/></Relationships>`);
+  assert.equal(s.heading.place, 'header');
+  assert.equal(s.heading.lines[1].text, '施工自主檢查照片(檢查日期：{date})');
+  assert.deepEqual(s.unknown, []);
+});
+
+test('parseTemplateDocx：.rels 的 Target 是絕對路徑（/word/header1.xml）也對得到頁首', async () => {
+  const s = await docxWithRels(`<?xml version="1.0"?><Relationships ${REL_NS}><Relationship Id="rId14" ${HDR} Target="/word/header1.xml"/></Relationships>`);
+  assert.equal(s.heading.place, 'header');
+  assert.equal(s.heading.lines[1].text, '施工自主檢查照片(檢查日期：{date})');
+  assert.deepEqual(s.unknown, []);
+});
