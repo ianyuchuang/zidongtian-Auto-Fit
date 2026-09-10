@@ -33,11 +33,16 @@ export function loadSaved(rootName, store = globalThis.localStorage) {
         store.removeItem(legacy);
       }
     }
-    return raw ? JSON.parse(raw) : {};
+    return asRecordMap(raw ? JSON.parse(raw) : null);
   } catch (e) {
     console.warn('讀取暫存失敗', e);
     return {};
   }
+}
+
+/** 暫存一定要是「路徑 → 紀錄」的物件；存到 "null"／陣列／字串（壞掉或被別的東西寫過）就當沒有，applySaved 才不會炸。 */
+function asRecordMap(v) {
+  return v && typeof v === 'object' && !Array.isArray(v) ? v : {};
 }
 
 export function serializePhotos(photos) {

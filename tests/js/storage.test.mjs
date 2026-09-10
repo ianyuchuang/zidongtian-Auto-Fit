@@ -141,3 +141,15 @@ test('舊版 key 的暫存第一次讀取時搬到新 key（既有使用者不�
   assert.equal(st.getItem(storageKey('帷幕骨架')), JSON.stringify(rec));
   assert.deepEqual(loadSaved('帷幕骨架', st), rec, '第二次直接讀新 key');
 });
+
+test('loadSaved：暫存被寫成 "null"／陣列／字串 → 當作沒有（回傳 {}），applySaved 才不會炸', () => {
+  for (const bad of ['null', '[]', '"x"', '123']) {
+    const st = new FakeStorage();
+    st.setItem(storageKey('root'), bad);
+    assert.deepEqual(loadSaved('root', st), {}, `壞掉的暫存 ${bad}`);
+    assert.doesNotThrow(() => applySaved([{ path: 'a.jpg', desc: '', status: 'pending', order: 0 }], loadSaved('root', st), { engine: null }));
+  }
+  const st = new FakeStorage();
+  st.setItem(storageKey('root'), '{"a.jpg":{"desc":"還在"}}');
+  assert.equal(loadSaved('root', st)['a.jpg'].desc, '還在', '正常的物件照讀');
+});
