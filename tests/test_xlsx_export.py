@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-FIX = ROOT / "tests" / "fixtures" / "版型"
+FIX = ROOT / "web" / "templates"  # 內建版型＝解析器的樣本，見 docs/版型.md
 SAMPLES = ROOT.parent / "需求及資訊來源" / "來源資料夾範例" / "帷幕骨架" / "4F"
 
 

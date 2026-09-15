@@ -32,7 +32,7 @@ def _build(tmp_path, photos, spec=None, template=None, name="out.docx"):
         sp.write_text(json.dumps(spec, ensure_ascii=False), encoding="utf-8")
         args += ["--spec", str(sp)]
     elif template is not None:
-        args += ["--template", str(ROOT / "tests" / "fixtures" / "版型" / template)]
+        args += ["--template", str(ROOT / "web" / "templates" / template)]  # 內建版型＝解析器的樣本
     r = subprocess.run(
         [*args, *map(str, photos), str(out)],
         cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
