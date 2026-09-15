@@ -46,3 +46,15 @@ def test_viewer_nav_sits_above_actions():
     assert js.index('class="navbar"') < js.index('class="actions"'), "換頁列要排在輸出列前面"
     head = js[js.index('class="head"'):js.index('class="big"')]
     assert "data-nav" not in head, "標題列不該再有換頁箭頭"
+
+
+def test_hidden_template_list_really_hides():
+    """`.tplpick-list` 是 flex，會蓋掉 `[hidden]` 預設的 display:none——讀不到內建版型時整區要真的收起來。"""
+    css = (ROOT / "web" / "css" / "app.css").read_text(encoding="utf-8")
+    assert ".tplpick-list[hidden]" in css, "少了讓 [hidden] 生效的規則，內建版型讀不到時會留下一塊空白"
+
+
+def test_builtin_section_is_first_on_pick_page():
+    """內建版型要列在選版型頁最頂端，排在「這台電腦存過的版型」前面。"""
+    js = (ROOT / "web" / "js" / "ui" / "template-page.js").read_text(encoding="utf-8")
+    assert js.index('id="tpl-builtin"') < js.index("這台電腦存過的版型"), "內建版型不在最頂端"

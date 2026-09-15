@@ -396,12 +396,16 @@ td.conf { color: var(--muted); text-align: right; }
 .tplpick { max-width: 900px; margin: 0 auto; }
 .tplpick-sec { font-weight: 600; margin: 6px 0 10px; }
 .tplpick-list { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 26px; }
+/* display:flex 會蓋掉 [hidden] 預設的 display:none（讀不到內建版型時整區要收起來） */
+.tplpick-list[hidden] { display: none; }
 .tplcard {
   width: 260px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px;
   display: flex; flex-direction: column; gap: 4px;
 }
 .tplcard.default { background: #fafbfc; }
+.tplcard.builtin { background: #f6f9ff; }
 .tplcard-name { font-weight: 600; }
+.tplcard-note { margin-top: 2px; }
 .tplcard-btns { display: flex; gap: 6px; margin-top: 8px; }
 .tplcard-btns .btn { padding: 4px 10px; font-size: 13px; }
 

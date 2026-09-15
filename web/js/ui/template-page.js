@@ -1,5 +1,6 @@
 // 版型頁：兩個步驟。
-//   1. 選版型：列出這台電腦存過的版型，或點選／拖入一份 docx（Word）或 xlsx（Excel）來讀。
+//   1. 選版型：最頂端是「內建版型」（web/templates/，見 template/builtin.js），接著是這台電腦存過的
+//      版型，最後可點選／拖入一份 docx（Word）或 xlsx（Excel）來讀。
 //   2. 版型調整：整頁畫出接近實際大小的版面，直接在頁面上改——抬頭與說明格點下去就能打字，
 //      要填值的位置是一顆「欄位膠囊」（下拉可換欄位、選「（留空）」就移除），
 //      從上面的工具列把欄位拖進句子裡就多一個，拖到行與行之間就多一行，也可以拖到別格或刪掉。
@@ -30,6 +31,7 @@ import {
   setCellAlign,
 } from '../template/spec.js';
 import { listTemplates, getTemplate, saveTemplate, removeTemplate } from '../template/library.js';
+import { loadBuiltins } from '../template/builtin.js';
 
 const PX = (twips) => twips / 15; // 1440 twips = 1 吋 = 96px
 const PT = (pt) => (pt * 4) / 3; // 1pt = 96/72 px
@@ -52,6 +54,10 @@ const FIELD_OPTIONS = (sel) =>
     .join('');
 
 const at = (k) => k.split('.').map(Number);
+
+/** 卡片上那行小字：直式／橫式・每頁幾張。存過的版型與內建版型共用。 */
+const specSummary = (s) =>
+  `${s.page?.orient === 'landscape' ? '橫式' : '直式'}・每頁 ${perPage(s)} 張（${s.grid.blockRows} 列 × ${s.grid.perRow}）`;
 
 /** 要填值的位置：一顆可換欄位的膠囊。field 為 null＝還沒指定（紅字）。 */
 function tagHtml(field) {
@@ -121,6 +127,7 @@ export function mountTemplatePage(container, app) {
   let spec = null;
   let name = '';
   let fileName = '';
+  let builtins = null; // 內建版型解析結果，這一次進版型頁只讀一次
   let drag = null; // 正在拖的說明欄位：{ line } 新增 | { from:{r,c,i} } 搬移
   const ac = new AbortController();
   const { signal } = ac; // 掛在容器／window 上（不隨 render 重畫）的監聽都帶這個 signal
@@ -151,12 +158,10 @@ export function mountTemplatePage(container, app) {
     const saved = listTemplates();
     const cards = saved
       .map((t) => {
-        const s = t.spec;
-        const summary = `${s.page?.orient === 'landscape' ? '橫式' : '直式'}・每頁 ${perPage(s)} 張（${s.grid.blockRows} 列 × ${s.grid.perRow}）`;
         return `
           <div class="tplcard" data-id="${esc(t.id)}">
             <div class="tplcard-name">📄 ${esc(t.name)}</div>
-            <div class="small muted">${esc(summary)}</div>
+            <div class="small muted">${esc(specSummary(t.spec))}</div>
             <div class="tplcard-btns">
               <button class="btn btn-primary" data-act="pick-use" data-id="${esc(t.id)}">使用</button>
               <button class="btn" data-act="pick-edit" data-id="${esc(t.id)}">調整</button>
@@ -167,6 +172,8 @@ export function mountTemplatePage(container, app) {
       .join('');
     return `
       <div class="tplpick">
+        <div class="tplpick-sec">內建版型</div>
+        <div class="tplpick-list" id="tpl-builtin"><div class="small muted">讀取內建版型中…</div></div>
         <div class="tplpick-sec">這台電腦存過的版型</div>
         <div class="tplpick-list">
           ${cards || '<div class="small muted">還沒存過版型。讀一份 docx 或 xlsx、調好之後按「存成版型」就會出現在這裡。</div>'}
@@ -188,7 +195,48 @@ export function mountTemplatePage(container, app) {
       </div>`;
   }
 
+  /**
+   * 內建版型是非同步讀進來的（要 fetch 六份 XML 再各自解析），所以先畫「讀取中…」再填。
+   * 讀不到（用 file:// 開、或沒有 web/templates/）就把整區收掉，選版型頁其他部分照常能用。
+   */
+  async function fillBuiltins() {
+    const box = container.querySelector('#tpl-builtin');
+    if (!box) return;
+    if (!builtins) {
+      try {
+        builtins = await loadBuiltins();
+      } catch (e) {
+        console.warn('讀不到內建版型（web/templates/）', e);
+        builtins = [];
+      }
+    }
+    // 期間可能已經離開選版型頁（讀了一份 docx 進調整頁、或整頁被拆掉）：抓到的還是同一個元素才寫
+    if (container.querySelector('#tpl-builtin') !== box || box.isConnected === false) return;
+    const sec = box.previousElementSibling; // 「內建版型」那一行標題
+    if (!builtins.length) {
+      box.hidden = true;
+      if (sec?.classList.contains('tplpick-sec')) sec.hidden = true;
+      return;
+    }
+    box.innerHTML = builtins.map(builtinCardHtml).join('');
+  }
+
+  function builtinCardHtml(t) {
+    const dup = t.dupes.length ? `<div class="small muted tplcard-note">另有 ${t.dupes.length} 份版面相同，沒重複列：${esc(t.dupes.join('、'))}</div>` : '';
+    return `
+      <div class="tplcard builtin" data-slug="${esc(t.slug)}">
+        <div class="tplcard-name">📐 ${esc(t.name)}</div>
+        <div class="small muted">${esc(specSummary(t.spec))}</div>
+        ${dup}
+        <div class="tplcard-btns">
+          <button class="btn btn-primary" data-act="builtin-use" data-slug="${esc(t.slug)}">使用</button>
+          <button class="btn" data-act="builtin-edit" data-slug="${esc(t.slug)}">調整</button>
+        </div>
+      </div>`;
+  }
+
   function bindPick() {
+    fillBuiltins();
     const dz = $('#tpl-drop');
     if (!dz) return;
     dz.addEventListener('click', () => $('#tpl-file-input').click());
@@ -675,6 +723,20 @@ export function mountTemplatePage(container, app) {
         return;
       }
       app.applyTemplate({ name: t.name, file: null, spec: t.spec });
+    } else if (act === 'builtin-use' || act === 'builtin-edit') {
+      // 內建版型不在版型庫裡（不佔 localStorage），要留下來就在調整頁按「存成版型」／「完成」。
+      const t = (builtins ?? []).find((x) => x.slug === btn.dataset.slug);
+      if (!t) return;
+      const errs = validateSpec(t.spec);
+      if (act === 'builtin-use' && !errs.length) {
+        app.applyTemplate({ name: t.name, file: null, spec: structuredClone(t.spec) });
+        return;
+      }
+      if (errs.length && act === 'builtin-use') toast(`內建版型「${t.name}」還不能直接用，請先調整：${errs[0]}`, { error: true });
+      spec = structuredClone(t.spec); // 改的是複本，不要動到讀進來那份
+      name = t.name;
+      fileName = '';
+      render();
     } else if (act === 'edit-default') {
       // 預設版面也能拿來改（換抬頭、格數…），改完「完成」會存成一份新版型，預設本身不會被動到
       spec = defaultSpec();
