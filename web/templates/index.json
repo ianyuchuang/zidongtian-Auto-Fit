@@ -1,0 +1,59 @@
+{
+  "note": "由 tools/make_template_fixtures.py 產生，不要手改",
+  "templates": [
+    {
+      "slug": "a-portrait-3x2",
+      "name": "尺寸檢查表",
+      "kind": "docx",
+      "files": [
+        "document.xml",
+        "header.xml"
+      ]
+    },
+    {
+      "slug": "b-landscape-5rows",
+      "name": "樓層檢查表（橫式）",
+      "kind": "docx",
+      "files": [
+        "document.xml"
+      ]
+    },
+    {
+      "slug": "c-portrait-label-cell",
+      "name": "材料進場檢查表",
+      "kind": "docx",
+      "files": [
+        "document.xml"
+      ]
+    },
+    {
+      "slug": "d-portrait-2x2",
+      "name": "尺寸檢查表（每頁 4 張）",
+      "kind": "docx",
+      "files": [
+        "document.xml",
+        "header.xml"
+      ]
+    },
+    {
+      "slug": "e-xlsx-3x2",
+      "name": "施工自檢表（Excel）",
+      "kind": "xlsx",
+      "files": [
+        "drawing.xml",
+        "sharedStrings.xml",
+        "sheet.xml",
+        "styles.xml"
+      ]
+    },
+    {
+      "slug": "f-portrait-3x2-anchor",
+      "name": "電梯工程檢查表",
+      "kind": "docx",
+      "files": [
+        "document.xml",
+        "header.xml"
+      ]
+    }
+  ]
+}

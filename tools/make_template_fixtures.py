@@ -1,14 +1,17 @@
 # -*- coding: utf-8 -*-
-"""把 需求及資訊來源/版型/*.docx（與 *.xlsx）抽成測試用的 XML fixture。
+"""把 需求及資訊來源/版型/*.docx（與 *.xlsx）抽成 web/templates/ 底下的「內建版型」。
 
 只取版面需要的 word/document.xml 與預設頁首，去掉 rsid 這類雜訊，
-並把工程案名、公司名、說明內容一律換成「範例…」——fixture 會進 git，
+並把工程案名、公司名、說明內容一律換成「範例…」——這些檔案會進 git 並隨網站發布，
 實際案名不進去。
 
 docx 取 word/document.xml 與預設頁首；xlsx 取工作表、sharedStrings、styles 與繪圖層。
+同一份檔案身兼兩用：版型頁最頂端的「內建版型」（web/js/template/builtin.js 依 index.json 讀）
+與解析器的測試樣本（tests/js/template-parse*.test.mjs）。
 
 用法：python tools/make_template_fixtures.py [版型資料夾]
 """
+import json
 import re
 import sys
 import zipfile
@@ -17,7 +20,7 @@ from xml.etree import ElementTree as ET
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT.parent / "需求及資訊來源" / "版型"
-OUT = ROOT / "tests" / "fixtures" / "版型"
+OUT = ROOT / "web" / "templates"
 
 W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 R = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
@@ -44,18 +47,17 @@ NS = {
     "a14": "http://schemas.microsoft.com/office/drawing/2010/main",
 }
 
-# xlsx 檔名 → fixture 目錄名
+# 檔名 → (目錄名（英數，好在測試裡引用）, 顯示名稱（版型頁上的卡片標題，不帶實際案名）)
 XLSX_NAMES = {
-    "6F.xlsx": "e-xlsx-3x2",
+    "6F.xlsx": ("e-xlsx-3x2", "施工自檢表（Excel）"),
 }
 
-# 檔名 → fixture 目錄名（英數，好在測試裡引用）
 NAMES = {
-    "1150614 輕隔間尺寸11F.docx": "a-portrait-3x2",
-    "D棟3樓.docx": "b-landscape-5rows",
-    "電氣設備 材料進場自檢(照片).docx": "c-portrait-label-cell",
-    "1150614 輕隔間尺寸11F(2x2).docx": "d-portrait-2x2",
-    "1150821電梯工程施工自檢照片檔案.docx": "f-portrait-3x2-anchor",
+    "1150614 輕隔間尺寸11F.docx": ("a-portrait-3x2", "尺寸檢查表"),
+    "D棟3樓.docx": ("b-landscape-5rows", "樓層檢查表（橫式）"),
+    "電氣設備 材料進場自檢(照片).docx": ("c-portrait-label-cell", "材料進場檢查表"),
+    "1150614 輕隔間尺寸11F(2x2).docx": ("d-portrait-2x2", "尺寸檢查表（每頁 4 張）"),
+    "1150821電梯工程施工自檢照片檔案.docx": ("f-portrait-3x2-anchor", "電梯工程檢查表"),
 }
 
 # 段落文字的匿名規則（照順序，第一條命中就停）；只換值，不動欄位名。
@@ -184,6 +186,38 @@ def extract_xlsx(src: Path, dst: Path):
         write_xml(sst, dst / "sharedStrings.xml")
 
 
+INDEX = "index.json"
+
+
+def read_index():
+    """現有的 index.json（讀不到就當空的）→ {slug: 那一筆}。"""
+    try:
+        body = json.loads((OUT / INDEX).read_text(encoding="utf-8"))
+        return {t["slug"]: t for t in body.get("templates", []) if t.get("slug")}
+    except (OSError, ValueError, KeyError, TypeError):
+        return {}
+
+
+def write_index(done):
+    """web/templates/index.json：網頁端照這份讀，不用去猜資料夾裡有哪些檔。
+
+    done＝這一輪抽出來的 [(slug, 顯示名稱, kind)]。原始檔在 需求及資訊來源/（不進 git），
+    只跑了一半時**不能**把沒抽到的那幾份從 index.json 抹掉——資料夾還在就沿用上一版那筆，
+    網站上的內建版型才不會憑空少幾份。資料夾不在了才真的移除。
+    """
+    keep = {slug: t for slug, t in read_index().items() if (OUT / slug).is_dir()}
+    for slug, label, kind in done:
+        keep[slug] = {"slug": slug, "name": label, "kind": kind}
+    out = []
+    for slug in sorted(keep):
+        t = dict(keep[slug])
+        t["files"] = sorted(f.name for f in (OUT / slug).iterdir() if f.suffix == ".xml")
+        out.append(t)
+    body = {"note": "由 tools/make_template_fixtures.py 產生，不要手改", "templates": out}
+    (OUT / INDEX).write_text(json.dumps(body, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return out
+
+
 def main(argv):
     src_dir = Path(argv[1]) if len(argv) > 1 else SRC
     if not src_dir.is_dir():
@@ -191,22 +225,26 @@ def main(argv):
         return 1
     for prefix, uri in NS.items():
         ET.register_namespace(prefix, uri)
-    for name, slug in NAMES.items():
+    done = []
+    for name, (slug, label) in NAMES.items():
         src = src_dir / name
         if not src.is_file():
             print(f"跳過（沒有這份）：{name}", file=sys.stderr)
             continue
         extract(src, OUT / slug)
+        done.append((slug, label, "docx"))
         print(f"OK {slug}")
     for prefix, uri in [("", "http://schemas.openxmlformats.org/spreadsheetml/2006/main")]:
         ET.register_namespace(prefix, uri)
-    for name, slug in XLSX_NAMES.items():
+    for name, (slug, label) in XLSX_NAMES.items():
         src = src_dir / name
         if not src.is_file():
             print(f"跳過（沒有這份）：{name}", file=sys.stderr)
             continue
         extract_xlsx(src, OUT / slug)
+        done.append((slug, label, "xlsx"))
         print(f"OK {slug}")
+    print(f"{INDEX}：{len(write_index(done))} 份內建版型")
     return 0
 
 

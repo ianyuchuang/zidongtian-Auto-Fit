@@ -1,4 +1,4 @@
-// 版型解析：五份 docx 樣本（tests/fixtures/版型/，由 tools/make_template_fixtures.py 產生）。
+// 版型解析：五份 docx 樣本（web/templates/，＝網站上的內建版型，由 tools/make_template_fixtures.py 產生）。
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
@@ -7,7 +7,7 @@ import { dirname, join } from 'node:path';
 import { parseTemplate } from '../../web/js/template/parse.js';
 import { validateSpec, layoutPages } from '../../web/js/template/spec.js';
 
-const FIX = join(dirname(fileURLToPath(import.meta.url)), '../fixtures/版型');
+const FIX = join(dirname(fileURLToPath(import.meta.url)), '../../web/templates');
 
 function load(slug) {
   const dir = join(FIX, slug);
