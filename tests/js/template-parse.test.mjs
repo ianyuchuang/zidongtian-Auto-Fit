@@ -1,4 +1,4 @@
-// 版型解析：四份樣本（tests/fixtures/版型/，由 tools/make_template_fixtures.py 產生）。
+// 版型解析：五份 docx 樣本（tests/fixtures/版型/，由 tools/make_template_fixtures.py 產生）。
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
@@ -18,6 +18,13 @@ function load(slug) {
     name: slug,
   });
 }
+
+// 手寫樣本用的照片格：一張插在段落裡的圖。判斷照片看的是 drawing 裡有沒有 a:blip，
+// 空的 wp:inline 不算照片（浮動照片 wp:anchor 見 f 樣本）。
+const PHOTO_TC =
+  '<w:tc><w:p><w:r><w:drawing><wp:inline><wp:extent cx="1905000" cy="1428750"/>' +
+  '<a:graphic><a:graphicData><pic:pic><pic:blipFill><a:blip r:embed="rId1"/></pic:blipFill></pic:pic></a:graphicData></a:graphic>' +
+  '</wp:inline></w:drawing></w:r></w:p></w:tc>';
 
 const labels = (spec) =>
   spec.block.rows.map((r) => r.cells.map((c) => (c.kind === 'photo' ? '照片' : (c.lines ?? []).map((l) => `${l.label}|${l.field}`).join(','))));
@@ -139,10 +146,9 @@ test('頁首有字卻讀不出段落時要列進 unknown，不要靜靜給空抬
 
 test('「欄位名：值」後面接的續行段落是值太長換行，不是新的欄位', () => {
   const tc = (...ps) => `<w:tc>${ps.map((t) => `<w:p><w:r><w:t>${t}</w:t></w:r></w:p>`).join('')}</w:tc>`;
-  const photo = '<w:tc><w:p><w:r><w:drawing><wp:inline><wp:extent cx="1905000" cy="1428750"/></wp:inline></w:drawing></w:r></w:p></w:tc>';
   const xml =
     `<w:document ${W} xmlns:wp="wp"><w:body><w:tbl><w:tblGrid><w:gridCol w:w="4000"/><w:gridCol w:w="4000"/></w:tblGrid>` +
-    `<w:tr>${photo}${tc('內容說明：這一段範例說明很長', '所以在樣本裡換到第二段', '設計值：10cm', '實際值：10cm')}</w:tr>` +
+    `<w:tr>${PHOTO_TC}${tc('內容說明：這一段範例說明很長', '所以在樣本裡換到第二段', '設計值：10cm', '實際值：10cm')}</w:tr>` +
     '</w:tbl><w:sectPr><w:pgSz w:w="11906" w:h="16838"/></w:sectPr></w:body></w:document>';
   const s = parseTemplate({ documentXml: xml, name: 'cont' });
   const cell = s.block.rows[0].cells.find((c) => c.kind === 'text');
@@ -180,6 +186,36 @@ test('d：同 a 的版面但每頁 2 列 × 2 張（2026-09-04 回歸：輸出�
   assert.equal(pages[1].length, 1);
 });
 
+test('f：同 a 的版面，但照片是浮在格子上的（wp:anchor）——2026-09-15 回歸：照片格讀成 0 個', () => {
+  const s = load('f-portrait-3x2-anchor');
+  assert.deepEqual(s.unknown, []);
+  assert.deepEqual(validateSpec(s), []);
+  assert.equal(s.grid.perRow, 2);
+  assert.equal(s.grid.blockRows, 3);
+  assert.deepEqual(s.block.cols, [4915]);
+  assert.equal(s.heading.place, 'header');
+  assert.equal(s.caption.sizePt, 8);
+  assert.deepEqual(labels(s), [['照片'], ['內容說明：|desc,設    計：|design,實    際：|actual']]);
+  // 照片框量的是照片自己，不能量到同一格裡那個日期戳文字方塊（119 × 34 px）
+  assert.ok(Math.abs(s.photo.maxW - 313.7) < 0.1 && Math.abs(s.photo.h - 241.9) < 0.1);
+  // 日期戳：這份樣本只剩一個文字方塊還留著日期，而且錨在表格後面的段落上
+  assert.equal(s.stamp.on, true);
+});
+
+test('浮動的文字方塊（日期戳）不算照片——照片看的是 drawing 裡有沒有圖', () => {
+  const stamp =
+    '<w:tc><w:p><w:r><w:drawing><wp:anchor><wp:extent cx="1129665" cy="319405"/>' +
+    '<wps:txbx><w:txbxContent><w:p><w:r><w:t>2026-04-22</w:t></w:r></w:p></w:txbxContent></wps:txbx>' +
+    '</wp:anchor></w:drawing></w:r></w:p></w:tc>';
+  const xml =
+    `<w:document ${W} xmlns:wp="wp"><w:body><w:tbl><w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid>` +
+    `<w:tr>${stamp}</w:tr>` +
+    '</w:tbl><w:sectPr><w:pgSz w:w="11906" w:h="16838"/></w:sectPr></w:body></w:document>';
+  const s = parseTemplate({ documentXml: xml, name: 'stamp' });
+  assert.ok(s.unknown.includes('照片格'));
+  assert.ok(s.unknown.includes('照片框大小'));
+});
+
 test('抬頭字級取文字 run 的 w:sz，不被段落標記（w:pPr/w:rPr）的字級撞到；w:b w:val="0" 不算粗體；靠右要讀成 right', () => {
   const p = (pPr, rPr, t) => `<w:p><w:pPr>${pPr}</w:pPr><w:r><w:rPr>${rPr}</w:rPr><w:t>${t}</w:t></w:r></w:p>`;
   const xml =
@@ -201,11 +237,10 @@ test('抬頭字級取文字 run 的 w:sz，不被段落標記（w:pPr/w:rPr）�
 });
 
 test('說明格字級也取文字 run 的 w:sz，不看段落標記的字級', () => {
-  const photo = '<w:tc><w:p><w:r><w:drawing><wp:inline><wp:extent cx="1905000" cy="1428750"/></wp:inline></w:drawing></w:r></w:p></w:tc>';
   const text = '<w:tc><w:p><w:pPr><w:rPr><w:sz w:val="24"/></w:rPr></w:pPr><w:r><w:rPr><w:sz w:val="16"/></w:rPr><w:t>內容說明：範例</w:t></w:r></w:p></w:tc>';
   const xml =
     `<w:document ${W} xmlns:wp="wp"><w:body><w:tbl><w:tblGrid><w:gridCol w:w="4000"/><w:gridCol w:w="4000"/></w:tblGrid>` +
-    `<w:tr>${photo}${text}</w:tr>` +
+    `<w:tr>${PHOTO_TC}${text}</w:tr>` +
     '</w:tbl><w:sectPr><w:pgSz w:w="11906" w:h="16838"/></w:sectPr></w:body></w:document>';
   const s = parseTemplate({ documentXml: xml, name: 'sz' });
   const cell = s.block.rows[0].cells.find((c) => c.kind === 'text');
@@ -214,11 +249,10 @@ test('說明格字級也取文字 run 的 w:sz，不看段落標記的字級', (
 });
 
 test('表格裡照片區塊以外的列（第一個照片列之前、最後一個區塊之後）要列進 unknown，不能靜靜丟掉', () => {
-  const photo = '<w:tc><w:p><w:r><w:drawing><wp:inline><wp:extent cx="1905000" cy="1428750"/></wp:inline></w:drawing></w:r></w:p></w:tc>';
   const tc = (t) => `<w:tc><w:p><w:r><w:t>${t}</w:t></w:r></w:p></w:tc>`;
   const head = `<w:document ${W} xmlns:wp="wp"><w:body><w:tbl><w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid>`;
   const tail = '</w:tbl><w:sectPr><w:pgSz w:w="11906" w:h="16838"/></w:sectPr></w:body></w:document>';
-  const block = `<w:tr>${photo}</w:tr><w:tr>${tc('內容說明：範例')}</w:tr>`;
+  const block = `<w:tr>${PHOTO_TC}</w:tr><w:tr>${tc('內容說明：範例')}</w:tr>`;
   // 剛好兩個區塊：不誤報
   const ok = parseTemplate({ documentXml: head + block + block + tail, name: 'ok' });
   assert.deepEqual(ok.unknown, []);

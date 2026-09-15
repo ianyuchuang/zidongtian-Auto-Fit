@@ -15,7 +15,14 @@ function text(node) {
   return out;
 }
 
-const isPhotoCell = (tc) => !!find(tc, 'wp:inline');
+/**
+ * 照片的 drawing：`wp:inline`（插在段落裡的圖）與 `wp:anchor`（浮在格子上、文繞圖的圖）都算——
+ * 同一份自檢表兩種貼法都有人用。判斷看的是「裡面有沒有圖」（`a:blip`），
+ * 所以照片格裡那個浮動的日期戳文字方塊（同樣是 drawing，但沒有圖）不會被誤認成照片。
+ */
+const photoDrawings = (node) => findAll(node, 'w:drawing').filter((d) => find(d, 'a:blip'));
+
+const isPhotoCell = (tc) => photoDrawings(tc).length > 0;
 
 function cellSpan(tc) {
   return num(find(tc, 'w:gridSpan'), 'w:val') ?? 1;
@@ -127,7 +134,7 @@ export function parseTemplate({ documentXml, headerXml = null, name = '' } = {})
 
   // ---- 照片表格 ----
   const tables = kids(body, 'w:tbl');
-  const tbl = tables.find((t) => findAll(t, 'wp:inline').length) ?? tables[0];
+  const tbl = tables.find((t) => photoDrawings(t).length) ?? tables[0];
   if (!tbl) {
     unknown.push('照片表格');
     return { id: null, name, font: '標楷體', page, heading: { place: 'body', lines: [] }, grid: {}, photo: {}, caption: {}, stamp: { on: false }, block: { cols: [], rows: [] }, unknown };
@@ -243,7 +250,9 @@ export function parseTemplate({ documentXml, headerXml = null, name = '' } = {})
 
   // ---- 照片框 ----
   const photoCell = rows[start] ? kids(rows[start], 'w:tc').find(isPhotoCell) : null;
-  const ext = photoCell ? find(photoCell, 'wp:extent') : null;
+  // 從照片本身的 drawing 取框，不是格子裡第一個 wp:extent——照片格常還有日期戳的文字方塊，
+  // 兩者的先後次序不保證，撞到文字方塊就會量成戳章大小。
+  const ext = photoCell ? find(photoDrawings(photoCell)[0], 'wp:extent') : null;
   const photo = { h: (num(ext, 'cy') ?? 0) / EMU_PER_PX, maxW: (num(ext, 'cx') ?? 0) / EMU_PER_PX };
   if (!photo.h || !photo.maxW) unknown.push('照片框大小');
 
@@ -266,8 +275,11 @@ export function parseTemplate({ documentXml, headerXml = null, name = '' } = {})
     if (find(sect, 'w:headerReference')) unknown.push('頁首文字');
   }
 
-  // ---- 日期戳（照片上的浮動文字方塊）----
-  const stampOn = photoCell ? findAll(photoCell, 'w:txbxContent').some((tb) => DATE_RE.test(text(tb))) : false;
+  // ---- 日期戳（浮在照片上的文字方塊）----
+  // 整份內文都看，不是只看第一個照片格：樣本常只有一張還留著日期（其餘被清空），
+  // 而且 Word 把浮動物件錨在哪個段落不一定——同一份檔的日期戳可能錨在表格後面那個空段落上。
+  // 認的是「內容像日期的文字方塊」，抬頭那種寫在段落裡的日期不會中。
+  const stampOn = findAll(body, 'w:txbxContent').some((tb) => DATE_RE.test(text(tb)));
 
   return {
     id: null,
