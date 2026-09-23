@@ -10,6 +10,7 @@ import {
   sortPhotos,
   reorderWithinDir,
   reorderManyWithinDir,
+  isLastInDir,
   assignOrder,
   TRASH_DIR,
   isTrashDir,
@@ -90,6 +91,15 @@ test('nextPendingReview：從目前之後循環找', () => {
   assert.equal(nextPendingReview([photos[0], photos[2]], 'c'), null);
   assert.equal(nextPendingReview([photos[2]], 'c'), null);
   assert.equal(nextPendingReview([photos[0], photos[2]], 'a').id, 'c');
+});
+
+test('isLastInDir：資料夾（群組）裡最後一張才算；不在清單裡回 false', () => {
+  const list = sortPhotos(photos, ['', '4F', '5F']); // f | a b | c d e
+  assert.equal(isLastInDir(list, 'b'), true);
+  assert.equal(isLastInDir(list, 'a'), false);
+  assert.equal(isLastInDir(list, 'e'), true);
+  assert.equal(isLastInDir(list, 'f'), true, '根資料夾只有一張');
+  assert.equal(isLastInDir(list, 'ghost'), false);
 });
 
 test('sortPhotos：依資料夾順序再依 order', () => {

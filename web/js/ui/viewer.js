@@ -54,8 +54,9 @@ export function cropNeedsReload(p, shown) {
 }
 
 /** 「✓ 確認，下一張」按完要不要提示：沒確認成功（已刪除）或沒有下一張都要講，別靜靜不動（跟「跳過」一致）。 */
-export function confirmFeedback({ confirmed, next }) {
+export function confirmFeedback({ confirmed, next, dirEnd = false }) {
   if (!confirmed) return '已刪除的照片不能確認';
+  if (dirEnd) return '已確認；這是這個資料夾的最後一張，停在這裡';
   if (!next) return '沒有其他待校對的照片了';
   return null;
 }

@@ -12,6 +12,7 @@ import {
   reorderManyWithinDir,
   assignOrder,
   nextPendingReview,
+  isLastInDir,
   TRASH_DIR,
   isTrashDir,
   isTrashed,
@@ -394,13 +395,20 @@ export function createApp({ thumb = makeThumbUrl } = {}) {
     confirm(id) {
       return app.confirmAndNext(id).confirmed;
     },
-    /** 同 confirm，但把「有沒有下一張待校對」也回傳，UI 才能在沒有下一張時提示（跟「跳過」一致）。 */
+    /**
+     * 同 confirm，但把「有沒有下一張待校對」也回傳，UI 才能在沒有下一張時提示（跟「跳過」一致）。
+     * 該資料夾的最後一張確認完就停在原地（dirEnd: true），不跳去下一個資料夾，免得畫面跳動；
+     * 「最後一張」看目前表格顯示的（有篩選就照篩選後的），這張被篩掉才看全部。
+     */
     confirmAndNext(id) {
       const p = byId(id);
       if (!p || isTrashed(p)) return { confirmed: false, next: false };
+      const shown = app.visiblePhotos();
+      const last = isLastInDir(shown.some((x) => x.id === id) ? shown : app.orderedPhotos(), id);
       p.status = STATUS.CONFIRMED;
       save();
       emit('photos');
+      if (last) return { confirmed: true, next: false, dirEnd: true };
       return { confirmed: true, next: app.gotoNextPending(id) };
     },
     skip(id) {

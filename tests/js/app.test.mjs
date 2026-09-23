@@ -578,19 +578,42 @@ test('loadThumbs：照片中途被搬走（不在 state.photos 裡）→ 那張�
   }
 });
 
-test('confirmAndNext：回傳 confirmed 與 next；已刪除的不能確認、最後一張確認後 next=false（跟「跳過」一致）', async () => {
+test('confirmAndNext：回傳 confirmed 與 next；已刪除的不能確認、沒有其他待校對時 next=false（跟「跳過」一致）', async () => {
   const { app } = await setup();
   await app.trash(['4F/a.jpg']);
   assert.deepEqual(app.confirmAndNext('4F/_回收桶/a.jpg'), { confirmed: false, next: false });
   assert.deepEqual(app.confirmAndNext('ghost'), { confirmed: false, next: false });
   for (const id of ['4F/b.jpg', '5F/a.jpg', '5F/c.jpg']) app.photo(id).status = 'ai'; // 待校對＝有 AI 結果的
-  assert.deepEqual(app.confirmAndNext('4F/b.jpg'), { confirmed: true, next: true });
-  assert.equal(app.state.selectedId, '5F/a.jpg');
-  app.confirmAndNext('5F/a.jpg');
-  const last = app.confirmAndNext('5F/c.jpg');
-  assert.deepEqual(last, { confirmed: true, next: false }, '沒有其他待校對的了');
-  assert.equal(app.photo('5F/c.jpg').status, 'confirmed');
-  assert.equal(app.skip('5F/c.jpg'), false, '跳過在同樣情況也回 false');
+  app.select('5F/a.jpg');
+  assert.deepEqual(app.confirmAndNext('5F/a.jpg'), { confirmed: true, next: true });
+  assert.equal(app.state.selectedId, '5F/c.jpg');
+  app.photo('4F/b.jpg').status = 'confirmed';
+  app.select('4F/b.jpg');
+  assert.equal(app.skip('4F/b.jpg'), true);
+  app.photo('5F/c.jpg').status = 'confirmed';
+  assert.equal(app.skip('5F/c.jpg'), false, '沒有其他待校對的了');
+});
+
+test('confirmAndNext：資料夾最後一張確認完停在原地，不跳去下一個資料夾（避免畫面跳動）', async () => {
+  const { app } = await setup();
+  for (const p of app.state.photos) p.status = 'ai';
+  app.select('4F/b.jpg');
+  assert.deepEqual(app.confirmAndNext('4F/b.jpg'), { confirmed: true, next: false, dirEnd: true });
+  assert.equal(app.state.selectedId, '4F/b.jpg', '選取沒動');
+  assert.equal(app.photo('4F/b.jpg').status, 'confirmed', '照樣確認');
+  // 不是最後一張照常跳下一張
+  app.select('4F/a.jpg');
+  assert.equal(app.confirmAndNext('4F/a.jpg').next, true);
+  // 最後一張被刪除 → 前一張就算最後一張
+  await app.trash(['5F/c.jpg']);
+  assert.equal(app.confirmAndNext('5F/a.jpg').dirEnd, true);
+});
+
+test('confirmAndNext：「最後一張」照篩選後表格上看到的算', async () => {
+  const { app } = await setup();
+  for (const p of app.state.photos) p.status = 'ai';
+  app.setQuery('a.jpg'); // 只剩 4F/a、5F/a
+  assert.equal(app.confirmAndNext('4F/a.jpg').dirEnd, true, '4F 在畫面上只剩 a，它就是最後一張');
 });
 
 test('stackOffset：多張拖曳的縮圖堆疊在游標右下，一張比一張再往右下', () => {

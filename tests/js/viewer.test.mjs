@@ -34,6 +34,7 @@ test('確認，下一張：已刪除的講「不能確認」、沒有下一張�
   assert.equal(confirmFeedback({ confirmed: false, next: false }), '已刪除的照片不能確認');
   assert.equal(confirmFeedback({ confirmed: true, next: false }), '沒有其他待校對的照片了');
   assert.equal(confirmFeedback({ confirmed: true, next: true }), null);
+  assert.match(confirmFeedback({ confirmed: true, next: false, dirEnd: true }), /最後一張/);
   // 跟 app.confirmAndNext 接起來
   const root = new MemoryDirectoryHandle('r');
   const f = await root.getDirectoryHandle('4F', { create: true });
@@ -44,6 +45,6 @@ test('確認，下一張：已刪除的講「不能確認」、沒有下一張�
   await app.rescan();
   await app.trash(['4F/a.jpg']);
   assert.equal(confirmFeedback(app.confirmAndNext('4F/_回收桶/a.jpg')), '已刪除的照片不能確認');
-  assert.equal(confirmFeedback(app.confirmAndNext('4F/b.jpg')), '沒有其他待校對的照片了');
+  assert.match(confirmFeedback(app.confirmAndNext('4F/b.jpg')), /這個資料夾的最後一張/);
   assert.equal(app.photo('4F/b.jpg').status, 'confirmed');
 });

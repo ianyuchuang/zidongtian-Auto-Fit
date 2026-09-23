@@ -133,6 +133,19 @@ export function nextPendingReview(orderedPhotos, fromId) {
 }
 
 /**
+ * id 是不是它那個資料夾（群組）在 orderedPhotos 裡的最後一張（已刪除的不算）。
+ * 「確認，下一張」在資料夾最後一張時不跳：跳到下一個資料夾會讓表格捲動、畫面跳一下。
+ * 不在清單裡 → false。
+ */
+export function isLastInDir(orderedPhotos, id) {
+  const p = orderedPhotos.find((x) => x.id === id);
+  if (!p) return false;
+  const dir = groupDirOf(p);
+  const live = orderedPhotos.filter((x) => groupDirOf(x) === dir && !isTrashed(x));
+  return live.length > 0 && live[live.length - 1].id === id;
+}
+
+/**
  * 依（資料夾順序, 是否已刪除, order）排序，回傳新陣列。dirOrder：資料夾路徑陣列。
  * 已刪除的照片仍歸原資料夾，只是排在該資料夾的最後面。
  */
