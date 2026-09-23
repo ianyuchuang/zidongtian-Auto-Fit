@@ -105,14 +105,33 @@ test('restore：從回收桶搬回原本那個資料夾，不需要使用者自�
   assert.deepEqual({ moved: r2.moved, failed: r2.failed }, { moved: 0, failed: [] });
 });
 
-test('已刪除的照片不進統計、不被批次修改設計值掃到', async () => {
+test('已刪除的照片不進統計、不被批次修改掃到', async () => {
   const { app } = await setup();
   await app.trash(['4F/a.jpg']);
   assert.equal(app.counts().all, 3);
   assert.equal(app.counts().trashed, 1);
-  app.batchDesign('X', 'all');
+  assert.equal(app.batchEdit('design', 'X', 'all'), 3);
   assert.equal(app.photo('4F/_回收桶/a.jpg').design, '', '已刪除的不跟著改');
   assert.equal(app.photo('4F/b.jpg').design, 'X');
+});
+
+test('批次修改：「目前勾選的檔案」只改勾選的，不是整個資料夾；可改內容說明', async () => {
+  const { app } = await setup();
+  app.setChecked(['4F/a.jpg', '5F/c.jpg'], true);
+  assert.equal(app.batchEdit('desc', '帷幕骨架', 'checked'), 2);
+  assert.equal(app.photo('4F/a.jpg').desc, '帷幕骨架');
+  assert.equal(app.photo('5F/c.jpg').desc, '帷幕骨架');
+  assert.equal(app.photo('4F/b.jpg').desc, '', '同資料夾但沒勾的不動');
+  assert.equal(app.photo('4F/a.jpg').design, '', '只改選的欄位');
+  app.clearChecked();
+  assert.equal(app.batchEdit('design', 'Y', 'checked'), 0, '沒勾就一張都不改');
+});
+
+test('批次修改：不明的欄位或範圍大聲失敗，不靜靜改錯', async () => {
+  const { app } = await setup();
+  assert.throws(() => app.batchEdit('actual', 'X', 'all'), /不能批次修改/);
+  assert.throws(() => app.batchEdit('design', 'X', 'dir'), /不明的套用範圍/);
+  assert.equal(app.photo('4F/a.jpg').design, '');
 });
 
 test('dropIds：多張 JSON 優先，其次單張，壞掉的 JSON 落回單張', () => {

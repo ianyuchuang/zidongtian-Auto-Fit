@@ -35,11 +35,12 @@ def test_no_scripts_and_links_privacy():
 
 
 def test_batch_edit_scope_matches_topbar():
-    """批次修改設計值的範圍是「目前篩選出的 N 列／目前選取的資料夾／全部」，不是勾選的照片。"""
+    """批次修改可選內容說明或設計值，範圍是「目前篩選出的 N 列／目前勾選的檔案／全部」。"""
     topbar = (WEB / "js" / "ui" / "topbar.js").read_text(encoding="utf-8")
-    for opt in ("目前篩選出的", "目前選取的資料夾", "全部"):
+    for opt in ("目前篩選出的", "目前勾選的檔案", "全部"):
         assert opt in topbar and opt in HTML, opt
-    assert "把選到的照片" not in HTML
+    assert "目前選取的資料夾" not in topbar and "目前選取的資料夾" not in HTML
+    assert "批次修改設計值" not in HTML
 
 
 def test_drop_faq_not_stale():

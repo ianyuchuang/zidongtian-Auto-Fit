@@ -17,8 +17,8 @@ import {
   isTrashed,
   trashDirOf,
   ownerOfTrash,
-  groupDirOf,
   pruneChecked,
+  BATCH_FIELDS,
 } from './state.js';
 import { loadSaved, savePhotos, applySaved, loadDates, saveDates } from './storage.js';
 import { makeThumbUrl, makeCropUrl, usableBbox, renderForDocx } from './imaging.js';
@@ -425,13 +425,19 @@ export function createApp({ thumb = makeThumbUrl } = {}) {
       app.select(list[j].id);
       return true;
     },
-    batchDesign(value, scope) {
+    /**
+     * 批次修改：field＝'desc'（內容說明）｜'design'（設計值）；
+     * scope＝'visible'（目前篩選出的）｜'checked'（目前勾選的）｜'all'。回傳改了幾張。
+     */
+    batchEdit(field, value, scope) {
+      if (!BATCH_FIELDS.includes(field)) throw new Error(`不能批次修改的欄位：${field}`);
       let targets;
       if (scope === 'visible') targets = app.visiblePhotos();
-      else if (scope === 'dir') targets = state.photos.filter((p) => groupDirOf(p) === (state.dirFilter ?? ''));
-      else targets = state.photos;
+      else if (scope === 'checked') targets = app.checkedPhotos();
+      else if (scope === 'all') targets = state.photos;
+      else throw new Error(`不明的套用範圍：${scope}`);
       targets = targets.filter((p) => !isTrashed(p)); // 已刪除的不跟著改
-      for (const p of targets) p.design = value;
+      for (const p of targets) p[field] = value;
       save();
       emit('photos');
       return targets.length;

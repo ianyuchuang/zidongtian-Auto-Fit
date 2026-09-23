@@ -1,4 +1,4 @@
-// 頂列：資料夾 / 版型 pill、AI 辨識、批次修改設計值、產生檔案（Word / Excel）。
+// 頂列：資料夾 / 版型 pill、AI 辨識、批次修改（內容說明／設計值）、產生檔案（Word / Excel）。
 // 檢查日期不在這裡：每個資料夾各自一個，在表格的資料夾列上填。
 
 import { esc, showDialog, alertDialog, confirmDialog, toast } from './dialog.js';
@@ -6,6 +6,7 @@ import { runRecognize, engineLabel } from './recognize.js';
 import { loadPdfFont } from '../pdf-font.js';
 import { DEFAULT_FONT } from '../template/spec.js';
 import { FORMATS, defaultFormat } from '../docx-model.js';
+import { BATCH_FIELDS, BATCH_FIELD_LABEL, isTrashed } from '../state.js';
 
 export function mountTopbar(container, app) {
   container.className = 'topbar';
@@ -21,7 +22,7 @@ export function mountTopbar(container, app) {
       ${eng ? `<span class="pill engine" title="${esc(eng.title)}">🤖 ${esc(eng.text)}</span>` : ''}
       <span class="spacer"></span>
       <button class="btn" data-act="recognize" title="選辨識方式與提示詞，讓 AI 填三欄" ${busy}>🤖 AI 辨識</button>
-      <button class="btn" data-act="batch" ${busy}>批次修改設計值</button>
+      <button class="btn" data-act="batch" ${busy}title="一次改掉多張的內容說明或設計值">批次修改</button>
       <button class="btn btn-primary" data-act="export" ${busy}>產生 ${defaultFormat(template?.spec) === 'xlsx' ? 'Excel' : 'Word'} 檔</button>`;
   }
 
@@ -33,7 +34,7 @@ export function mountTopbar(container, app) {
     } else if (act === 'recognize') {
       await runRecognize(app);
     } else if (act === 'batch') {
-      await batchDesign(app);
+      await batchEdit(app);
     } else if (act === 'export') {
       await exportFiles(app);
     }
@@ -55,39 +56,55 @@ export function mountTopbar(container, app) {
   return unsubscribe;
 }
 
-async function batchDesign(app) {
-  const visibleN = app.visiblePhotos().length;
-  const dirName = app.state.dirFilter == null ? '（未選資料夾）' : app.dirOf(app.state.dirFilter)?.name;
+async function batchEdit(app) {
+  const visibleN = app.visiblePhotos().filter((p) => !isTrashed(p)).length;
+  const checkedN = app.checkedPhotos().filter((p) => !isTrashed(p)).length;
+  const allN = app.state.photos.filter((p) => !isTrashed(p)).length;
+  let field;
   let scope;
   let value;
   const ok = await showDialog({
-    title: '批次修改設計值',
+    title: '批次修改',
     body: `
+      <div class="opt"><label>要改的欄位
+        <select id="field">
+          ${BATCH_FIELDS.map((f) => `<option value="${f}" ${f === 'design' ? 'selected' : ''}>${esc(BATCH_FIELD_LABEL[f])}</option>`).join('')}
+        </select></label></div>
       <div class="opt"><label>套用範圍
         <select id="scope">
-          <option value="visible">目前篩選出的 ${visibleN} 列</option>
-          <option value="dir" ${app.state.dirFilter == null ? 'disabled' : ''}>目前選取的資料夾 ${esc(dirName)}</option>
-          <option value="all">全部 ${app.state.photos.length} 張</option>
+          <option value="visible" ${checkedN ? '' : 'selected'}>目前篩選出的 ${visibleN} 列</option>
+          <option value="checked" ${checkedN ? 'selected' : 'disabled'}>目前勾選的檔案 ${checkedN} 張</option>
+          <option value="all">全部 ${allN} 張</option>
         </select></label></div>
-      <div class="opt"><label>設計值<input type="text" id="val" placeholder="例如 700mm±10"></label></div>`,
+      <div class="opt"><label><span id="val-label">設計值</span><input type="text" id="val"></label></div>`,
     buttons: [
       { label: '取消', value: false },
       { label: '套用', value: true, primary: true },
     ],
-    onOpen: (d) => d.querySelector('#val').focus(),
+    onOpen: (d) => {
+      const sel = d.querySelector('#field');
+      const sync = () => {
+        d.querySelector('#val-label').textContent = BATCH_FIELD_LABEL[sel.value];
+        d.querySelector('#val').placeholder = sel.value === 'design' ? '例如 700mm±10' : '要套用到每一張的內容說明';
+      };
+      sel.addEventListener('change', sync);
+      sync();
+      d.querySelector('#val').focus();
+    },
     beforeClose: (v, d) => {
+      field = d.querySelector('#field').value;
       scope = d.querySelector('#scope').value;
       value = d.querySelector('#val').value.trim();
       if (v === true && !value) {
-        toast('請輸入設計值', { error: true });
+        toast(`請輸入${BATCH_FIELD_LABEL[field]}`, { error: true });
         return false;
       }
       return true;
     },
   });
   if (ok !== true) return;
-  const n = app.batchDesign(value, scope);
-  toast(`已把 ${n} 張的設計值改成「${value}」`);
+  const n = app.batchEdit(field, value, scope);
+  toast(`已把 ${n} 張的${BATCH_FIELD_LABEL[field]}改成「${value}」`);
 }
 
 async function exportFiles(app) {

@@ -207,6 +207,10 @@ export function groupDirOf(p) {
   return ownerOfTrash(p?.dir);
 }
 
+/** 頂列「批次修改」可以改的欄位與顯示名稱（實際值每張照片不同，不給批次改）。 */
+export const BATCH_FIELDS = ['desc', 'design'];
+export const BATCH_FIELD_LABEL = { desc: '內容說明', design: '設計值' };
+
 /** 勾選集合只留還存在的 id（就地修改），回傳移除數。 */
 export function pruneChecked(checked, photos) {
   const alive = new Set(photos.map((p) => p.id));
