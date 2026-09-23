@@ -186,6 +186,20 @@ tr.photo:hover td { background: #fafbfc; }
 tr.photo.selected td { background: var(--sel); }
 tr.photo.selected td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 tr.photo.dragging { opacity: .4; }
+/* 多張一起拖：縮圖從表格飛到游標右下角聚成一疊（ui/dnd.js 的 startDragStack） */
+.drag-stack { position: fixed; left: 0; top: 0; width: 0; height: 0; pointer-events: none; z-index: 200; }
+.drag-stack .ds-card {
+  position: absolute; left: 0; top: 0; width: 56px; height: 42px; border-radius: 4px;
+  background: #d8dce2 center / cover no-repeat; border: 2px solid #fff; box-shadow: 0 2px 8px rgba(0,0,0,.28);
+  transition: transform .32s cubic-bezier(.2,.8,.2,1);
+}
+.drag-stack .ds-count {
+  position: absolute; left: 0; top: 0; z-index: 10; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px;
+  background: var(--accent); color: #fff; font-size: 12px; font-weight: 600; line-height: 20px; text-align: center;
+  opacity: 0; transition: opacity .2s .15s;
+}
+.drag-stack.gathered .ds-count { opacity: 1; }
+/* 不理 prefers-reduced-motion：公司電腦常把 Windows 動畫效果關掉，這個短動畫是使用者指定要的 */
 tr.photo.checked td { background: #f3f8f5; }
 td.chk, th.chk { width: 38px; text-align: center; }
 td.chk input, th.chk input { width: 16px; height: 16px; cursor: pointer; margin: 0; }

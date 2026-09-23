@@ -1,9 +1,9 @@
 // 中欄：篩選 chip、搜尋、依資料夾分組的可編輯表格、拖曳換序 / 拖到群組列搬移、
-// 勾選多選（批次搬到資料夾、刪除到 _回收桶；拖任一勾選列＝整批拖走）。
+// 勾選多選（批次搬到資料夾、刪除到 _回收桶；拖任一勾選列＝整批拖走，可拖到某列前後一起換順序）。
 
 import { CHIPS, CHIP_LABEL, STATUS_LABEL, TRASH_DIR, isTrashDir, isTrashed, groupDirOf } from '../state.js';
 import { esc, toast, confirmDialog } from './dialog.js';
-import { DND_MULTI, DND_SINGLE, dropIds, reportMove } from './dnd.js';
+import { DND_MULTI, DND_SINGLE, dropIds, reportMove, startDragStack } from './dnd.js';
 
 const FIELDS = ['desc', 'design', 'actual'];
 
@@ -27,7 +27,7 @@ export function mountTable(container, app) {
       </table>
       <div class="empty" hidden>沒有符合的照片</div>
     </div>
-    <div class="table-hint">拖把手改順序（＝Word 順序）；拖到左側資料夾或群組列即搬移。右側勾選可多選：批次搬移、刪除（移到該資料夾的 ${TRASH_DIR}）；刪掉的會留在原位反灰，按「↩ 還原」就回來。點列 → 右側顯示大圖與白板裁切。Tab / Enter 在儲存格間移動。</div>`;
+    <div class="table-hint">拖把手改順序（＝Word 順序）；拖到左側資料夾或群組列即搬移。右側勾選可多選：拖任一勾選列＝整批一起搬、一起換順序；批次搬移、刪除（移到該資料夾的 ${TRASH_DIR}）；刪掉的會留在原位反灰，按「↩ 還原」就回來。點列 → 右側顯示大圖與白板裁切。Tab / Enter 在儲存格間移動。</div>`;
 
   const tbody = container.querySelector('tbody');
   const emptyEl = container.querySelector('.empty');
@@ -303,6 +303,7 @@ export function mountTable(container, app) {
   // ---- 拖曳 ----
   let draggingId = null;
   let draggingIds = [];
+  let stopStack = null;
   tbody.addEventListener('dragstart', (e) => {
     const handle = e.target.closest('.handle');
     if (!handle) return;
@@ -314,11 +315,18 @@ export function mountTable(container, app) {
     e.dataTransfer.setData(DND_SINGLE, draggingId);
     e.dataTransfer.setData('text/plain', draggingIds.join('\n'));
     e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setDragImage(tr, 10, 10);
     tr.classList.add('dragging');
-    if (draggingIds.length > 1) for (const id of draggingIds) rows.get(id)?.classList.add('dragging');
+    if (draggingIds.length > 1) {
+      for (const id of draggingIds) rows.get(id)?.classList.add('dragging');
+      const thumbs = draggingIds.map((id) => rows.get(id)?.querySelector('.thumb')).filter(Boolean);
+      stopStack = startDragStack(e, thumbs, draggingIds.length);
+    } else {
+      e.dataTransfer.setDragImage(tr, 10, 10);
+    }
   });
   tbody.addEventListener('dragend', () => {
+    stopStack?.();
+    stopStack = null;
     for (const el of tbody.querySelectorAll('.dragging')) el.classList.remove('dragging');
     clearMarks();
     draggingId = null;
@@ -341,10 +349,10 @@ export function mountTable(container, app) {
       g.classList.add('over');
       return;
     }
-    if (!tr || tr.dataset.id === draggingId || draggingIds.length > 1) return; // 整批只能拖到資料夾 / 群組列
-    const moving = app.photo(draggingId);
+    // 拖到某一列前後＝換順序（別的資料夾的會先搬過來）；不能拖到自己這批身上或已刪除的列
+    if (!tr || draggingIds.includes(tr.dataset.id)) return;
     const target = app.photo(tr.dataset.id);
-    if (!moving || !target || moving.dir !== target.dir) return; // 跨資料夾請拖到群組列或左樹
+    if (!target || isTrashed(target)) return;
     e.preventDefault();
     tr.classList.add(placeOf(e, tr) === 'before' ? 'drop-before' : 'drop-after');
   });
@@ -359,9 +367,16 @@ export function mountTable(container, app) {
       return;
     }
     const tr = e.target.closest('tr.photo');
-    if (!tr || ids.length > 1) return;
+    if (!tr) return;
     e.preventDefault();
-    app.reorder(ids[0], tr.dataset.id, placeOf(e, tr));
+    const toDir = app.photo(tr.dataset.id)?.dir ?? '';
+    try {
+      const r = await app.reorderMany(ids, tr.dataset.id, placeOf(e, tr));
+      if (r.moved || r.failed.length) reportMove(app, r, app.dirOf(toDir)?.name ?? toDir);
+    } catch (err) {
+      console.error(err);
+      toast(`搬移失敗：${err.message}`, { error: true });
+    }
   });
 
   /** 辨識中：篩選區與勾選一起反灰，避免中途換範圍造成混亂。 */

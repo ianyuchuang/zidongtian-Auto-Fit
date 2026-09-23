@@ -27,6 +27,73 @@ export function reportMove(app, r, dirName) {
   toast(msg, { error: r.failed.length > 0, ms: r.failed.length ? 6000 : 3500 });
 }
 
+/** 聚到游標右下角後，第 i 張卡片相對游標的位移（往右下疊，最多疊 maxCards 張）。 */
+export function stackOffset(i, { dx = 18, dy = 18, step = 4 } = {}) {
+  return { x: dx + i * step, y: dy + i * step };
+}
+
+/**
+ * 多張一起拖：瀏覽器的拖曳影像是一張死圖，做不出動畫，所以換成透明影像，
+ * 自己在 body 上疊一層跟著游標走的縮圖堆——每張縮圖從它在表格裡的位置飛到游標右下角聚成一疊，
+ * 右上角標總張數（含被篩選隱藏、畫面上沒有縮圖的）。回傳 stop()，dragend 時呼叫。
+ * e：dragstart 事件；thumbs：畫面上看得到的縮圖 <img>（依表格順序）；count：總張數。
+ */
+export function startDragStack(e, thumbs, count, { maxCards = 4 } = {}) {
+  // 透明拖曳影像：元素要在 DOM 裡瀏覽器才拍得到，拍完（下一輪）就拿掉
+  const blank = document.createElement('div');
+  blank.style.cssText = 'position:fixed;top:-10px;left:-10px;width:1px;height:1px;opacity:0;';
+  document.body.appendChild(blank);
+  e.dataTransfer.setDragImage(blank, 0, 0);
+  setTimeout(() => blank.remove(), 0);
+
+  const layer = document.createElement('div');
+  layer.className = 'drag-stack';
+  let x = e.clientX;
+  let y = e.clientY;
+  const place = () => {
+    layer.style.transform = `translate(${x}px, ${y}px)`;
+  };
+  place();
+  const cards = thumbs.slice(0, maxCards).map((img, i) => {
+    const r = img.getBoundingClientRect();
+    const card = document.createElement('div');
+    card.className = 'ds-card';
+    if (img.getAttribute('src')) card.style.backgroundImage = `url("${img.src}")`;
+    card.style.zIndex = String(maxCards - i);
+    card.style.transform = `translate(${r.left - x}px, ${r.top - y}px)`; // 起點：表格上原本的位置
+    layer.appendChild(card);
+    return card;
+  });
+  const badge = document.createElement('span');
+  badge.className = 'ds-count';
+  badge.textContent = String(count);
+  layer.appendChild(badge);
+  document.body.appendChild(layer);
+
+  // 先逼瀏覽器把起點算進樣式，再設終點，transition 才會動起來（不靠 requestAnimationFrame：分頁在背景時它不跑）
+  void layer.offsetWidth;
+  cards.forEach((c, i) => {
+    const o = stackOffset(i);
+    c.style.transform = `translate(${o.x}px, ${o.y}px)`;
+  });
+  const last = stackOffset(Math.max(0, cards.length - 1));
+  badge.style.transform = `translate(${last.x + 44}px, ${last.y - 8}px)`;
+  layer.classList.add('gathered');
+
+  // 拖曳中 mousemove 不會發，只有 dragover；掛在 document 的捕獲階段，哪個元素擋掉冒泡都收得到
+  const onOver = (ev) => {
+    if (ev.clientX === 0 && ev.clientY === 0) return; // 部分情況（拖出視窗）會給 0,0
+    x = ev.clientX;
+    y = ev.clientY;
+    place();
+  };
+  document.addEventListener('dragover', onOver, true);
+  return function stop() {
+    document.removeEventListener('dragover', onOver, true);
+    layer.remove();
+  };
+}
+
 /**
  * 把一塊區域變成可拖放檔案的區域（入口頁選資料夾、版型頁拖 docx／xlsx 共用）。
  * 會擋掉冒泡，所以小區塊（例：版型框）綁的處理會蓋過外層整頁的處理。

@@ -9,6 +9,7 @@ import {
   nextPendingReview,
   sortPhotos,
   reorderWithinDir,
+  reorderManyWithinDir,
   assignOrder,
   TRASH_DIR,
   isTrashDir,
@@ -94,6 +95,21 @@ test('nextPendingReview：從目前之後循環找', () => {
 test('sortPhotos：依資料夾順序再依 order', () => {
   const sorted = sortPhotos(photos, ['', '4F', '5F']);
   assert.deepEqual(sorted.map((p) => p.id), ['f', 'a', 'b', 'c', 'd', 'e']);
+});
+
+test('reorderManyWithinDir：多張照給的順序排成連續一段，插在目標前／後', () => {
+  // 5F：c(0) d(1) e(2)
+  assert.deepEqual(reorderManyWithinDir(photos, ['e', 'c'], 'd', 'before'), ['e', 'c', 'd']);
+  assert.deepEqual(reorderManyWithinDir(photos, ['c', 'e'], 'd', 'after'), ['d', 'c', 'e']);
+  assert.deepEqual(reorderManyWithinDir(photos, ['d', 'e'], 'c', 'before'), ['d', 'e', 'c']);
+});
+
+test('reorderManyWithinDir：目標在搬移清單裡、有別的資料夾的、重複或空清單 → null', () => {
+  assert.equal(reorderManyWithinDir(photos, ['c', 'd'], 'd', 'after'), null);
+  assert.equal(reorderManyWithinDir(photos, ['a', 'c'], 'd', 'before'), null, 'a 在 4F，要先搬過來');
+  assert.equal(reorderManyWithinDir(photos, ['c', 'c'], 'd', 'before'), null);
+  assert.equal(reorderManyWithinDir(photos, [], 'd', 'before'), null);
+  assert.equal(reorderManyWithinDir(photos, ['c'], 'ghost', 'before'), null);
 });
 
 test('reorderWithinDir：同資料夾前後插入；跨資料夾回 null', () => {

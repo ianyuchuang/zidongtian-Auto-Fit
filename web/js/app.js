@@ -9,7 +9,7 @@ import {
   sortPhotos,
   filterPhotos,
   counts,
-  reorderWithinDir,
+  reorderManyWithinDir,
   assignOrder,
   nextPendingReview,
   TRASH_DIR,
@@ -487,14 +487,28 @@ export function createApp({ thumb = makeThumbUrl } = {}) {
     },
 
     // ---------- 順序 / 搬移 / 資料夾 ----------
-    reorder(movingId, targetId, place) {
-      const ids = reorderWithinDir(state.photos, movingId, targetId, place);
-      if (!ids) return false;
-      const order = assignOrder(ids);
-      for (const p of state.photos) if (order.has(p.id)) p.order = order.get(p.id);
-      save();
-      emit('photos');
-      return true;
+    /**
+     * 多張一起拖到某一列的前／後（勾選的整批拖曳）。別的資料夾的先搬進 target 的資料夾，
+     * 再照 ids 的順序排成連續一段。回傳 { ok, moved, failed }：moved / failed 是跨資料夾搬檔的結果，
+     * 搬失敗的留在原資料夾、不參與排序。target 已刪除或本身在 ids 裡 → ok=false、什麼都不動。
+     */
+    async reorderMany(ids, targetId, place) {
+      const target = byId(targetId);
+      const none = { ok: false, moved: 0, failed: [] };
+      if (!target || isTrashed(target) || ids.includes(targetId)) return none;
+      const list = ids.map(byId).filter((p) => p && !isTrashed(p)); // 物件參照：搬檔後 id 會變
+      if (!list.length) return none;
+      const away = list.filter((p) => p.dir !== target.dir);
+      const r = away.length ? await app.moveManyToDir(away.map((p) => p.id), target.dir) : { moved: 0, failed: [] };
+      const here = list.filter((p) => p.dir === target.dir);
+      const next = here.length ? reorderManyWithinDir(state.photos, here.map((p) => p.id), target.id, place) : null;
+      if (next) {
+        const order = assignOrder(next);
+        for (const p of state.photos) if (order.has(p.id)) p.order = order.get(p.id);
+        save();
+        emit('photos');
+      }
+      return { ok: !!next, moved: r.moved, failed: r.failed };
     },
     /** 搬一張到資料夾。同資料夾 / 找不到 → false；搬移失敗丟錯。 */
     async moveToDir(id, dirPath) {

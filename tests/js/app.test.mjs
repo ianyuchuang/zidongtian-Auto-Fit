@@ -5,7 +5,7 @@ import { createApp, engineId } from '../../web/js/app.js';
 import { MemoryDirectoryHandle } from '../../web/js/fs/memory.js';
 import { TRASH_DIR, trashDirOf } from '../../web/js/state.js';
 import { exists } from '../../web/js/fs/adapter.js';
-import { dropIds, DND_MULTI, DND_SINGLE } from '../../web/js/ui/dnd.js';
+import { dropIds, DND_MULTI, DND_SINGLE, stackOffset } from '../../web/js/ui/dnd.js';
 
 async function setup() {
   const root = new MemoryDirectoryHandle('帷幕骨架');
@@ -57,6 +57,48 @@ test('moveManyToDir：整批搬、一張失敗不影響其他、id 隨路徑改�
   const b = app.photo('5F/b.jpg');
   assert.ok(b.order > app.photo('5F/c.jpg').order, '搬過去排在最後');
   await assert.rejects(app.moveManyToDir(['5F/c.jpg'], '6F'), /找不到資料夾/);
+});
+
+async function setupOrder() {
+  const root = new MemoryDirectoryHandle('帷幕骨架');
+  const f4 = await root.getDirectoryHandle('4F', { create: true });
+  const f5 = await root.getDirectoryHandle('5F', { create: true });
+  for (const n of ['a', 'b', 'c', 'd']) f4.putFile(`${n}.jpg`, new File([n], `${n}.jpg`));
+  for (const n of ['x', 'y']) f5.putFile(`${n}.jpg`, new File([n], `${n}.jpg`));
+  f5.putFile('a.jpg', new File(['dup'], 'a.jpg')); // 5F 也有 a.jpg：4F/a 搬不過去
+  const app = createApp();
+  app.state.root = root;
+  await app.rescan();
+  const names = (dir) => app.orderedPhotos().filter((p) => p.dir === dir).map((p) => p.name);
+  return { app, root, names };
+}
+
+test('reorderMany：同資料夾勾選多張一起換順序，勾選保留', async () => {
+  const { app, names } = await setupOrder();
+  app.setChecked(['4F/a.jpg', '4F/c.jpg'], true);
+  const r = await app.reorderMany(['4F/a.jpg', '4F/c.jpg'], '4F/d.jpg', 'after');
+  assert.deepEqual(r, { ok: true, moved: 0, failed: [] });
+  assert.deepEqual(names('4F'), ['b.jpg', 'd.jpg', 'a.jpg', 'c.jpg']);
+  assert.deepEqual([...app.state.checked].sort(), ['4F/a.jpg', '4F/c.jpg']);
+});
+
+test('reorderMany：跨資料夾的先搬過來，再排在目標前面；搬失敗的留原地不排', async () => {
+  const { app, root, names } = await setupOrder();
+  const r = await app.reorderMany(['4F/a.jpg', '4F/b.jpg', '5F/x.jpg'], '5F/y.jpg', 'before');
+  assert.equal(r.ok, true);
+  assert.equal(r.moved, 1);
+  assert.equal(r.failed.length, 1, '4F/a 同名搬不過去');
+  assert.equal(await exists(await root.getDirectoryHandle('5F'), 'b.jpg'), true);
+  assert.deepEqual(names('5F').filter((n) => n !== 'a.jpg'), ['b.jpg', 'x.jpg', 'y.jpg']);
+  assert.deepEqual(names('4F'), ['a.jpg', 'c.jpg', 'd.jpg']);
+});
+
+test('reorderMany：拖到自己身上或已刪除的列 → 什麼都不動', async () => {
+  const { app, names } = await setupOrder();
+  assert.equal((await app.reorderMany(['4F/a.jpg', '4F/b.jpg'], '4F/b.jpg', 'after')).ok, false);
+  await app.trash(['4F/d.jpg']);
+  assert.equal((await app.reorderMany(['4F/a.jpg'], '4F/_回收桶/d.jpg', 'after')).ok, false);
+  assert.deepEqual(names('4F'), ['a.jpg', 'b.jpg', 'c.jpg']);
 });
 
 test('moveToDir：單張介面不變（同資料夾 false、失敗丟錯）', async () => {
@@ -549,4 +591,11 @@ test('confirmAndNext：回傳 confirmed 與 next；已刪除的不能確認、�
   assert.deepEqual(last, { confirmed: true, next: false }, '沒有其他待校對的了');
   assert.equal(app.photo('5F/c.jpg').status, 'confirmed');
   assert.equal(app.skip('5F/c.jpg'), false, '跳過在同樣情況也回 false');
+});
+
+test('stackOffset：多張拖曳的縮圖堆疊在游標右下，一張比一張再往右下', () => {
+  const a = stackOffset(0);
+  const b = stackOffset(1);
+  assert.ok(a.x > 0 && a.y > 0, '在游標右下，不擋住游標指的位置');
+  assert.ok(b.x > a.x && b.y > a.y);
 });

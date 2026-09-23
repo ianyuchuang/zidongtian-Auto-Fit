@@ -154,16 +154,30 @@ export function sortPhotos(photos, dirOrder) {
  * 回傳該資料夾內照片的新順序（id 陣列）。不同資料夾回傳 null。
  */
 export function reorderWithinDir(photos, movingId, targetId, place = 'before') {
-  const moving = photos.find((p) => p.id === movingId);
+  return reorderManyWithinDir(photos, [movingId], targetId, place);
+}
+
+/**
+ * 多張一起換順序：把 movingIds（照給的順序排成連續一段）放到 targetId 之前或之後，
+ * 回傳該資料夾內照片的新順序（id 陣列）。有任何一張不在 target 的資料夾、
+ * 或 target 本身就在要搬的裡面 → null（呼叫端要先把別的資料夾的搬過來）。
+ */
+export function reorderManyWithinDir(photos, movingIds, targetId, place = 'before') {
   const target = photos.find((p) => p.id === targetId);
-  if (!moving || !target || moving.dir !== target.dir || movingId === targetId) return null;
+  if (!target || !movingIds.length || movingIds.includes(targetId)) return null;
+  const moving = new Set(movingIds);
+  if (moving.size !== movingIds.length) return null;
+  for (const id of movingIds) {
+    const p = photos.find((x) => x.id === id);
+    if (!p || p.dir !== target.dir) return null;
+  }
   const ids = photos
-    .filter((p) => p.dir === moving.dir)
+    .filter((p) => p.dir === target.dir)
     .sort((a, b) => a.order - b.order)
     .map((p) => p.id)
-    .filter((id) => id !== movingId);
+    .filter((id) => !moving.has(id));
   const idx = ids.indexOf(targetId);
-  ids.splice(place === 'after' ? idx + 1 : idx, 0, movingId);
+  ids.splice(place === 'after' ? idx + 1 : idx, 0, ...movingIds);
   return ids;
 }
 
