@@ -30,6 +30,8 @@ import { buildXlsxBlob } from './xlsx-export.js';
 import { buildPdfBlob } from './pdf-export.js';
 import { pdfFileName } from './docx-model.js';
 import { rocCompact, rocDisplay, rocDot, stampText, parseRocInput } from './rocdate.js';
+import { defaultSpec } from './template/spec.js';
+import { getTemplate, saveTemplate } from './template/library.js';
 
 /** 辨識引擎識別字串：存進校對暫存，換引擎重開時用來判斷舊的 AI 結果要不要重跑。 */
 export function engineId(recognizerId, api) {
@@ -51,6 +53,7 @@ export function createApp({ thumb = makeThumbUrl } = {}) {
     date: new Date(), // 預設日期（新資料夾沿用）
     dates: {}, // 各資料夾自己的檢查日期：{ 資料夾路徑: '1150725' }
     template: null, // {name, file, spec} | null；spec 是解析出來的 LayoutSpec（template/spec.js）
+    defaultStampOn: true, // 沒選版型（預設版面）時，照片左下角要不要印日期；有版型就看 template.spec.stamp.on
     templateFile: null, // 拖進入口頁、要帶去版型調整頁解析的 docx
     prompt: '',
     recognizerId: null, // 還沒在頂列「AI 辨識」選過辨識方式；選過就留著（回首頁再讀取也不清）
@@ -117,6 +120,40 @@ export function createApp({ thumb = makeThumbUrl } = {}) {
         date = state.date;
       }
       return { compact: rocCompact(date), display: rocDisplay(date), dot: rocDot(date), stamp: stampText(date) };
+    },
+
+    // ---------- 照片日期戳 ----------
+    /** 照片左下角要不要印檢查日期（工作台頂列的勾選框、檢視器大圖、輸出三種檔案都看這個）。 */
+    stampOn() {
+      return state.template ? !!state.template.spec?.stamp?.on : state.defaultStampOn;
+    },
+    /**
+     * 工作台切換日期戳。改的是目前版型的 stamp.on；那份版型在版型庫裡就一併存回去，
+     * 下次用同一份版型還是這個設定。內建版型／未存的版型／預設版面只記在這次（換版型就回到它原本的設定）。
+     * 存不進 localStorage 會丟錯（saveTemplate），畫面上的設定不改。回傳 { saved }。
+     */
+    setStamp(on) {
+      on = !!on;
+      let saved = false;
+      if (state.template) {
+        const spec = state.template.spec;
+        const stored = spec?.id ? getTemplate(spec.id) : null;
+        const next = { corner: 'bl', ...spec.stamp, on };
+        if (stored) {
+          saveTemplate({ ...spec, stamp: next }, stored.name); // 丟錯就停在這裡，不改記憶體裡的
+          saved = true;
+        }
+        spec.stamp = next;
+      } else {
+        state.defaultStampOn = on;
+      }
+      emit('stamp');
+      return { saved };
+    },
+    /** 輸出用的 LayoutSpec：版型本身；沒選版型時是預設版面（undefined＝讓匯出模組用 defaultSpec()），日期戳照工作台的勾選。 */
+    exportSpec() {
+      if (state.template) return state.template.spec;
+      return state.defaultStampOn ? undefined : { ...defaultSpec(), stamp: { on: false, corner: 'bl' } };
     },
 
     // ---------- 開啟資料夾 ----------
@@ -658,7 +695,7 @@ export function createApp({ thumb = makeThumbUrl } = {}) {
     async exportWord({ onProgress, pdf = null, format = null } = {}) {
       const { groups, skipped } = app.exportPlan();
       if (!groups.length) throw new Error('沒有可輸出的照片（內容說明都是空的）。');
-      const spec = state.template?.spec;
+      const spec = app.exportSpec();
       const fmt = format ?? defaultFormat(spec);
       if (!['docx', 'xlsx'].includes(fmt)) throw new Error(`不認得的輸出格式：${fmt}`);
       const build = fmt === 'xlsx' ? buildXlsxBlob : buildDocxBlob;

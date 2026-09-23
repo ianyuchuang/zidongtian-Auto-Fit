@@ -99,7 +99,7 @@ export function mountViewer(container, app) {
         <span class="name" title="${esc(p.name)}">${esc(p.name)}</span>
         <span class="badge ${isTrashed(p) ? 'trashed' : p.status}">${isTrashed(p) ? '已刪除' : STATUS_LABEL[p.status]}</span>
       </div>
-      <div class="big"><img alt=""><span class="stamp">${esc(app.dateInfo(groupDirOf(p)).stamp)}</span></div>
+      <div class="big"><img alt=""><span class="stamp"${app.stampOn() ? '' : ' hidden'}>${esc(app.dateInfo(groupDirOf(p)).stamp)}</span></div>
       <div class="off-filter small muted" hidden>這張目前不在篩選結果中</div>
       <div class="err small" ${p.status === 'error' ? '' : 'hidden'}>❌ ${esc(p.error ?? '')}</div>
       <div class="warn-note small" ${p.warn ? '' : 'hidden'}>⚠ ${esc(p.warn ?? '')}</div>
@@ -319,6 +319,9 @@ export function mountViewer(container, app) {
       const p = app.photo(app.state.selectedId);
       const s = container.querySelector('.stamp');
       if (s && p) s.textContent = app.dateInfo(groupDirOf(p)).stamp; // 日期跟著該照片的資料夾
+    } else if (what === 'stamp') {
+      const s = container.querySelector('.stamp');
+      if (s) s.hidden = !app.stampOn(); // 頂列取消勾選 → 大圖上也不顯示，跟輸出一致
     } else if (what === 'selection' || what === 'page' || what === 'photos' || what === 'recognize-progress' || what === 'filter') {
       render();
     }

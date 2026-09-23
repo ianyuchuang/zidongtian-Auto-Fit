@@ -1,4 +1,4 @@
-// 頂列：資料夾 / 版型 pill、AI 辨識、批次修改（內容說明／設計值）、產生檔案（Word / Excel）。
+// 頂列：資料夾 / 版型 pill、照片印日期勾選、AI 辨識、批次修改（內容說明／設計值）、產生檔案（Word / Excel）。
 // 檢查日期不在這裡：每個資料夾各自一個，在表格的資料夾列上填。
 
 import { esc, showDialog, alertDialog, confirmDialog, toast } from './dialog.js';
@@ -21,6 +21,7 @@ export function mountTopbar(container, app) {
       <span class="pill" title="${esc(template?.name ?? '')}">📄 版型 ${template ? esc(template.name) : '預設（每頁 3 列 × 2 張）'}</span>
       ${eng ? `<span class="pill engine" title="${esc(eng.title)}">🤖 ${esc(eng.text)}</span>` : ''}
       <span class="spacer"></span>
+      <label class="small stamp-toggle" title="產生的 Word／Excel／PDF 裡，每張照片左下角印該資料夾的檢查日期"><input type="checkbox" data-stamp ${app.stampOn() ? 'checked' : ''}> 照片印日期</label>
       <button class="btn" data-act="recognize" title="選辨識方式與提示詞，讓 AI 填三欄" ${busy}>🤖 AI 辨識</button>
       <button class="btn" data-act="batch" ${busy}title="一次改掉多張的內容說明或設計值">批次修改</button>
       <button class="btn btn-primary" data-act="export" ${busy}>產生 ${defaultFormat(template?.spec) === 'xlsx' ? 'Excel' : 'Word'} 檔</button>`;
@@ -37,6 +38,19 @@ export function mountTopbar(container, app) {
       await batchEdit(app);
     } else if (act === 'export') {
       await exportFiles(app);
+    }
+  });
+
+  container.addEventListener('change', (e) => {
+    const box = e.target.closest('input[data-stamp]');
+    if (!box) return;
+    try {
+      const { saved } = app.setStamp(box.checked);
+      toast(`照片${box.checked ? '會' : '不'}印檢查日期${saved ? '（已存回版型）' : ''}`);
+    } catch (err) {
+      console.error(err);
+      box.checked = app.stampOn(); // 沒存成功就退回原本的勾選，不要畫面跟實際輸出不一致
+      toast(`改不了日期戳設定：${err.message}`, { error: true });
     }
   });
 

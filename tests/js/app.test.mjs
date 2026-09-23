@@ -622,3 +622,62 @@ test('stackOffset：多張拖曳的縮圖堆疊在游標右下，一張比一張
   assert.ok(a.x > 0 && a.y > 0, '在游標右下，不擋住游標指的位置');
   assert.ok(b.x > a.x && b.y > a.y);
 });
+
+test('日期戳（工作台勾選）：預設版面只記在這次，取消勾選後輸出用的 spec 不印', async () => {
+  const { app, events } = await setup();
+  assert.equal(app.stampOn(), true);
+  assert.equal(app.exportSpec(), undefined); // 預設版面照舊交給匯出模組用 defaultSpec()
+  const r = app.setStamp(false);
+  assert.deepEqual(r, { saved: false });
+  assert.equal(app.stampOn(), false);
+  assert.equal(app.exportSpec().stamp.on, false);
+  assert.equal(app.exportSpec().grid.perRow, 2); // 其他照預設版面
+  assert.ok(events.includes('stamp'));
+  app.setStamp(true);
+  assert.equal(app.exportSpec(), undefined);
+});
+
+test('日期戳（工作台勾選）：版型庫裡的版型要存回去，下次用同一份還是這個設定', async () => {
+  const { saveTemplate, getTemplate } = await import('../../web/js/template/library.js');
+  const { defaultSpec } = await import('../../web/js/template/spec.js');
+  const store = new FakeStorage();
+  const prev = globalThis.localStorage;
+  globalThis.localStorage = store;
+  try {
+    const entry = saveTemplate(defaultSpec(), '我的版型', store);
+    const { app } = await setup();
+    app.state.template = { name: entry.name, file: null, spec: entry.spec };
+    assert.equal(app.stampOn(), true);
+    assert.deepEqual(app.setStamp(false), { saved: true });
+    assert.equal(app.exportSpec().stamp.on, false);
+    assert.equal(getTemplate(entry.id, store).spec.stamp.on, false);
+    assert.equal(getTemplate(entry.id, store).spec.id, entry.id); // id 不能換，資料夾記的是 id
+  } finally {
+    globalThis.localStorage = prev;
+  }
+});
+
+test('日期戳（工作台勾選）：不在版型庫的版型（內建／未存）只改這次；存不進去要丟錯且設定不變', async () => {
+  const { defaultSpec } = await import('../../web/js/template/spec.js');
+  const store = new FakeStorage();
+  const prev = globalThis.localStorage;
+  globalThis.localStorage = store;
+  try {
+    const { app } = await setup();
+    app.state.template = { name: '內建', file: null, spec: { ...defaultSpec(), id: 'builtin-x' } };
+    assert.deepEqual(app.setStamp(false), { saved: false });
+    assert.equal(app.stampOn(), false);
+    assert.equal(store.writes, 0);
+
+    const { saveTemplate } = await import('../../web/js/template/library.js');
+    const entry = saveTemplate(defaultSpec(), '滿了', store);
+    app.state.template = { name: entry.name, file: null, spec: entry.spec };
+    store.setItem = () => {
+      throw new Error('QuotaExceededError');
+    };
+    assert.throws(() => app.setStamp(false), /存不進/);
+    assert.equal(app.stampOn(), true);
+  } finally {
+    globalThis.localStorage = prev;
+  }
+});
