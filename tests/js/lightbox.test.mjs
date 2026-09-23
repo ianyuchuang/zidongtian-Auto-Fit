@@ -1,7 +1,7 @@
 // 燈箱的縮放/平移數學（純函式，不碰 DOM）。
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { clamp, wheelFactor, zoomAt, clampPan, isTypingTarget, hitsRect, MIN_SCALE, MAX_SCALE, IDENTITY } from '../../web/js/ui/lightbox.js';
+import { clamp, wheelFactor, zoomAt, clampPan, isTypingTarget, hitsRect, containedRect, MIN_SCALE, MAX_SCALE, IDENTITY } from '../../web/js/ui/lightbox.js';
 
 const near = (a, b, eps = 1e-9) => assert.ok(Math.abs(a - b) < eps, `${a} ≉ ${b}`);
 
@@ -92,4 +92,20 @@ test('hitsRect：圖片放大平移後，外框跟著變，圖上的點仍算命
   const zoomed = { left: -100, top: -100, right: 700, bottom: 500 };
   assert.equal(hitsRect(zoomed, 300, 200), true);
   assert.equal(hitsRect(zoomed, 750, 200), false);
+});
+
+test('containedRect：object-fit contain 的灰邊不算圖（點灰邊要能關燈箱）', () => {
+  // 舞台 800×400，原圖 400×400 → 畫出來 400×400，左右各 200 灰邊
+  const box = { left: 0, top: 0, right: 800, bottom: 400 };
+  const r = containedRect(box, 400, 400);
+  assert.deepEqual(r, { left: 200, top: 0, right: 600, bottom: 400 });
+  assert.equal(hitsRect(r, 100, 200), false, '左側灰邊');
+  assert.equal(hitsRect(r, 400, 200), true, '圖中央');
+  // 直式照片在橫的舞台：上下不留邊、左右留
+  assert.deepEqual(containedRect({ left: 10, top: 20, right: 610, bottom: 320 }, 300, 600), { left: 235, top: 20, right: 385, bottom: 320 });
+});
+
+test('containedRect：圖還沒載好（原圖尺寸 0）就退回外框，不會算出 NaN', () => {
+  const box = { left: 0, top: 0, right: 100, bottom: 50 };
+  assert.deepEqual(containedRect(box, 0, 0), box);
 });

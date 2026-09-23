@@ -41,6 +41,23 @@ export function hitsRect(rect, x, y) {
   return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
 }
 
+/**
+ * object-fit: contain 的圖實際畫出來的範圍。<img> 撐滿整個舞台（width/height 100%），
+ * 外框＝舞台，上下或左右的灰邊也算在外框裡；只看外框的話點灰邊永遠關不掉燈箱。
+ * box：<img> 的外框（getBoundingClientRect，已含縮放平移）；nw/nh：原圖尺寸（還沒載好給 0 → 回傳 box）。
+ */
+export function containedRect(box, nw, nh) {
+  const w = box.right - box.left;
+  const h = box.bottom - box.top;
+  if (!(nw > 0 && nh > 0 && w > 0 && h > 0)) return box;
+  const k = Math.min(w / nw, h / nh);
+  const cw = nw * k;
+  const ch = nh * k;
+  const left = box.left + (w - cw) / 2;
+  const top = box.top + (h - ch) / 2;
+  return { left, top, right: left + cw, bottom: top + ch };
+}
+
 /** 焦點是否在可打字的欄位上（燈箱是非強制視窗，快捷鍵不能搶走輸入）。 */
 export function isTypingTarget(el) {
   if (!el) return false;
@@ -210,8 +227,8 @@ export function openLightbox(src, { title = '', root = null, onClose = null } = 
       return;
     }
     if (e.detail > 1) return; // 雙擊的第二下交給 dblclick（還原縮放），不要關窗
-    if (!stage.contains(e.target) && e.target !== overlay) return; // 工具列 / 提示列不關
-    if (hitsRect(img.getBoundingClientRect(), e.clientX, e.clientY)) return; // 點在圖上不關
+    if (e.target.closest('.lb-bar')) return; // 工具列不關；其他灰色區域（含提示列）＝按 Esc
+    if (hitsRect(containedRect(img.getBoundingClientRect(), img.naturalWidth, img.naturalHeight), e.clientX, e.clientY)) return; // 點在圖上不關
     close();
   });
 
