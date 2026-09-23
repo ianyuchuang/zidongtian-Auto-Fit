@@ -88,10 +88,36 @@ export function startDragStack(e, thumbs, count, { maxCards = 4 } = {}) {
     place();
   };
   document.addEventListener('dragover', onOver, true);
-  return function stop() {
+  const stop = () => {
+    detach();
     document.removeEventListener('dragover', onOver, true);
     layer.remove();
   };
+  const detach = onDragFinish(document, e.target, stop);
+  return stop;
+}
+
+/**
+ * 拖曳結束（放下或取消）時呼叫 fn 一次。不能只靠呼叫端在外層接 dragend：
+ * 放下後表格／左樹會重畫，被拖的那一列已經不在 DOM 裡，它的 dragend 冒泡不到外層，
+ * 縮圖堆就一直懸在畫面上（2026-09-23 的 bug）。所以放下時在 doc 的捕獲階段先收，
+ * 取消（沒放在任何地方）時由來源元素自己的 dragend 收。回傳 detach()。
+ */
+export function onDragFinish(doc, source, fn) {
+  let done = false;
+  const finish = () => {
+    if (done) return;
+    done = true;
+    detach();
+    fn();
+  };
+  const detach = () => {
+    doc.removeEventListener('drop', finish, { capture: true });
+    source?.removeEventListener('dragend', finish);
+  };
+  doc.addEventListener('drop', finish, { capture: true });
+  source?.addEventListener('dragend', finish);
+  return detach;
 }
 
 /**

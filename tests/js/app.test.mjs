@@ -5,7 +5,7 @@ import { createApp, engineId } from '../../web/js/app.js';
 import { MemoryDirectoryHandle } from '../../web/js/fs/memory.js';
 import { TRASH_DIR, trashDirOf } from '../../web/js/state.js';
 import { exists } from '../../web/js/fs/adapter.js';
-import { dropIds, DND_MULTI, DND_SINGLE, stackOffset } from '../../web/js/ui/dnd.js';
+import { dropIds, DND_MULTI, DND_SINGLE, stackOffset, onDragFinish } from '../../web/js/ui/dnd.js';
 
 async function setup() {
   const root = new MemoryDirectoryHandle('帷幕骨架');
@@ -680,4 +680,31 @@ test('日期戳（工作台勾選）：不在版型庫的版型（內建／未�
   } finally {
     globalThis.localStorage = prev;
   }
+});
+
+test('onDragFinish：放下時（來源列已被重畫拿掉、收不到 dragend）也要收掉縮圖堆，且只收一次', () => {
+  const doc = new EventTarget();
+  const source = new EventTarget();
+  let n = 0;
+  onDragFinish(doc, source, () => n++);
+  doc.dispatchEvent(new Event('drop'));
+  assert.equal(n, 1);
+  source.dispatchEvent(new Event('dragend'));
+  doc.dispatchEvent(new Event('drop'));
+  assert.equal(n, 1);
+});
+
+test('onDragFinish：取消拖曳（沒有 drop）靠來源的 dragend 收；detach 後不再觸發', () => {
+  const doc = new EventTarget();
+  const source = new EventTarget();
+  let n = 0;
+  onDragFinish(doc, source, () => n++);
+  source.dispatchEvent(new Event('dragend'));
+  assert.equal(n, 1);
+  let m = 0;
+  const detach = onDragFinish(doc, source, () => m++);
+  detach();
+  doc.dispatchEvent(new Event('drop'));
+  source.dispatchEvent(new Event('dragend'));
+  assert.equal(m, 0);
 });
